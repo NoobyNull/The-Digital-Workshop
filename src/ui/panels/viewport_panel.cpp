@@ -105,8 +105,15 @@ void ViewportPanel::setPreOrientedMesh(MeshPtr mesh,
     if (m_mesh && m_mesh->isValid()) {
         m_gpuMesh = m_renderer.uploadMesh(*m_mesh);
 
+        // Always target the bounding box center
+        const auto& bounds = m_mesh->bounds();
+        m_camera.setTarget(bounds.center());
+
         if (savedCamera) {
-            restoreCameraState(*savedCamera);
+            // Restore viewing angle but keep bounding box center as focal point
+            m_camera.setYaw(savedCamera->yaw);
+            m_camera.setPitch(savedCamera->pitch);
+            m_camera.setDistance(savedCamera->distance);
         } else {
             fitToModel();
             if (m_mesh->wasAutoOriented()) {
@@ -172,6 +179,13 @@ void ViewportPanel::setFitParams(const carve::FitParams& params,
 
     m_modelMatrix = swapYZ * fitMat;
     m_hasFitParams = true;
+
+    // Update camera target to transformed bounding box center
+    if (m_mesh) {
+        Vec3 center = m_mesh->bounds().center();
+        Vec4 tc = m_modelMatrix * Vec4(center.x, center.y, center.z, 1.0f);
+        m_camera.setTarget(Vec3(tc.x, tc.y, tc.z));
+    }
 
     // Store for alignment validation
     m_fitParams = params;

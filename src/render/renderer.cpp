@@ -111,6 +111,10 @@ void Renderer::renderMesh(const GPUMesh& gpuMesh,
         return;
     }
 
+    // Disable back-face culling so non-solid meshes (e.g. CNC relief surfaces) are
+    // visible from both sides — same approach as renderToolpath()
+    glDisable(GL_CULL_FACE);
+
     if (m_settings.wireframe) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     }
@@ -161,6 +165,8 @@ void Renderer::renderMesh(const GPUMesh& gpuMesh,
     if (m_settings.wireframe) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
+
+    glEnable(GL_CULL_FACE);
 }
 
 void Renderer::renderToolpath(const Mesh& toolpathMesh, const Mat4& modelMatrix) {
