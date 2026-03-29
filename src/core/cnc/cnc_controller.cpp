@@ -34,13 +34,7 @@ bool CncController::connect(const std::string& device, int baudRate) {
     m_port->writeByte(cnc::CMD_SOFT_RESET);
     m_port->drain();
 
-    m_running = true;
-    m_connected = false;
-    m_consecutiveTimeouts = 0;
-    m_statusPending = false;
-    m_pendingRtCommands.store(0, std::memory_order_relaxed);
-    m_statusPollMs = Config::instance().getStatusPollIntervalMs();
-    m_ioThread = std::thread(&CncController::ioThreadFunc, this);
+    initializeConnection();
 
     return true;
 }
@@ -58,6 +52,12 @@ bool CncController::connectTcp(const std::string& host, int port) {
     m_port->writeByte(cnc::CMD_SOFT_RESET);
     m_port->drain();
 
+    initializeConnection();
+
+    return true;
+}
+
+void CncController::initializeConnection() {
     m_running = true;
     m_connected = false;
     m_consecutiveTimeouts = 0;
@@ -65,8 +65,6 @@ bool CncController::connectTcp(const std::string& host, int port) {
     m_pendingRtCommands.store(0, std::memory_order_relaxed);
     m_statusPollMs = Config::instance().getStatusPollIntervalMs();
     m_ioThread = std::thread(&CncController::ioThreadFunc, this);
-
-    return true;
 }
 
 bool CncController::connectSimulator() {
