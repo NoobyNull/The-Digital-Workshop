@@ -11,12 +11,18 @@ Framebuffer::~Framebuffer() {
 
 Framebuffer::Framebuffer(Framebuffer&& other) noexcept
     : m_fbo(other.m_fbo), m_colorTexture(other.m_colorTexture),
-      m_depthTexture(other.m_depthTexture), m_width(other.m_width), m_height(other.m_height) {
+      m_depthTexture(other.m_depthTexture), m_width(other.m_width), m_height(other.m_height),
+      m_savedViewport{other.m_savedViewport[0], other.m_savedViewport[1],
+                      other.m_savedViewport[2], other.m_savedViewport[3]} {
     other.m_fbo = 0;
     other.m_colorTexture = 0;
     other.m_depthTexture = 0;
     other.m_width = 0;
     other.m_height = 0;
+    other.m_savedViewport[0] = 0;
+    other.m_savedViewport[1] = 0;
+    other.m_savedViewport[2] = 0;
+    other.m_savedViewport[3] = 0;
 }
 
 Framebuffer& Framebuffer::operator=(Framebuffer&& other) noexcept {
@@ -27,11 +33,19 @@ Framebuffer& Framebuffer::operator=(Framebuffer&& other) noexcept {
         m_depthTexture = other.m_depthTexture;
         m_width = other.m_width;
         m_height = other.m_height;
+        m_savedViewport[0] = other.m_savedViewport[0];
+        m_savedViewport[1] = other.m_savedViewport[1];
+        m_savedViewport[2] = other.m_savedViewport[2];
+        m_savedViewport[3] = other.m_savedViewport[3];
         other.m_fbo = 0;
         other.m_colorTexture = 0;
         other.m_depthTexture = 0;
         other.m_width = 0;
         other.m_height = 0;
+        other.m_savedViewport[0] = 0;
+        other.m_savedViewport[1] = 0;
+        other.m_savedViewport[2] = 0;
+        other.m_savedViewport[3] = 0;
     }
     return *this;
 }
@@ -113,12 +127,14 @@ bool Framebuffer::resize(int width, int height) {
 }
 
 void Framebuffer::bind() {
+    glGetIntegerv(GL_VIEWPORT, m_savedViewport);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
     glViewport(0, 0, m_width, m_height);
 }
 
 void Framebuffer::unbind() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(m_savedViewport[0], m_savedViewport[1], m_savedViewport[2], m_savedViewport[3]);
 }
 
 ByteBuffer Framebuffer::readPixels() const {
