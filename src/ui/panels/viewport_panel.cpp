@@ -13,6 +13,7 @@
 
 #include "../../core/config/config.h"
 #include "../../core/config/input_binding.h"
+#include "../../core/coordinate_utils.h"
 #include "../../core/mesh/mesh.h"
 #include "../../render/gl_utils.h"
 #include "../context_menu_manager.h"
@@ -629,7 +630,7 @@ void ViewportPanel::renderViewport() {
     // Work envelope (blue box showing machine limits)
     // G-code (X,Y,Z) -> renderer (X,Z,Y): swap Y/Z travel limits
     if (cfg.getCncShowWorkEnvelope()) {
-        Vec3 envMax{profile.maxTravelX, profile.maxTravelZ, profile.maxTravelY};
+        Vec3 envMax = gcodeToRenderer(Vec3{profile.maxTravelX, profile.maxTravelY, profile.maxTravelZ});
         m_renderer.renderWireBox(Vec3{0, 0, 0}, envMax, cfg.getCncEnvelopeColor());
     }
 
@@ -693,9 +694,7 @@ void ViewportPanel::renderViewport() {
     // Live CNC tool position (only when connected)
     if (m_cncConnected) {
         // G-code Z (height) -> renderer Y, G-code Y -> renderer Z
-        Vec3 renderPos{m_machineStatus.workPos.x,
-                       m_machineStatus.workPos.z,
-                       m_machineStatus.workPos.y};
+        Vec3 renderPos = gcodeToRenderer(m_machineStatus.workPos);
 
         if (cfg.getCncShowToolDot()) {
             m_renderer.renderPoint(renderPos, cfg.getCncToolDotSize(), cfg.getCncToolDotColor());
@@ -1055,8 +1054,8 @@ void ViewportPanel::setGCodeProgram(const gcode::Program& program) {
     // Fit camera to G-code bounds if no mesh is currently loaded
     if (!m_mesh) {
         // Swap Y<->Z: G-code uses Z-up, renderer uses Y-up
-        Vec3 bMin{program.boundsMin.x, program.boundsMin.z, program.boundsMin.y};
-        Vec3 bMax{program.boundsMax.x, program.boundsMax.z, program.boundsMax.y};
+        Vec3 bMin = gcodeToRenderer(program.boundsMin);
+        Vec3 bMax = gcodeToRenderer(program.boundsMax);
         m_camera.fitToBounds(bMin, bMax);
     }
 
@@ -1540,13 +1539,14 @@ void ViewportPanel::renderGCodeLines() {
         for (size_t si = 0; si < m_simSegmentIndex && si < m_gcodeProgram.path.size(); ++si) {
             const auto& seg = m_gcodeProgram.path[si];
             if (seg.end.z > m_zClipMax) continue;
-            // Swap Y<->Z for Y-up renderer
-            simVerts.push_back(seg.start.x);
-            simVerts.push_back(seg.start.z);
-            simVerts.push_back(seg.start.y);
-            simVerts.push_back(seg.end.x);
-            simVerts.push_back(seg.end.z);
-            simVerts.push_back(seg.end.y);
+            Vec3 rStart = gcodeToRenderer(seg.start);
+            Vec3 rEnd   = gcodeToRenderer(seg.end);
+            simVerts.push_back(rStart.x);
+            simVerts.push_back(rStart.y);
+            simVerts.push_back(rStart.z);
+            simVerts.push_back(rEnd.x);
+            simVerts.push_back(rEnd.y);
+            simVerts.push_back(rEnd.z);
         }
 
         u32 completedVertCount = static_cast<u32>(simVerts.size() / 3);
@@ -1558,13 +1558,14 @@ void ViewportPanel::renderGCodeLines() {
             float ex = cur.start.x + (cur.end.x - cur.start.x) * t;
             float ey = cur.start.y + (cur.end.y - cur.start.y) * t;
             float ez = cur.start.z + (cur.end.z - cur.start.z) * t;
-            // Swap Y<->Z
-            simVerts.push_back(cur.start.x);
-            simVerts.push_back(cur.start.z);
-            simVerts.push_back(cur.start.y);
-            simVerts.push_back(ex);
-            simVerts.push_back(ez);
-            simVerts.push_back(ey);
+            Vec3 rCurStart = gcodeToRenderer(cur.start);
+            Vec3 rCurEnd   = gcodeToRenderer(Vec3{ex, ey, ez});
+            simVerts.push_back(rCurStart.x);
+            simVerts.push_back(rCurStart.y);
+            simVerts.push_back(rCurStart.z);
+            simVerts.push_back(rCurEnd.x);
+            simVerts.push_back(rCurEnd.y);
+            simVerts.push_back(rCurEnd.z);
         }
 
         if (!simVerts.empty()) {
