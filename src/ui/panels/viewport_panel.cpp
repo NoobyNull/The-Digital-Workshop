@@ -17,6 +17,8 @@
 #include "../../core/mesh/mesh.h"
 #include "../../render/gl_utils.h"
 #include "../context_menu_manager.h"
+#include "../icons.h"
+#include "../ui_colors.h"
 
 namespace dw {
 
@@ -745,21 +747,25 @@ void ViewportPanel::renderToolbar() {
         ImGuiStyleVar_FramePadding,
         ImVec2(style.FramePadding.x, style.FramePadding.y));
 
-    if (ImGui::Button("Reset")) {
+    if (ImGui::Button(Icons::Refresh)) {
         resetView();
     }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Reset View");
     ImGui::SameLine();
 
-    if (ImGui::Button("Fit")) {
+    if (ImGui::Button(Icons::Fit)) {
         fitToModel();
     }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Fit to Model");
     ImGui::SameLine();
 
     ImGui::Separator();
     ImGui::SameLine();
 
     // Wrap Wireframe checkbox to new line if too narrow
-    if (ImGui::GetContentRegionAvail().x < 100.0f) {
+    if (ImGui::GetContentRegionAvail().x < ImGui::GetFontSize() * 6.0f) {
         ImGui::NewLine();
     }
 
@@ -789,11 +795,11 @@ void ViewportPanel::renderToolbar() {
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
         ImGui::SameLine();
         if (m_alignmentStatus == AlignmentStatus::Aligned) {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, colors::kSuccess);
             ImGui::Text("Aligned");
             ImGui::PopStyleColor();
         } else {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, colors::kError);
             ImGui::Text("Misaligned");
             ImGui::PopStyleColor();
         }
@@ -805,7 +811,7 @@ void ViewportPanel::renderToolbar() {
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
         ImGui::SameLine();
 
-        if (ImGui::GetContentRegionAvail().x < 350.0f) {
+        if (ImGui::GetContentRegionAvail().x < ImGui::GetFontSize() * 22.0f) {
             ImGui::NewLine();
         }
 

@@ -15,6 +15,7 @@
 #include "core/utils/log.h"
 #include "ui/dialogs/file_dialog.h"
 #include "ui/icons.h"
+#include "ui/ui_colors.h"
 
 namespace dw {
 
@@ -1014,9 +1015,9 @@ void ToolBrowserPanel::renderCalculator() {
         ImGui::Spacing();
         ImGui::Indent();
 
-        ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "Classification: %s",
+        ImGui::TextColored(colors::kInfo, "Classification: %s",
                            hardnessBandName(m_calcResult.hardness_band));
-        ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "Rigidity Factor: %.0f%%",
+        ImGui::TextColored(colors::kInfo, "Rigidity Factor: %.0f%%",
                            m_calcResult.rigidity_factor * 100.0);
 
         ImGui::Spacing();
@@ -1035,7 +1036,7 @@ void ToolBrowserPanel::renderCalculator() {
             ImGui::Text("Power:       %.0f W", m_calcResult.power_required);
             if (m_calcResult.power_limited) {
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "(power limited)");
+                ImGui::TextColored(colors::kOrange, "(power limited)");
             }
         }
 

@@ -139,7 +139,7 @@ void GCodePanel::render() {
             // Main content area: stats + G-code text listing
             float availWidth = ImGui::GetContentRegionAvail().x;
 
-            if (availWidth < 420.0f) {
+            if (availWidth < ImGui::GetFontSize() * 26.0f) {
                 float statsH = ImGui::GetContentRegionAvail().y * 0.4f;
                 ImGui::BeginChild("Stats", ImVec2(0, statsH), true);
                 renderStatistics();
@@ -154,7 +154,7 @@ void GCodePanel::render() {
                             const auto& cmd = m_program.commands[static_cast<size_t>(i)];
                             bool isAcked = m_cncConnected && i <= m_lastAckedLine;
                             if (isAcked) {
-                                ImGui::TextColored(ImVec4(0.3f, 0.8f, 0.3f, 1.0f), "%6d  %s", i + 1, cmd.raw.c_str());
+                                ImGui::TextColored(colors::kSuccess, "%6d  %s", i + 1, cmd.raw.c_str());
                             } else {
                                 ImGui::Text("%6d  %s", i + 1, cmd.raw.c_str());
                             }
@@ -192,7 +192,7 @@ void GCodePanel::render() {
                             const auto& cmd = m_program.commands[static_cast<size_t>(i)];
                             bool isAcked = m_cncConnected && i <= m_lastAckedLine;
                             if (isAcked) {
-                                ImGui::TextColored(ImVec4(0.3f, 0.8f, 0.3f, 1.0f), "%6d  %s", i + 1, cmd.raw.c_str());
+                                ImGui::TextColored(colors::kSuccess, "%6d  %s", i + 1, cmd.raw.c_str());
                             } else {
                                 ImGui::Text("%6d  %s", i + 1, cmd.raw.c_str());
                             }
@@ -602,7 +602,7 @@ void GCodePanel::renderConnectionBar() {
 
     if (m_cncConnected) {
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), "%s", m_cncVersion.c_str());
+        ImGui::TextColored(colors::kSuccess, "%s", m_cncVersion.c_str());
     }
 }
 
@@ -1185,11 +1185,11 @@ void GCodePanel::renderJobHistory() {
                 // Status column with color
                 ImGui::TableNextColumn();
                 if (job.status == "completed") {
-                    ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), "Done");
+                    ImGui::TextColored(colors::kSuccess, "Done");
                 } else if (job.status == "aborted") {
                     ImGui::TextColored(colors::kError, "Abort");
                 } else if (job.status == "interrupted") {
-                    ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.1f, 1.0f), "Crash");
+                    ImGui::TextColored(colors::kWarning, "Crash");
                 } else {
                     ImGui::TextColored(colors::kInfo, "Run");
                 }
