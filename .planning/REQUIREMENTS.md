@@ -3,9 +3,37 @@
 **Defined:** 2026-03-09
 **Core Value:** A woodworker can go from selecting a piece of wood and a cutting tool to safely running a CNC job with optimized feeds and speeds -- all without leaving the application.
 
-## v0.5.5 Requirements
+## v0.6.0 Requirements
 
-Requirements for Unified 3D Viewport milestone. Each maps to roadmap phases.
+Requirements for Technical Debt Cleanup milestone. Verified via deep-dive code audit (2026-03-28).
+
+### Rendering Bugs (RBUG)
+
+- [ ] **RBUG-01**: Camera far plane restoration calls `setCamera()` so the renderer receives the updated projection matrix
+- [ ] **RBUG-02**: Framebuffer `unbind()` restores the previous GL viewport -- no viewport leak to ImGui
+- [ ] **RBUG-03**: `renderPoint()` restores `glPointSize(1.0f)` after drawing
+- [ ] **RBUG-04**: `renderGCodeLines()` restores `glPointSize(1.0f)` after drawing the cutter dot
+
+### Coordinate Space (COORD)
+
+- [ ] **COORD-01**: An inline `gcodeToRenderer(Vec3)` helper centralizes the Y↔Z swap
+- [ ] **COORD-02**: All 5 manual swap sites in viewport_panel.cpp use the helper -- no inline coordinate reordering remains
+
+### GL State Safety (GLST)
+
+- [ ] **GLST-01**: A private `GLStateScope` RAII struct in Renderer handles `glEnable`/`glDisable` save/restore
+- [ ] **GLST-02**: All 5 renderer functions (renderMesh, renderToolpath, renderGrid, renderAxis, renderWireBox) use `GLStateScope` instead of manual toggle pairs
+
+### CNC Controller (CNC)
+
+- [ ] **CNC-01**: A private `initializeConnection()` helper extracts the shared state init from `connect()` and `connectTcp()`
+
+## Previous Milestone Requirements
+
+<details>
+<summary>v0.5.5 Unified 3D Viewport (15 requirements)</summary>
+
+### Viewport Rendering (VPR)
 
 ### Viewport Rendering (VPR)
 
@@ -33,6 +61,8 @@ Requirements for Unified 3D Viewport milestone. Each maps to roadmap phases.
 - [ ] **ELM-01**: GCodePanel no longer owns Renderer, Camera, or Framebuffer
 - [ ] **ELM-02**: GCodePanel retains text listing, statistics, CNC sender controls, and file management
 - [ ] **ELM-03**: Mouse interaction is identical regardless of visible layers
+
+</details>
 
 ## Previous Milestone Requirements
 
@@ -90,6 +120,27 @@ Requirements for Unified 3D Viewport milestone. Each maps to roadmap phases.
 
 ## Traceability
 
+### v0.6.0
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| RBUG-01 | Phase 36 | Pending |
+| RBUG-02 | Phase 36 | Pending |
+| RBUG-03 | Phase 36 | Pending |
+| RBUG-04 | Phase 36 | Pending |
+| COORD-01 | Phase 37 | Pending |
+| COORD-02 | Phase 37 | Pending |
+| GLST-01 | Phase 38 | Pending |
+| GLST-02 | Phase 38 | Pending |
+| CNC-01 | Phase 39 | Pending |
+
+**Coverage:**
+- v0.6.0 requirements: 9 total
+- Mapped to phases: 9
+- Unmapped: 0
+
+### v0.5.5
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | VPR-01 | Phase 31 | Complete |
@@ -108,11 +159,6 @@ Requirements for Unified 3D Viewport milestone. Each maps to roadmap phases.
 | ELM-02 | Phase 35 | Pending |
 | ELM-03 | Phase 35 | Pending |
 
-**Coverage:**
-- v0.5.5 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0
-
 ---
 *Requirements defined: 2026-03-09*
-*Last updated: 2026-03-09 after roadmap creation (traceability populated)*
+*Last updated: 2026-03-28 -- v0.6.0 traceability complete (9/9 requirements mapped)*

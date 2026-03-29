@@ -627,8 +627,9 @@ void ViewportPanel::renderViewport() {
     }
 
     // Work envelope (blue box showing machine limits)
+    // G-code (X,Y,Z) -> renderer (X,Z,Y): swap Y/Z travel limits
     if (cfg.getCncShowWorkEnvelope()) {
-        Vec3 envMax{profile.maxTravelX, profile.maxTravelY, profile.maxTravelZ};
+        Vec3 envMax{profile.maxTravelX, profile.maxTravelZ, profile.maxTravelY};
         m_renderer.renderWireBox(Vec3{0, 0, 0}, envMax, cfg.getCncEnvelopeColor());
     }
 
@@ -672,9 +673,11 @@ void ViewportPanel::renderViewport() {
         }
 
         // Check if model fits within machine envelope
+        // Transformed bounds are in renderer space (Y-up), so swap profile limits:
+        // renderer Y = G-code Z (height), renderer Z = G-code Y (depth)
         bool fitsX = transformedMax.x <= profile.maxTravelX;
-        bool fitsY = transformedMax.y <= profile.maxTravelY;
-        bool fitsZ = transformedMax.z <= profile.maxTravelZ;
+        bool fitsY = transformedMax.y <= profile.maxTravelZ;
+        bool fitsZ = transformedMax.z <= profile.maxTravelY;
         bool modelFits = fitsX && fitsY && fitsZ &&
                        transformedMin.x >= 0.0f &&
                        transformedMin.y >= 0.0f &&
@@ -689,7 +692,10 @@ void ViewportPanel::renderViewport() {
 
     // Live CNC tool position (only when connected)
     if (m_cncConnected) {
-        const Vec3& renderPos = m_machineStatus.workPos;
+        // G-code Z (height) -> renderer Y, G-code Y -> renderer Z
+        Vec3 renderPos{m_machineStatus.workPos.x,
+                       m_machineStatus.workPos.z,
+                       m_machineStatus.workPos.y};
 
         if (cfg.getCncShowToolDot()) {
             m_renderer.renderPoint(renderPos, cfg.getCncToolDotSize(), cfg.getCncToolDotColor());

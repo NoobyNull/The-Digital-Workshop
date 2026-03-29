@@ -8,6 +8,7 @@
 - [x] **v0.4.0 Shared Materials & Project Costing** - Phases 20-26 (completed 2026-03-05)
 - [ ] **v0.5.0 Codebase Cleanup & Simplification** - Phases 27-30 (in progress)
 - [ ] **v0.5.5 Unified 3D Viewport** - Phases 31-35
+- [ ] **v0.6.0 Technical Debt Cleanup** - Phases 36-39
 
 ## Phases
 
@@ -80,6 +81,15 @@
 - [x] **Phase 33: Model-Toolpath Alignment** - FitParams transform overlays model and G-code correctly with point-match validation (completed 2026-03-09)
 - [x] **Phase 34: Simulation Playback** - Play/pause/scrub simulation with completed/current/cutter visualization in viewport (completed 2026-03-09)
 - [ ] **Phase 35: GCodePanel Rendering Elimination** - Strip rendering infrastructure from GCodePanel, unify mouse interaction across layers
+
+### v0.6.0 Technical Debt Cleanup (Phases 36-39)
+
+**Milestone Goal:** Fix four verified rendering bugs, centralize scattered coordinate space transformations into a single helper, introduce RAII-based GL state management to eliminate manual enable/disable pairs, and deduplicate CNC connection initialization -- all changes identified by deep-dive code audit.
+
+- [x] **Phase 36: Critical Rendering Bugs** - Fix camera far plane propagation, framebuffer viewport leak, and two glPointSize leaks (completed 2026-03-29)
+- [ ] **Phase 37: Coordinate Space Consolidation** - Introduce gcodeToRenderer() helper and replace all 5 manual Y↔Z swap sites
+- [ ] **Phase 38: GL State Safety** - Introduce GLStateScope RAII struct and replace manual toggle pairs in 5 renderer functions
+- [ ] **Phase 39: CNC Controller Dedup** - Extract shared connection initialization into a private initializeConnection() helper
 
 ## Phase Details (v0.5.0)
 
@@ -220,6 +230,60 @@ Plans:
 Plans:
 - [ ] 35-01-PLAN.md — Strip rendering infrastructure from GCodePanel, add G-code text listing
 
+## Phase Details (v0.6.0)
+
+### Phase 36: Critical Rendering Bugs
+**Goal**: Four verified rendering bugs are eliminated -- the renderer always holds the current projection matrix, framebuffer unbind does not leak the viewport rect, and glPointSize is always restored after use
+**Depends on**: Phase 35 (v0.5.5 complete)
+**Requirements**: RBUG-01, RBUG-02, RBUG-03, RBUG-04
+**Success Criteria** (what must be TRUE):
+  1. After restoring the camera far plane in viewport_panel.cpp, calling setCamera() propagates the updated projection matrix to the renderer -- the scene does not briefly render with a stale projection
+  2. After Framebuffer::unbind() returns, the GL viewport rect matches what it was before bind() was called -- ImGui widgets that render after an unbind are not clipped or scaled incorrectly
+  3. After renderPoint() returns, glPointSize is 1.0f -- subsequent draw calls that do not set a point size are not affected by the cutter dot's size
+  4. After renderGCodeLines() returns, glPointSize is 1.0f -- the cutter position dot does not affect point sizes elsewhere in the frame
+**Plans**: 2 plans
+
+Plans:
+- [x] 36-01-PLAN.md — Framebuffer viewport save/restore in bind/unbind
+- [x] 36-02-PLAN.md — Camera projection propagation and glPointSize restore fixes
+
+### Phase 37: Coordinate Space Consolidation
+**Goal**: A single inline helper function owns the Y↔Z coordinate swap for G-code-to-renderer conversion, and all five manual swap sites in viewport_panel.cpp use it -- no inline coordinate reordering remains scattered through the file
+**Depends on**: Phase 36
+**Requirements**: COORD-01, COORD-02
+**Success Criteria** (what must be TRUE):
+  1. An inline gcodeToRenderer(Vec3) function exists that takes a G-code space coordinate and returns the renderer space coordinate with Y and Z swapped
+  2. A search for manual Y↔Z swap patterns (assigning .y to .z or .z to .y across the five known sites at viewport_panel.cpp lines 632, 694-698, 1057-1058, 1543-1548, and 1562-1566) finds zero instances -- all sites call gcodeToRenderer() instead
+  3. Toolpath, simulation, and alignment visuals render identically before and after the consolidation -- no coordinate is incorrectly transformed
+**Plans**: 1 plan
+
+Plans:
+- [ ] 37-01-PLAN.md — Create gcodeToRenderer helper and replace all 5 manual Y<->Z swap sites
+
+### Phase 38: GL State Safety
+**Goal**: A private GLStateScope RAII struct in Renderer saves and restores a named GL capability on construction/destruction, replacing manual enable/disable pairs in five renderer functions -- no render function leaves GL state modified after it returns
+**Depends on**: Phase 36
+**Requirements**: GLST-01, GLST-02
+**Success Criteria** (what must be TRUE):
+  1. A GLStateScope struct exists in renderer.cpp/h that takes a GLenum capability, saves its current state with glIsEnabled, enables or disables it as requested, and restores the original state on destruction
+  2. renderMesh, renderToolpath, renderGrid, renderAxis, and renderWireBox each use GLStateScope in place of their manual glEnable/glDisable toggle pairs -- no manual before/after toggle pattern remains in these functions
+  3. Rendering output is visually identical before and after the refactor -- no model, toolpath, grid, axis, or wire-box appearance changes
+  4. All 931+ tests continue to pass after the refactor
+**Plans**: TBD
+
+### Phase 39: CNC Controller Dedup
+**Goal**: The shared state initialization code executed at the start of both connect() and connectTcp() is extracted into a single private helper -- neither method duplicates that logic
+**Depends on**: Phase 36
+**Requirements**: CNC-01
+**Success Criteria** (what must be TRUE):
+  1. A private initializeConnection() method exists in CncController that contains the 8 lines of shared state init (reset state flags, clear buffers, initialize status fields) that were previously duplicated between connect() and connectTcp()
+  2. connect() and connectTcp() each call initializeConnection() at the point where the duplicated block previously appeared -- neither method contains an inline copy of that initialization block
+  3. CNC connection behavior (serial and TCP) is identical before and after the extraction -- existing connection tests pass without modification
+**Plans**: 1 plan
+
+Plans:
+- [ ] 39-01-PLAN.md — Extract initializeConnection() helper and update connect()/connectTcp()
+
 ## Progress (v0.5.0)
 
 **Execution Order:** Phase 27 -> 28 -> 29 -> 30 (sequential -- each builds on the previous)
@@ -243,6 +307,17 @@ Plans:
 | 34. Simulation Playback | 1/1 | Complete   | 2026-03-09 | - |
 | 35. GCodePanel Rendering Elimination | v0.5.5 | 0/1 | Not started | - |
 
+## Progress (v0.6.0)
+
+**Execution Order:** Phase 36 first (bugs must be fixed before refactors build on them); Phase 37 and Phase 38 depend on Phase 36 and can execute in either order; Phase 39 is independent and can execute in parallel with 37 and 38.
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 36. Critical Rendering Bugs | v0.6.0 | 2/2 | Complete    | 2026-03-29 |
+| 37. Coordinate Space Consolidation | v0.6.0 | 0/? | Not started | - |
+| 38. GL State Safety | v0.6.0 | 0/? | Not started | - |
+| 39. CNC Controller Dedup | v0.6.0 | 0/1 | Not started | - |
+
 ---
 *Roadmap created: 2026-02-24*
-*Last updated: 2026-03-09 -- Phase 35 planned (1 plan)*
+*Last updated: 2026-03-28 -- Phase 36 planned (2 plans, wave 1)*
