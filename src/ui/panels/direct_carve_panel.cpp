@@ -69,7 +69,7 @@ constexpr ImU32 kRapidColor = IM_COL32(80, 220, 80, 150);     // green
 
 void statusBullet(bool ok, const char* label) {
     ImGui::PushStyleColor(ImGuiCol_Text, ok ? kGreen : kRed);
-    ImGui::BulletText("%s %s", ok ? "OK" : "--", label);
+    ImGui::BulletText("%s %s", ok ? "OK" : "FAIL", label);
     ImGui::PopStyleColor();
 }
 

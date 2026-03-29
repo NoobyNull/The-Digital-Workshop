@@ -140,6 +140,14 @@ void UIManager::renderViewMenu() {
     if (!ImGui::BeginMenu("View"))
         return;
 
+    bool isModel = (m_workspaceMode == WorkspaceMode::Model);
+    bool isCnc = (m_workspaceMode == WorkspaceMode::CNC);
+    if (ImGui::MenuItem("Workshop", "Ctrl+1", isModel))
+        setWorkspaceMode(WorkspaceMode::Model);
+    if (ImGui::MenuItem("CNC Sender", "Ctrl+2", isCnc))
+        setWorkspaceMode(WorkspaceMode::CNC);
+    ImGui::Separator();
+
     ImGui::MenuItem("Start Page", nullptr, &m_showStartPage);
     ImGui::Separator();
     ImGui::MenuItem("Viewport", nullptr, &m_showViewport);
