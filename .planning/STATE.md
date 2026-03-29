@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5.5
 milestone_name: Unified 3D Viewport
 status: executing
-stopped_at: Completed 39-01-PLAN.md (CNC controller dedup)
-last_updated: "2026-03-29T01:42:05.392Z"
+stopped_at: Completed 38-01-PLAN.md (GL state safety RAII refactor)
+last_updated: "2026-03-29T01:45:35.134Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 25
-  completed_phases: 19
+  completed_phases: 20
   total_plans: 44
-  completed_plans: 42
+  completed_plans: 43
 ---
 
 # Project State
@@ -46,6 +46,7 @@ Progress: [----------] 0/4 phases complete
 - Phases 37, 38, and 39 are independent of each other once Phase 36 is complete
 - m_savedViewport zeroed on moved-from Framebuffer objects since viewport state is only valid between bind/unbind
 - [Phase 39]: CncController dedup via private initializeConnection() helper -- not base class refactor
+- [Phase 38-gl-state-safety]: GLStateScope RAII guard in renderer.cpp anonymous namespace replaces 5 manual GL capability toggle pairs
 
 ### Known Fix Locations (from audit)
 
@@ -67,8 +68,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T01:42:05.390Z
-Stopped at: Completed 39-01-PLAN.md (CNC controller dedup)
+Last session: 2026-03-29T01:45:35.132Z
+Stopped at: Completed 38-01-PLAN.md (GL state safety RAII refactor)
 Resume file: None
 Next action: Execute Phase 36 Plan 02
 

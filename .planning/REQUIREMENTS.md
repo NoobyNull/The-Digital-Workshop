@@ -21,8 +21,8 @@ Requirements for Technical Debt Cleanup milestone. Verified via deep-dive code a
 
 ### GL State Safety (GLST)
 
-- [ ] **GLST-01**: A private `GLStateScope` RAII struct in Renderer handles `glEnable`/`glDisable` save/restore
-- [ ] **GLST-02**: All 5 renderer functions (renderMesh, renderToolpath, renderGrid, renderAxis, renderWireBox) use `GLStateScope` instead of manual toggle pairs
+- [x] **GLST-01**: A private `GLStateScope` RAII struct in Renderer handles `glEnable`/`glDisable` save/restore
+- [x] **GLST-02**: All 5 renderer functions (renderMesh, renderToolpath, renderGrid, renderAxis, renderWireBox) use `GLStateScope` instead of manual toggle pairs
 
 ### CNC Controller (CNC)
 
@@ -130,8 +130,8 @@ Requirements for Technical Debt Cleanup milestone. Verified via deep-dive code a
 | RBUG-04 | Phase 36 | Pending |
 | COORD-01 | Phase 37 | Pending |
 | COORD-02 | Phase 37 | Pending |
-| GLST-01 | Phase 38 | Pending |
-| GLST-02 | Phase 38 | Pending |
+| GLST-01 | Phase 38 | Complete |
+| GLST-02 | Phase 38 | Complete |
 | CNC-01 | Phase 39 | Complete |
 
 **Coverage:**
