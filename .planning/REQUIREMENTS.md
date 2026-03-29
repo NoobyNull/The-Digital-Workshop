@@ -26,7 +26,7 @@ Requirements for Technical Debt Cleanup milestone. Verified via deep-dive code a
 
 ### CNC Controller (CNC)
 
-- [ ] **CNC-01**: A private `initializeConnection()` helper extracts the shared state init from `connect()` and `connectTcp()`
+- [x] **CNC-01**: A private `initializeConnection()` helper extracts the shared state init from `connect()` and `connectTcp()`
 
 ## Previous Milestone Requirements
 
@@ -132,7 +132,7 @@ Requirements for Technical Debt Cleanup milestone. Verified via deep-dive code a
 | COORD-02 | Phase 37 | Pending |
 | GLST-01 | Phase 38 | Pending |
 | GLST-02 | Phase 38 | Pending |
-| CNC-01 | Phase 39 | Pending |
+| CNC-01 | Phase 39 | Complete |
 
 **Coverage:**
 - v0.6.0 requirements: 9 total

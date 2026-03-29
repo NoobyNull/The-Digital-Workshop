@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5.5
 milestone_name: Unified 3D Viewport
 status: executing
-stopped_at: Completed 36-01-PLAN.md (Framebuffer viewport save/restore)
-last_updated: "2026-03-29T01:00:00.000Z"
-last_activity: 2026-03-29 -- Completed 36-01 (RBUG-02 framebuffer viewport fix)
+stopped_at: Completed 39-01-PLAN.md (CNC controller dedup)
+last_updated: "2026-03-29T01:42:05.392Z"
+last_activity: 2026-03-29
 progress:
-  total_phases: 22
-  completed_phases: 17
-  total_plans: 41
-  completed_plans: 40
+  total_phases: 25
+  completed_phases: 19
+  total_plans: 44
+  completed_plans: 42
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 ## Current Position
 
-Phase: 36 (critical-rendering-bugs) — EXECUTING
-Plan: 2 of 2
+Phase: 36
+Plan: Not started
 Status: Executing Phase 36 (36-01 complete)
-Last activity: 2026-03-29 -- Completed 36-01 (RBUG-02 framebuffer viewport fix)
+Last activity: 2026-03-29
 
 Progress: [----------] 0/4 phases complete
 
@@ -45,6 +45,7 @@ Progress: [----------] 0/4 phases complete
 - Phase 36 must execute before phases 37/38 (bug fixes are the baseline for refactors)
 - Phases 37, 38, and 39 are independent of each other once Phase 36 is complete
 - m_savedViewport zeroed on moved-from Framebuffer objects since viewport state is only valid between bind/unbind
+- [Phase 39]: CncController dedup via private initializeConnection() helper -- not base class refactor
 
 ### Known Fix Locations (from audit)
 
@@ -66,8 +67,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-28
-Stopped at: Completed 36-01-PLAN.md (Framebuffer viewport save/restore)
+Last session: 2026-03-29T01:42:05.390Z
+Stopped at: Completed 39-01-PLAN.md (CNC controller dedup)
 Resume file: None
 Next action: Execute Phase 36 Plan 02
 

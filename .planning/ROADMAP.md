@@ -89,7 +89,7 @@
 - [x] **Phase 36: Critical Rendering Bugs** - Fix camera far plane propagation, framebuffer viewport leak, and two glPointSize leaks (completed 2026-03-29)
 - [ ] **Phase 37: Coordinate Space Consolidation** - Introduce gcodeToRenderer() helper and replace all 5 manual Y↔Z swap sites
 - [ ] **Phase 38: GL State Safety** - Introduce GLStateScope RAII struct and replace manual toggle pairs in 5 renderer functions
-- [ ] **Phase 39: CNC Controller Dedup** - Extract shared connection initialization into a private initializeConnection() helper
+- [x] **Phase 39: CNC Controller Dedup** - Extract shared connection initialization into a private initializeConnection() helper (completed 2026-03-29)
 
 ## Phase Details (v0.5.0)
 
@@ -285,7 +285,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 39-01-PLAN.md — Extract initializeConnection() helper and update connect()/connectTcp()
+- [x] 39-01-PLAN.md — Extract initializeConnection() helper and update connect()/connectTcp()
 
 ## Progress (v0.5.0)
 
@@ -319,7 +319,7 @@ Plans:
 | 36. Critical Rendering Bugs | v0.6.0 | 2/2 | Complete    | 2026-03-29 |
 | 37. Coordinate Space Consolidation | v0.6.0 | 0/1 | Not started | - |
 | 38. GL State Safety | v0.6.0 | 0/1 | Not started | - |
-| 39. CNC Controller Dedup | v0.6.0 | 0/1 | Not started | - |
+| 39. CNC Controller Dedup | v0.6.0 | 1/1 | Complete   | 2026-03-29 |
 
 ---
 *Roadmap created: 2026-02-24*
