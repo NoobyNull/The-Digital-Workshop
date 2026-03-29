@@ -699,6 +699,7 @@ void ViewportPanel::renderViewport() {
     // Restore original far plane
     if (m_camera.farPlane() != savedFar) {
         m_camera.setFarPlane(savedFar);
+        m_renderer.setCamera(m_camera);
     }
 
     m_renderer.endFrame();
@@ -1594,6 +1595,7 @@ void ViewportPanel::renderGCodeLines() {
                 flat.setVec4("uColor", Vec4{1.0f, 0.2f, 0.2f, 1.0f});
                 glPointSize(8.0f);
                 glDrawArrays(GL_POINTS, static_cast<GLint>(completedVertCount) + 1, 1);
+                glPointSize(1.0f);
             }
         }
     }

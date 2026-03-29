@@ -363,6 +363,7 @@ void Renderer::renderPoint(const Vec3& position, f32 pointSize, const Vec4& colo
     glBindVertexArray(0);
 
     glEnable(GL_DEPTH_TEST);
+    glPointSize(1.0f);
 }
 
 void Renderer::renderWireBox(const Vec3& min, const Vec3& max, const Vec4& color) {
