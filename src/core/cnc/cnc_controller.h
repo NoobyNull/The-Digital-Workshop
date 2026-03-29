@@ -83,6 +83,7 @@ class CncController {
     void requestStatus();
     void dispatchPendingCommands();
     void handleDisconnect();
+    void initializeConnection(); // shared post-port-open init for connect() and connectTcp()
 
     // Simulator internals
     void simIoThreadFunc();

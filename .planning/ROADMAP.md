@@ -269,7 +269,10 @@ Plans:
   2. renderMesh, renderToolpath, renderGrid, renderAxis, and renderWireBox each use GLStateScope in place of their manual glEnable/glDisable toggle pairs -- no manual before/after toggle pattern remains in these functions
   3. Rendering output is visually identical before and after the refactor -- no model, toolpath, grid, axis, or wire-box appearance changes
   4. All 931+ tests continue to pass after the refactor
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 38-01-PLAN.md — GLStateScope struct and 5-function toggle replacement
 
 ### Phase 39: CNC Controller Dedup
 **Goal**: The shared state initialization code executed at the start of both connect() and connectTcp() is extracted into a single private helper -- neither method duplicates that logic
@@ -314,10 +317,10 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 36. Critical Rendering Bugs | v0.6.0 | 2/2 | Complete    | 2026-03-29 |
-| 37. Coordinate Space Consolidation | v0.6.0 | 0/? | Not started | - |
-| 38. GL State Safety | v0.6.0 | 0/? | Not started | - |
+| 37. Coordinate Space Consolidation | v0.6.0 | 0/1 | Not started | - |
+| 38. GL State Safety | v0.6.0 | 0/1 | Not started | - |
 | 39. CNC Controller Dedup | v0.6.0 | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-24*
-*Last updated: 2026-03-28 -- Phase 36 planned (2 plans, wave 1)*
+*Last updated: 2026-03-28 -- Phase 38 planned (1 plan, wave 1)*
