@@ -8,6 +8,30 @@
 
 namespace dw {
 
+namespace {
+
+// RAII guard that saves a GL capability's current state, applies the desired state
+// on construction, and restores the original state on destruction.
+// Eliminates manual glEnable/glDisable bracket pairs in render functions.
+struct GLStateScope {
+    GLenum capability;
+    bool wasEnabled;
+    GLStateScope(GLenum cap, bool desired) : capability(cap) {
+        wasEnabled = glIsEnabled(cap);
+        if (desired && !wasEnabled) glEnable(cap);
+        else if (!desired && wasEnabled) glDisable(cap);
+    }
+    ~GLStateScope() {
+        if (wasEnabled) glEnable(capability);
+        else glDisable(capability);
+    }
+    // Non-copyable, non-movable — RAII only
+    GLStateScope(const GLStateScope&) = delete;
+    GLStateScope& operator=(const GLStateScope&) = delete;
+};
+
+} // anonymous namespace
+
 void GPUMesh::destroy() {
     if (ebo != 0) {
         glDeleteBuffers(1, &ebo);
