@@ -685,6 +685,7 @@ void ViewportPanel::renderViewport() {
     // Restore original far plane
     if (m_camera.farPlane() != savedFar) {
         m_camera.setFarPlane(savedFar);
+        m_renderer.setCamera(m_camera);
     }
 
     m_renderer.endFrame();
