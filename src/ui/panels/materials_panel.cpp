@@ -119,34 +119,23 @@ void MaterialsPanel::render() {
 // ---------------------------------------------------------------------------
 
 void MaterialsPanel::renderToolbar() {
-    // Import button
-    if (ImGui::Button(Icons::Import)) {
-        // File dialog for .dwmat import.
-        // In production this would open a native file dialog; here we log intent.
-        log::info("MaterialsPanel", "Import material requested (file dialog not yet wired)");
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Import material (.dwmat)");
+    // Import button (not yet implemented)
+    ImGui::BeginDisabled(true);
+    ImGui::Button(Icons::Import);
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("Coming soon");
     }
 
     ImGui::SameLine();
 
-    // Export button (only active when a material is selected)
+    // Export button (not yet implemented)
     bool hasSelection = (m_selectedMaterialId != -1);
-    if (!hasSelection) {
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::Button(Icons::Export)) {
-        if (hasSelection && m_materialManager) {
-            log::info("MaterialsPanel", "Export material requested (file dialog not yet wired)");
-        }
-    }
-    if (!hasSelection) {
-        ImGui::EndDisabled();
-    }
+    ImGui::BeginDisabled(true);
+    ImGui::Button(Icons::Export);
+    ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip(hasSelection ? "Export selected material (.dwmat)"
-                                       : "Select a material to export");
+        ImGui::SetTooltip("Coming soon");
     }
 
     ImGui::SameLine();
@@ -282,7 +271,9 @@ void MaterialsPanel::registerContextMenuEntries() {
                  log::info("MaterialsPanel",
                            "Export material requested (file dialog not yet wired)");
              }
-         }},
+         },
+         {},        // icon
+         []() { return false; }},  // disabled — coming soon
         ContextMenuEntry::separator(),
         {"Set as Default Material",
          [this]() {

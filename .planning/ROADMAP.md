@@ -87,7 +87,7 @@
 **Milestone Goal:** Fix four verified rendering bugs, centralize scattered coordinate space transformations into a single helper, introduce RAII-based GL state management to eliminate manual enable/disable pairs, and deduplicate CNC connection initialization -- all changes identified by deep-dive code audit.
 
 - [x] **Phase 36: Critical Rendering Bugs** - Fix camera far plane propagation, framebuffer viewport leak, and two glPointSize leaks (completed 2026-03-29)
-- [ ] **Phase 37: Coordinate Space Consolidation** - Introduce gcodeToRenderer() helper and replace all 5 manual Y↔Z swap sites
+- [x] **Phase 37: Coordinate Space Consolidation** - Introduce gcodeToRenderer() helper and replace all 5 manual Y↔Z swap sites (completed 2026-03-29)
 - [x] **Phase 38: GL State Safety** - Introduce GLStateScope RAII struct and replace manual toggle pairs in 5 renderer functions (completed 2026-03-29)
 - [x] **Phase 39: CNC Controller Dedup** - Extract shared connection initialization into a private initializeConnection() helper (completed 2026-03-29)
 
