@@ -543,7 +543,7 @@ void CncSafetyPanel::renderResumeDialog() {
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f),
+    ImGui::TextColored(colors::kOrange,
                        "%s CAUTION", Icons::Warning);
     ImGui::TextWrapped(
         "Resuming from an arbitrary line is inherently risky. "
@@ -739,7 +739,7 @@ void CncSafetyPanel::renderZProbeTab() {
     if (!canProbe) ImGui::EndDisabled();
 
     if (!canProbe) {
-        ImGui::TextColored(ImVec4(1, 0.5f, 0, 1),
+        ImGui::TextColored(colors::kOrange,
                            "Machine must be Idle and connected to probe");
     }
 }
@@ -827,7 +827,7 @@ void CncSafetyPanel::renderTlsTab() {
     if (!canCapture) ImGui::EndDisabled();
 
     if (!canCapture) {
-        ImGui::TextColored(ImVec4(1, 0.5f, 0, 1),
+        ImGui::TextColored(colors::kOrange,
                            "Machine must be Idle and connected");
     }
     } // end unit label scope
@@ -986,7 +986,7 @@ void CncSafetyPanel::render3DProbeTab() {
     if (!canProbe) ImGui::EndDisabled();
 
     if (!canProbe) {
-        ImGui::TextColored(ImVec4(1, 0.5f, 0, 1),
+        ImGui::TextColored(colors::kOrange,
                            "Machine must be Idle and connected to probe");
     }
 }

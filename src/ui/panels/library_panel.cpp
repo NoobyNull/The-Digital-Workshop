@@ -16,6 +16,7 @@
 #include "../../core/utils/log.h"
 #include "../context_menu_manager.h"
 #include "../icons.h"
+#include "../ui_colors.h"
 #include "../widgets/toast.h"
 
 namespace dw {
@@ -442,7 +443,7 @@ void LibraryPanel::renderCategoryBreadcrumb() {
     if (m_selectedCategoryId <= 0)
         return;
 
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f),
+    ImGui::TextColored(colors::kInfo,
                        "Category: %s",
                        m_selectedCategoryName.c_str());
     ImGui::SameLine();
