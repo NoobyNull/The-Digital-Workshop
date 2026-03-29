@@ -135,6 +135,10 @@ void Renderer::renderMesh(const GPUMesh& gpuMesh,
         return;
     }
 
+    // Disable back-face culling so non-solid meshes (e.g. CNC relief surfaces) are
+    // visible from both sides — state restored on scope exit
+    GLStateScope cullScope(GL_CULL_FACE, false);
+
     if (m_settings.wireframe) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     }
@@ -206,7 +210,7 @@ void Renderer::renderToolpath(const Mesh& toolpathMesh, const Mat4& modelMatrix)
     }
 
     // Disable back-face culling for toolpath (thin geometry visible from both sides)
-    glDisable(GL_CULL_FACE);
+    GLStateScope cullScope(GL_CULL_FACE, false);
 
     m_meshShader.bind();
 
@@ -237,9 +241,6 @@ void Renderer::renderToolpath(const Mesh& toolpathMesh, const Mat4& modelMatrix)
 
     // Disable toolpath mode for subsequent renders
     m_meshShader.setBool("uIsToolpath", false);
-
-    // Re-enable back-face culling
-    glEnable(GL_CULL_FACE);
 }
 
 void Renderer::renderGrid(f32 size, [[maybe_unused]] f32 spacing) {
@@ -247,7 +248,7 @@ void Renderer::renderGrid(f32 size, [[maybe_unused]] f32 spacing) {
         return;
     }
 
-    glDisable(GL_CULL_FACE);
+    GLStateScope cullScope(GL_CULL_FACE, false);
 
     m_gridShader.bind();
     m_gridShader.setMat4("uMVP", m_camera.viewProjectionMatrix());
@@ -258,8 +259,6 @@ void Renderer::renderGrid(f32 size, [[maybe_unused]] f32 spacing) {
     glBindVertexArray(m_gridMesh.vao);
     glDrawElements(GL_LINES, static_cast<GLsizei>(m_gridMesh.indexCount), GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
-
-    glEnable(GL_CULL_FACE);
 }
 
 void Renderer::renderAxis([[maybe_unused]] f32 length) {
@@ -267,7 +266,7 @@ void Renderer::renderAxis([[maybe_unused]] f32 length) {
         return;
     }
 
-    glDisable(GL_DEPTH_TEST);
+    GLStateScope depthScope(GL_DEPTH_TEST, false);
 
     m_flatShader.bind();
     m_flatShader.setMat4("uMVP", m_camera.viewProjectionMatrix());
@@ -287,7 +286,6 @@ void Renderer::renderAxis([[maybe_unused]] f32 length) {
     glDrawArrays(GL_LINES, 4, 2);
 
     glBindVertexArray(0);
-    glEnable(GL_DEPTH_TEST);
 }
 
 GPUMesh Renderer::uploadMesh(const Mesh& mesh) {
@@ -422,7 +420,7 @@ void Renderer::renderWireBox(const Vec3& min, const Vec3& max, const Vec4& color
     glBindBuffer(GL_ARRAY_BUFFER, m_wireBoxVBO);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
 
-    glDisable(GL_CULL_FACE);
+    GLStateScope cullScope(GL_CULL_FACE, false);
 
     m_flatShader.bind();
     m_flatShader.setMat4("uMVP", m_camera.viewProjectionMatrix());
@@ -431,8 +429,6 @@ void Renderer::renderWireBox(const Vec3& min, const Vec3& max, const Vec4& color
     glBindVertexArray(m_wireBoxVAO);
     glDrawArrays(GL_LINES, 0, 24);
     glBindVertexArray(0);
-
-    glEnable(GL_CULL_FACE);
 }
 
 void Renderer::clearMeshCache() {
