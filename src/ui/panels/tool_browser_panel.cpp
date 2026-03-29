@@ -501,20 +501,25 @@ void ToolBrowserPanel::renderTree() {
         ImGui::Text("Delete this item?");
         ImGui::TextDisabled("This cannot be undone.");
         ImGui::Spacing();
-        if (ImGui::Button("Delete", ImVec2(80, 0))) {
-            // Temporarily set selection to perform delete
-            std::string prevSelId = m_selectedTreeEntryId;
-            m_selectedTreeEntryId = m_contextMenuEntryId;
-            deleteSelected();
-            if (m_selectedTreeEntryId.empty()
-                && prevSelId != m_contextMenuEntryId) {
-                m_selectedTreeEntryId = prevSelId;
+        {
+            const float pad = ImGui::GetStyle().FramePadding.x * 4.0f;
+            const float deleteW = ImGui::CalcTextSize("Delete").x + pad;
+            const float cancelW = ImGui::CalcTextSize("Cancel").x + pad;
+            if (ImGui::Button("Delete", ImVec2(deleteW, 0))) {
+                // Temporarily set selection to perform delete
+                std::string prevSelId = m_selectedTreeEntryId;
+                m_selectedTreeEntryId = m_contextMenuEntryId;
+                deleteSelected();
+                if (m_selectedTreeEntryId.empty()
+                    && prevSelId != m_contextMenuEntryId) {
+                    m_selectedTreeEntryId = prevSelId;
+                }
+                ImGui::CloseCurrentPopup();
             }
-            ImGui::CloseCurrentPopup();
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(cancelW, 0)))
+                ImGui::CloseCurrentPopup();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(80, 0)))
-            ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 }

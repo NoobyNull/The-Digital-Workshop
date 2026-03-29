@@ -98,7 +98,7 @@ void CutOptimizerPanel::render() {
             }
         } else {
             // --- 3-column layout ---
-            float colH = -ImGui::GetFrameHeightWithSpacing() - 4;
+            float colH = -ImGui::GetFrameHeightWithSpacing() - ImGui::GetStyle().ItemSpacing.y;
             // Left column
             ImGui::BeginChild("Left", ImVec2(leftW, colH), ImGuiChildFlags_Borders);
             renderCutListTable();

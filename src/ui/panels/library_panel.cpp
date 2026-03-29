@@ -503,7 +503,7 @@ void LibraryPanel::renderCategoryAssignDialog() {
             }
 
             // Show children indented
-            ImGui::Indent(20.0f);
+            ImGui::Indent(ImGui::GetStyle().IndentSpacing);
             for (auto& child : m_categories) {
                 if (!child.parentId.has_value() || *child.parentId != cat.id)
                     continue;
@@ -515,7 +515,7 @@ void LibraryPanel::renderCategoryAssignDialog() {
                         m_assignedCategoryIds.erase(child.id);
                 }
             }
-            ImGui::Unindent(20.0f);
+            ImGui::Unindent(ImGui::GetStyle().IndentSpacing);
         }
 
         ImGui::EndChild();
