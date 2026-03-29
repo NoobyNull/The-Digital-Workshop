@@ -46,6 +46,7 @@ class Framebuffer {
     GLuint m_depthTexture = 0;
     int m_width = 0;
     int m_height = 0;
+    GLint m_savedViewport[4] = {0, 0, 0, 0};
 };
 
 } // namespace dw
