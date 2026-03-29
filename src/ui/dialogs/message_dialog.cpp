@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include "../icons.h"
+#include "../ui_colors.h"
 
 namespace dw {
 
@@ -23,20 +24,20 @@ void MessageDialog::render() {
     if (ImGui::BeginPopupModal(m_title.c_str(), &m_open, ImGuiWindowFlags_AlwaysAutoResize)) {
         // Icon based on type
         const char* icon = Icons::Info;
-        ImVec4 iconColor = ImVec4(0.4f, 0.6f, 0.8f, 1.0f);
+        ImVec4 iconColor = colors::kInfo;
 
         switch (m_type) {
         case MessageType::Warning:
             icon = Icons::Warning;
-            iconColor = ImVec4(0.8f, 0.6f, 0.3f, 1.0f);
+            iconColor = colors::kWarning;
             break;
         case MessageType::Error:
             icon = Icons::Error;
-            iconColor = ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
+            iconColor = colors::kError;
             break;
         case MessageType::Question:
             icon = Icons::Question;
-            iconColor = ImVec4(0.5f, 0.7f, 0.9f, 1.0f);
+            iconColor = colors::kInfo;
             break;
         default:
             break;
@@ -143,7 +144,7 @@ void ConfirmDialog::render() {
     ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x * 0.25f, 0), ImGuiCond_Appearing);
 
     if (ImGui::BeginPopupModal(m_title.c_str(), &m_open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.7f, 0.9f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, colors::kInfo);
         ImGui::Text("%s", Icons::Question);
         ImGui::PopStyleColor();
 
@@ -204,7 +205,7 @@ void SavePromptDialog::render() {
 
     if (ImGui::BeginPopupModal(m_title.c_str(), &m_open,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.6f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, colors::kWarning);
         ImGui::Text("%s", Icons::Warning);
         ImGui::PopStyleColor();
 
