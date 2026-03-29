@@ -33,13 +33,13 @@ const char* machineStateName(MachineState state) {
 ImVec4 machineStateColor(MachineState state) {
     switch (state) {
     case MachineState::Idle: return colors::kSuccess;                   // Green
-    case MachineState::Run: return ImVec4(0.3f, 0.5f, 1.0f, 1.0f);    // Blue
+    case MachineState::Run: return colors::kStateRun;                   // Blue
     case MachineState::Hold: return colors::kWarning;                   // Yellow
-    case MachineState::Jog: return ImVec4(0.3f, 0.7f, 1.0f, 1.0f);    // Light blue
+    case MachineState::Jog: return colors::kStateJog;                   // Light blue
     case MachineState::Alarm: return colors::kError;                    // Red
-    case MachineState::Door: return ImVec4(1.0f, 0.5f, 0.2f, 1.0f);   // Orange
-    case MachineState::Check: return ImVec4(0.6f, 0.6f, 0.8f, 1.0f);  // Lavender
-    case MachineState::Home: return ImVec4(0.5f, 0.8f, 1.0f, 1.0f);   // Cyan
+    case MachineState::Door: return colors::kStateDoor;                 // Orange
+    case MachineState::Check: return colors::kStateCheck;               // Lavender
+    case MachineState::Home: return colors::kStateHome;                 // Cyan
     case MachineState::Sleep: return colors::kDimmed;                   // Gray
     default: return colors::kDimmed;
     }
@@ -138,7 +138,7 @@ void CncStatusPanel::renderProbeIndicator() {
     ImGui::TextDisabled("Probe");
     if (probeActive) {
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.0f, 0.85f, 0.0f, 1.0f), "(ACTIVE)");
+        ImGui::TextColored(colors::kSuccess, "(ACTIVE)");
     }
 }
 
@@ -366,9 +366,14 @@ void CncStatusPanel::renderAlarmBanner() {
     float width = ImGui::GetContentRegionAvail().x;
     float height = ImGui::GetFrameHeight() * 2.2f;
 
+    // Background derived from kError: darken the red, semi-transparent
+    const ImVec4& ec = colors::kError;
     ImGui::GetWindowDrawList()->AddRectFilled(
         cursorPos, ImVec2(cursorPos.x + width, cursorPos.y + height),
-        IM_COL32(180, 40, 40, 200), 4.0f);
+        IM_COL32(static_cast<int>(ec.x * 180),
+                 static_cast<int>(ec.y * 130),
+                 static_cast<int>(ec.z * 130), 200),
+        4.0f);
 
     // Alarm text
     char alarmText[128];
@@ -396,7 +401,7 @@ void CncStatusPanel::renderAlarmBanner() {
 
     // Alarm reference tooltip
     ImGui::SameLine();
-    ImGui::SmallButton("?##AlarmRef");
+    ImGui::TextDisabled("?");
     if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
         ImGui::TextUnformatted("GRBL Alarm Codes");
