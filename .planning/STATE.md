@@ -2,13 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.5.5
 milestone_name: Unified 3D Viewport
-status: executing
-last_updated: "2026-03-09T15:37:54.000Z"
+status: verifying
+stopped_at: Completed 36-02-PLAN.md (glPointSize leaks + stale projection fix)
+last_updated: "2026-03-29T00:57:43.173Z"
+last_activity: 2026-03-29
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 10
+  completed_phases: 0
+  total_plans: 7
+  completed_plans: 13
+  percent: 90
 ---
 
 # Project State
@@ -24,14 +27,15 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 Phase: 34 of 35 (Simulation Playback)
 Plan: 1 of 1
-Status: Phase 34 Complete
-Last activity: 2026-03-09 -- Completed 34-01-PLAN.md (Simulation Playback)
+Status: Phase complete — ready for verification
+Last activity: 2026-03-29
 
 Progress: [########=.] 90%
 
 ## Accumulated Context
 
 ### Decisions
+
 - Unified viewport (Option B) -- merge all 3D rendering into ViewportPanel
 - FitParams as alignment source of truth for model-gcode overlay
 - Point-match validation (1% sample) confirms alignment, doesn't solve it
@@ -55,17 +59,21 @@ Progress: [########=.] 90%
 - VPSimState enum separate from GCodePanel SimState to avoid viewport-gcode_panel header coupling
 - Scrubbing auto-transitions Stopped->Paused so slider drag shows live overlay
 - Statistics computed via gcode::Analyzer in wiring callback for independent viewport simulation
+- [Phase 36-critical-rendering-bugs]: GL state restore: each render helper that modifies GL state must restore it before returning (established by 36-02 glPointSize fixes)
+- [Phase 36-critical-rendering-bugs]: Camera propagation: after mutating camera state with setFarPlane, call m_renderer.setCamera(m_camera) to push new projection matrix
 
 ### Pending Todos
+
 None.
 
 ### Blockers/Concerns
+
 None.
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Completed 34-01-PLAN.md
+Last session: 2026-03-29T00:57:43.171Z
+Stopped at: Completed 36-02-PLAN.md (glPointSize leaks + stale projection fix)
 Resume file: None
 Next action: Execute Phase 35
 
