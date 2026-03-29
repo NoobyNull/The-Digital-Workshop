@@ -3,72 +3,76 @@ gsd_state_version: 1.0
 milestone: v0.5.5
 milestone_name: Unified 3D Viewport
 status: executing
-last_updated: "2026-03-09T15:37:54.000Z"
+stopped_at: Completed 38-01-PLAN.md (GL state safety RAII refactor)
+last_updated: "2026-03-29T01:45:35.134Z"
+last_activity: 2026-03-29
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 25
+  completed_phases: 20
+  total_plans: 44
+  completed_plans: 43
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-09)
+See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** A woodworker can go from selecting a piece of wood and a cutting tool to safely running a CNC job with optimized feeds and speeds -- all without leaving the application.
-**Current focus:** Milestone v0.5.5 Unified 3D Viewport -- Phase 34 complete, Phase 35 next
+**Current focus:** Phase 36 — critical-rendering-bugs
 
 ## Current Position
 
-Phase: 34 of 35 (Simulation Playback)
-Plan: 1 of 1
-Status: Phase 34 Complete
-Last activity: 2026-03-09 -- Completed 34-01-PLAN.md (Simulation Playback)
+Phase: 36
+Plan: Not started
+Status: Executing Phase 36 (36-01 complete)
+Last activity: 2026-03-29
 
-Progress: [########=.] 90%
+Progress: [----------] 0/4 phases complete
 
 ## Accumulated Context
 
 ### Decisions
+
 - Unified viewport (Option B) -- merge all 3D rendering into ViewportPanel
 - FitParams as alignment source of truth for model-gcode overlay
-- Point-match validation (1% sample) confirms alignment, doesn't solve it
-- GCodePanel loses 3D rendering, keeps control/info role
-- External .nc files render in viewport, no model required
-- Phase numbering continues from 31 (v0.5.0 ended at 30)
-- No research phase -- internal architectural work
-- Height-line shader owned by Renderer (not per-panel) for shared access
-- No filter toggles in Phase 31 -- all move types render unconditionally
-- G-code lines are separate rendering layer from existing toolpath mesh
-- Callback wiring in application_wiring_cnc.cpp alongside existing GCodePanel setup
-- Null-check on viewportPanel() pointer for safety against panel ordering changes
-- Reused GCodePanel's 8-color toolColor palette and ToolGroup pattern for consistency
-- Z-clip filtering in G-code space (not renderer Y-up space) matching GCodePanel convention
-- Move-type filtering at geometry build time for GPU efficiency
-- Direct matrix construction for FitParams (single swapYZ * fitMat multiply, no chain)
-- Fire FitParams callback every frame in renderModelFit() -- matrix update is cheap
-- Brute-force point-to-triangle distance with 1% stride sampling for alignment validation
-- 70% near-ratio threshold for Aligned status (accounts for approach/retract segments)
-- Deterministic stride-based sampling for reproducible validation results
-- VPSimState enum separate from GCodePanel SimState to avoid viewport-gcode_panel header coupling
-- Scrubbing auto-transitions Stopped->Paused so slider drag shows live overlay
-- Statistics computed via gcode::Analyzer in wiring callback for independent viewport simulation
+- Phase numbering continues from 35 (v0.5.5 ended at 35)
+- No research phase -- internal refactoring/bugfix work
+- Coordinate swap centralization via inline helper function (not matrix-based)
+- GL state management via RAII guard pattern (GLStateScope in renderer.cpp)
+- CncController dedup via private initializeConnection() helper (not base class refactor)
+- Phase 36 must execute before phases 37/38 (bug fixes are the baseline for refactors)
+- Phases 37, 38, and 39 are independent of each other once Phase 36 is complete
+- m_savedViewport zeroed on moved-from Framebuffer objects since viewport state is only valid between bind/unbind
+- [Phase 39]: CncController dedup via private initializeConnection() helper -- not base class refactor
+- [Phase 38-gl-state-safety]: GLStateScope RAII guard in renderer.cpp anonymous namespace replaces 5 manual GL capability toggle pairs
+
+### Known Fix Locations (from audit)
+
+- RBUG-01: viewport_panel.cpp:707 -- add m_renderer.setCamera(m_camera) after far plane restore
+- RBUG-02: framebuffer.cpp -- unbind() must save/restore previous GL viewport rect
+- RBUG-03: renderer.cpp:361 -- renderPoint() must call glPointSize(1.0f) before return
+- RBUG-04: viewport_panel.cpp:1601 -- renderGCodeLines() must call glPointSize(1.0f) before return
+- COORD-01/02: 5 swap sites at viewport_panel.cpp lines 632, 694-698, 1057-1058, 1543-1548, 1562-1566
+- GLST-01/02: 5 render functions (renderMesh, renderToolpath, renderGrid, renderAxis, renderWireBox)
+- CNC-01: connect() and connectTcp() share ~8 lines of init code
 
 ### Pending Todos
+
 None.
 
 ### Blockers/Concerns
+
 None.
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Completed 34-01-PLAN.md
+Last session: 2026-03-29T01:45:35.132Z
+Stopped at: Completed 38-01-PLAN.md (GL state safety RAII refactor)
 Resume file: None
-Next action: Execute Phase 35
+Next action: Execute Phase 36 Plan 02
 
 ---
 *State initialized: 2026-02-27*
-*Last updated: 2026-03-09 -- 34-01 completed (Simulation Playback)*
+*Last updated: 2026-03-29 -- 36-01 completed (RBUG-02 framebuffer viewport fix)*
