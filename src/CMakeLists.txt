@@ -237,6 +237,7 @@ target_link_libraries(digital_workshop PRIVATE
     miniz_static
     nlohmann_json::nlohmann_json
     CURL::libcurl
+    nfd
 )
 
 # Include directories

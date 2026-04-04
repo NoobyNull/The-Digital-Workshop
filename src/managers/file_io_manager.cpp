@@ -48,9 +48,9 @@ FileIOManager::~FileIOManager() = default;
 
 void FileIOManager::importModel() {
     if (m_fileDialog) {
-        m_fileDialog->showOpenMulti("Import Models",
-                                    FileDialog::modelFilters(),
-                                    [this](const std::vector<std::string>& paths) {
+        m_fileDialog->showNativeOpenMulti("Import Models",
+                                          FileDialog::modelFilters(),
+                                          [this](const std::vector<std::string>& paths) {
                                         if (paths.empty())
                                             return;
 

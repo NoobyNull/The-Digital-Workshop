@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include <imgui.h>
+#include <nfd.h>
 
 #include "../../core/utils/file_utils.h"
 #include "../icons.h"
@@ -316,6 +317,150 @@ bool FileDialog::matchesFilter(const std::string& filename) const {
     }
 
     return false;
+}
+
+// --- Native OS file dialog implementations ---
+
+namespace {
+
+// Convert our FileFilter format to NFD's filter format
+std::vector<nfdfilteritem_t> toNfdFilters(const std::vector<FileFilter>& filters) {
+    std::vector<nfdfilteritem_t> nfdFilters;
+    for (const auto& f : filters) {
+        if (f.extensions == "*" || f.extensions == "*.*")
+            continue; // NFD handles "all files" automatically
+
+        // Convert "*.stl;*.obj" → "stl,obj"
+        std::string spec;
+        std::string exts = f.extensions;
+        size_t pos = 0;
+        while (pos < exts.size()) {
+            size_t next = exts.find(';', pos);
+            std::string pattern = exts.substr(pos, next == std::string::npos ? next : next - pos);
+            // Strip leading "*."
+            size_t dot = pattern.find('.');
+            if (dot != std::string::npos) {
+                if (!spec.empty()) spec += ',';
+                spec += pattern.substr(dot + 1);
+            }
+            if (next == std::string::npos) break;
+            pos = next + 1;
+        }
+        nfdFilters.push_back({f.name.c_str(), spec.c_str()});
+    }
+    return nfdFilters;
+}
+
+} // anonymous namespace
+
+void FileDialog::showNativeOpen(const std::string& /*title*/,
+                                const std::vector<FileFilter>& filters,
+                                std::function<void(const std::string&)> callback) {
+    NFD_Init();
+
+    auto nfdFilters = toNfdFilters(filters);
+    nfdchar_t* outPath = nullptr;
+    nfdresult_t result = NFD_OpenDialog(&outPath,
+                                         nfdFilters.empty() ? nullptr : nfdFilters.data(),
+                                         static_cast<nfdfiltersize_t>(nfdFilters.size()),
+                                         nullptr);
+
+    if (result == NFD_OKAY && outPath) {
+        std::string path(outPath);
+        NFD_FreePath(outPath);
+        NFD_Quit();
+        if (callback) callback(path);
+    } else {
+        if (result == NFD_ERROR) {
+            fprintf(stderr, "Native file dialog error: %s\n", NFD_GetError());
+        }
+        NFD_Quit();
+        if (callback) callback("");
+    }
+}
+
+void FileDialog::showNativeOpenMulti(const std::string& /*title*/,
+                                     const std::vector<FileFilter>& filters,
+                                     std::function<void(const std::vector<std::string>&)> callback) {
+    NFD_Init();
+
+    auto nfdFilters = toNfdFilters(filters);
+    const nfdpathset_t* outPaths = nullptr;
+    nfdresult_t result = NFD_OpenDialogMultiple(&outPaths,
+                                                 nfdFilters.empty() ? nullptr : nfdFilters.data(),
+                                                 static_cast<nfdfiltersize_t>(nfdFilters.size()),
+                                                 nullptr);
+
+    if (result == NFD_OKAY && outPaths) {
+        std::vector<std::string> paths;
+        nfdpathsetsize_t count = 0;
+        NFD_PathSet_GetCount(outPaths, &count);
+        for (nfdpathsetsize_t i = 0; i < count; ++i) {
+            nfdchar_t* path = nullptr;
+            if (NFD_PathSet_GetPath(outPaths, i, &path) == NFD_OKAY && path) {
+                paths.emplace_back(path);
+                NFD_PathSet_FreePath(path);
+            }
+        }
+        NFD_PathSet_Free(outPaths);
+        NFD_Quit();
+        if (callback) callback(paths);
+    } else {
+        if (result == NFD_ERROR) {
+            fprintf(stderr, "Native file dialog error: %s\n", NFD_GetError());
+        }
+        NFD_Quit();
+        if (callback) callback({});
+    }
+}
+
+void FileDialog::showNativeSave(const std::string& /*title*/,
+                                const std::vector<FileFilter>& filters,
+                                const std::string& defaultName,
+                                std::function<void(const std::string&)> callback) {
+    NFD_Init();
+
+    auto nfdFilters = toNfdFilters(filters);
+    nfdchar_t* outPath = nullptr;
+    nfdresult_t result = NFD_SaveDialog(&outPath,
+                                         nfdFilters.empty() ? nullptr : nfdFilters.data(),
+                                         static_cast<nfdfiltersize_t>(nfdFilters.size()),
+                                         nullptr,
+                                         defaultName.c_str());
+
+    if (result == NFD_OKAY && outPath) {
+        std::string path(outPath);
+        NFD_FreePath(outPath);
+        NFD_Quit();
+        if (callback) callback(path);
+    } else {
+        if (result == NFD_ERROR) {
+            fprintf(stderr, "Native file dialog error: %s\n", NFD_GetError());
+        }
+        NFD_Quit();
+        if (callback) callback("");
+    }
+}
+
+void FileDialog::showNativeFolder(const std::string& /*title*/,
+                                  std::function<void(const std::string&)> callback) {
+    NFD_Init();
+
+    nfdchar_t* outPath = nullptr;
+    nfdresult_t result = NFD_PickFolder(&outPath, nullptr);
+
+    if (result == NFD_OKAY && outPath) {
+        std::string path(outPath);
+        NFD_FreePath(outPath);
+        NFD_Quit();
+        if (callback) callback(path);
+    } else {
+        if (result == NFD_ERROR) {
+            fprintf(stderr, "Native file dialog error: %s\n", NFD_GetError());
+        }
+        NFD_Quit();
+        if (callback) callback("");
+    }
 }
 
 std::vector<FileFilter> FileDialog::modelFilters() {

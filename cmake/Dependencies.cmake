@@ -204,6 +204,16 @@ set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 set(JSON_Install OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(json)
 
+# NFD-extended - Native file dialogs (Linux GTK/portal, Windows, macOS)
+FetchContent_Declare(
+    nfd
+    GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
+    GIT_TAG v1.2.1
+    GIT_SHALLOW TRUE
+)
+set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(nfd)
+
 # GoogleTest (for testing only)
 if(DW_BUILD_TESTS)
     FetchContent_Declare(

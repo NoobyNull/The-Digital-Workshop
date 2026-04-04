@@ -46,6 +46,23 @@ class FileDialog : public Dialog {
     // Show folder selection dialog
     void showFolder(const std::string& title, std::function<void(const std::string&)> callback);
 
+    // Native OS file dialog (supports network locations via GVFS/portal)
+    void showNativeOpen(const std::string& title,
+                        const std::vector<FileFilter>& filters,
+                        std::function<void(const std::string&)> callback);
+
+    void showNativeOpenMulti(const std::string& title,
+                             const std::vector<FileFilter>& filters,
+                             std::function<void(const std::vector<std::string>&)> callback);
+
+    void showNativeSave(const std::string& title,
+                        const std::vector<FileFilter>& filters,
+                        const std::string& defaultName,
+                        std::function<void(const std::string&)> callback);
+
+    void showNativeFolder(const std::string& title,
+                          std::function<void(const std::string&)> callback);
+
     // Common filters
     static std::vector<FileFilter> modelFilters();
     static std::vector<FileFilter> projectFilters();
