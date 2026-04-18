@@ -54,7 +54,9 @@ void ToastManager::render(float deltaTime) {
     float yOffset = viewport->WorkPos.y + ImGui::GetFrameHeightWithSpacing() * 2; // Below menu bar
     const float xPadding = ImGui::GetStyle().WindowPadding.x;
     const float ySpacing = ImGui::GetStyle().ItemSpacing.y;
-    const float toastWidth = std::clamp(viewport->WorkSize.x * 0.25f, 200.0f, 500.0f);
+    const float toastWidth = std::clamp(viewport->WorkSize.x * 0.25f,
+                                        ImGui::GetFontSize() * 15.0f,
+                                        ImGui::GetFontSize() * 38.0f);
 
     // Update and render toasts
     for (auto it = m_toasts.begin(); it != m_toasts.end();) {

@@ -54,7 +54,8 @@ void StatusBar::render(const LoadingState* loadingState) {
             }
 
             // Align to right side
-            float progressBarWidth = std::max(ImGui::GetContentRegionAvail().x * 0.15f, 120.0f);
+            float progressBarWidth = std::max(ImGui::GetContentRegionAvail().x * 0.15f,
+                                              ImGui::GetFontSize() * 9.0f);
             float cancelButtonWidth = ImGui::CalcTextSize("X").x +
                                       ImGui::GetStyle().FramePadding.x * 2;
             float itemSpacing = ImGui::GetStyle().ItemSpacing.x * 2;
