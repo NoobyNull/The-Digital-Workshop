@@ -6,9 +6,9 @@
 - [x] **v0.2.0 Sender Feature Parity** - Phases 9-13 (shipped 2026-02-27)
 - [x] **v0.3.0 Direct Carve** - Phases 14-19 (completed 2026-02-28)
 - [x] **v0.4.0 Shared Materials & Project Costing** - Phases 20-26 (completed 2026-03-05)
-- [ ] **v0.5.0 Codebase Cleanup & Simplification** - Phases 27-30 (in progress)
-- [ ] **v0.5.5 Unified 3D Viewport** - Phases 31-35
-- [ ] **v0.6.0 Technical Debt Cleanup** - Phases 36-39
+- [x] **v0.5.0 Codebase Cleanup & Simplification** - Phases 27-30 (completed 2026-04-18)
+- [x] **v0.5.5 Unified 3D Viewport** - Phases 31-35 (completed 2026-03-09, P35 back-filled 2026-04-18)
+- [x] **v0.6.0 Technical Debt Cleanup** - Phases 36-39 (completed 2026-03-29)
 
 ## Phases
 
@@ -65,10 +65,10 @@
 <details>
 <summary>v0.5.0 Codebase Cleanup & Simplification (Phases 27-30) - IN PROGRESS</summary>
 
-- [ ] **Phase 27: Bug Fixes & Safety** - Fix raw new/delete in ImportQueue and cross-filesystem file::move() fallback
-- [ ] **Phase 28: Monolithic Function Splits** - Decompose five oversized functions and bring all files under the 800-line limit
-- [ ] **Phase 29: Duplicate Code Consolidation** - Centralize UI color constants, ImGui table helpers, and edit buffer management
-- [ ] **Phase 30: Code Quality Polish** - Replace hardcoded UI scale factors and glClearColor constants with style/config-derived values
+- [x] **Phase 27: Bug Fixes & Safety** - Fix raw new/delete in ImportQueue and cross-filesystem file::move() fallback (executed 2026-03-04 in commit 6751b47; tracker back-filled 2026-04-18)
+- [x] **Phase 28: Monolithic Function Splits** - Decompose five oversized functions and bring all split-out files under the 800-line limit (executed 2026-03; tracker back-filled 2026-04-18)
+- [x] **Phase 29: Duplicate Code Consolidation** - Centralize UI color constants, ImGui table helpers, and edit buffer management (completed 2026-03-05; tracker back-filled 2026-04-18)
+- [x] **Phase 30: Code Quality Polish** - Replace hardcoded UI scale factors and glClearColor constants with style/config-derived values (completed 2026-04-18)
 
 </details>
 
@@ -80,7 +80,7 @@
 - [x] **Phase 32: Viewport Toolbar & Toggles** - Toggle buttons and sliders for model, toolpath, move types, color-by-tool, and Z-clip (completed 2026-03-09)
 - [x] **Phase 33: Model-Toolpath Alignment** - FitParams transform overlays model and G-code correctly with point-match validation (completed 2026-03-09)
 - [x] **Phase 34: Simulation Playback** - Play/pause/scrub simulation with completed/current/cutter visualization in viewport (completed 2026-03-09)
-- [ ] **Phase 35: GCodePanel Rendering Elimination** - Strip rendering infrastructure from GCodePanel, unify mouse interaction across layers
+- [x] **Phase 35: GCodePanel Rendering Elimination** - Strip rendering infrastructure from GCodePanel, unify mouse interaction across layers (executed 2026-03; tracker back-filled 2026-04-18)
 
 ### v0.6.0 Technical Debt Cleanup (Phases 36-39)
 
