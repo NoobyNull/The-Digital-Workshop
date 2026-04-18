@@ -31,7 +31,7 @@ bool BindingRecorder::renderBindingRow(
             ImGui::SetNextFrameWantCaptureMouse(true);
 
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
-            ImGui::Button(">>> Press key/button <<<", ImVec2(200, 0));
+            ImGui::Button(">>> Press key/button <<<", ImVec2(ImGui::GetFontSize() * 15.0f, 0));
             ImGui::PopStyleColor();
 
             // Try to capture
@@ -58,7 +58,7 @@ bool BindingRecorder::renderBindingRow(
         } else {
             // Display current binding
             std::string label = "[" + binding.displayName() + "]";
-            ImGui::Button(label.c_str(), ImVec2(200, 0));
+            ImGui::Button(label.c_str(), ImVec2(ImGui::GetFontSize() * 15.0f, 0));
 
             ImGui::SameLine();
             if (ImGui::Button("+")) {

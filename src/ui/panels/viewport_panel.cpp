@@ -430,9 +430,14 @@ void ViewportPanel::handleInput() {
     f32 orbitSignX = cfg.getInvertOrbitX() ? 1.0f : -1.0f;
     f32 orbitSignY = cfg.getInvertOrbitY() ? 1.0f : -1.0f;
 
+    // Mouse sensitivity tuning values (candidates for Config promotion)
+    constexpr f32 kWheelZoomSensitivity = 0.5f;            // camera units per wheel tick
+    constexpr f32 kDragZoomSensitivity = 0.01f;            // camera units per pixel of Y drag
+    constexpr f32 kLightIntensityDragSensitivity = 0.005f; // intensity units per pixel of Y drag
+
     // Mouse wheel zoom (all styles)
     if (io.MouseWheel != 0.0f) {
-        m_camera.zoom(io.MouseWheel * 0.5f);
+        m_camera.zoom(io.MouseWheel * kWheelZoomSensitivity);
     }
 
     // --- Configurable light controls ---
@@ -479,7 +484,7 @@ void ViewportPanel::handleInput() {
         if (delta.y != 0.0f) {
             auto& col = m_renderer.settings().lightColor;
             f32 maxC = std::max({col.x, col.y, col.z, 0.001f});
-            f32 intensity = maxC - delta.y * 0.005f;
+            f32 intensity = maxC - delta.y * kLightIntensityDragSensitivity;
             intensity = std::clamp(intensity, 0.1f, 3.0f);
             f32 scale = intensity / maxC;
             col.x *= scale;
@@ -524,7 +529,7 @@ void ViewportPanel::handleInput() {
             }
             if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
                 ImVec2 delta = io.MouseDelta;
-                m_camera.zoom(delta.y * 0.01f);
+                m_camera.zoom(delta.y * kDragZoomSensitivity);
             }
         }
         break;
