@@ -903,6 +903,9 @@ void GCodePanel::onGrblConnected(bool connected, const std::string& version) {
             auto modal = GCodeModalScanner::scanToLine(getRawLines(), m_streamProgress.ackedLines);
             m_jobRepo->finishJob(m_activeJobId, "aborted", m_streamProgress.ackedLines,
                                  m_streamProgress.elapsedSeconds, m_streamProgress.errorCount, modal);
+            if (m_projectManager && m_projectManager->currentProject()) {
+                (void)m_projectManager->currentOpenItems();
+            }
             m_activeJobId = -1;
             m_jobHistoryDirty = true;
         }
@@ -940,6 +943,9 @@ void GCodePanel::onGrblProgress(const StreamProgress& progress) {
             auto modal = GCodeModalScanner::scanToLine(getRawLines(), progress.ackedLines);
             m_jobRepo->finishJob(m_activeJobId, "completed", progress.ackedLines,
                                  progress.elapsedSeconds, progress.errorCount, modal);
+            if (m_projectManager && m_projectManager->currentProject()) {
+                (void)m_projectManager->currentOpenItems();
+            }
             m_activeJobId = -1;
             m_jobHistoryDirty = true;
         }
@@ -969,6 +975,9 @@ void GCodePanel::onGrblAlarm(int code, const std::string& desc) {
         auto modal = GCodeModalScanner::scanToLine(getRawLines(), m_streamProgress.ackedLines);
         m_jobRepo->finishJob(m_activeJobId, "aborted", m_streamProgress.ackedLines,
                              m_streamProgress.elapsedSeconds, m_streamProgress.errorCount, modal);
+        if (m_projectManager && m_projectManager->currentProject()) {
+            (void)m_projectManager->currentOpenItems();
+        }
         m_activeJobId = -1;
         m_jobHistoryDirty = true;
     }
@@ -1058,10 +1067,13 @@ void GCodePanel::buildSendProgram() {
     if (m_jobRepo) {
         JobRecord job;
         job.fileName = file::getStem(m_filePath) + "." + file::getExtension(m_filePath);
-        job.filePath = m_filePath;
+        job.filePath = PathResolver::makeStorable(Path(m_filePath), PathCategory::GCode).string();
         job.totalLines = static_cast<int>(lines.size());
         auto id = m_jobRepo->insert(job);
         m_activeJobId = id.value_or(-1);
+        if (id && m_projectManager && m_projectManager->currentProject()) {
+            (void)m_projectManager->currentOpenItems();
+        }
         m_jobHistoryDirty = true;
     }
 

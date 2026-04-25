@@ -533,6 +533,31 @@ TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesJobItemsForProj
     EXPECT_NE(jobItems[0].snapshotJson.find(R"("elapsed_seconds":73.5)"), std::string::npos);
 }
 
+TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_UpdatesExistingJobItemStatus) {
+    auto projectId = insertProject("Runtime Update");
+    auto gcodeId = insertGCode("Relief Finish", "finish-hash");
+    auto jobId = insertJobForGCode("Relief Finish", "running");
+
+    dw::GCodeRepository gcodeRepo(m_db);
+    ASSERT_TRUE(gcodeRepo.addToProject(projectId, gcodeId));
+
+    ASSERT_EQ(m_repo->ensureOpenItemsForProject(projectId), 4);
+    auto runningItems = m_repo->findOpenItemsBySource(projectId, "cnc_jobs", jobId);
+    ASSERT_EQ(runningItems.size(), 1u);
+    EXPECT_EQ(runningItems[0].status, dw::ProjectOpenItemStatus::Sent);
+
+    dw::JobRepository jobRepo(m_db);
+    dw::ModalState modal;
+    ASSERT_TRUE(jobRepo.finishJob(jobId, "completed", 100, 88.0f, 0, modal));
+
+    EXPECT_EQ(m_repo->ensureOpenItemsForProject(projectId), 0);
+    auto completedItems = m_repo->findOpenItemsBySource(projectId, "cnc_jobs", jobId);
+    ASSERT_EQ(completedItems.size(), 1u);
+    EXPECT_EQ(completedItems[0].id, runningItems[0].id);
+    EXPECT_EQ(completedItems[0].status, dw::ProjectOpenItemStatus::Complete);
+    EXPECT_NE(completedItems[0].snapshotJson.find(R"("elapsed_seconds":88)"), std::string::npos);
+}
+
 TEST_F(ProjectOpenItemRepoTest, ValidateOpenItemsForProject_MarksChangedSourcesStale) {
     auto projectId = insertProject("Changed Sources");
     auto modelId = insertModel("Relief", "model-v1");

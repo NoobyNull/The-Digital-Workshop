@@ -972,9 +972,7 @@ int ProjectRepository::ensureOpenItemsForProject(i64 projectId) {
     if (jobStmt.isValid() && jobStmt.bindInt(1, projectId)) {
         while (jobStmt.step()) {
             i64 jobId = jobStmt.getInt(0);
-            if (!findOpenItemsBySource(projectId, "cnc_jobs", jobId).empty()) {
-                continue;
-            }
+            auto existingItems = findOpenItemsBySource(projectId, "cnc_jobs", jobId);
 
             std::optional<i64> parentItemId;
             auto gcodeItems = findOpenItemsBySource(projectId, "gcode_files", jobStmt.getInt(10));
@@ -1013,7 +1011,10 @@ int ProjectRepository::ensureOpenItemsForProject(i64 projectId) {
             item.displayName = "Run: " + jobStmt.getText(1);
             item.intentJson = R"({"actual_type":"cnc_run"})";
             item.snapshotJson = snapshot.str();
-            if (insertOpenItem(item).has_value()) {
+            if (!existingItems.empty()) {
+                item.id = existingItems.front().id;
+                (void)updateOpenItem(item);
+            } else if (insertOpenItem(item).has_value()) {
                 ++created;
             }
         }
