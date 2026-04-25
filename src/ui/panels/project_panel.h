@@ -80,6 +80,7 @@ class ProjectPanel : public Panel {
   private:
     // Section renderers
     void renderProjectInfo();
+    void renderWarningsSection(const std::vector<ProjectOpenItem>& items);
     void renderOpenItemsSection();
     void renderModelsSection();
     void renderGCodeSection();

@@ -18,6 +18,7 @@ set(DW_TEST_SOURCES
     test_model_repository.cpp
     test_material_repository.cpp
     test_project_repository.cpp
+    test_project_open_item_warnings.cpp
     test_project_open_item_repository.cpp
     test_loader_factory.cpp
     test_project.cpp
@@ -148,6 +149,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/database/toolbox_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/gcode_project_context.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/project/project_open_item_warnings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_directory.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_costing_io.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/costing_engine.cpp

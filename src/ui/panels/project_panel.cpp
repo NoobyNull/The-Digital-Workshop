@@ -10,6 +10,7 @@
 #include "../../core/database/cut_plan_repository.h"
 #include "../../core/database/gcode_repository.h"
 #include "../../core/database/model_repository.h"
+#include "../../core/project/project_open_item_warnings.h"
 #include "../icons.h"
 #include "../widgets/toast.h"
 
@@ -88,6 +89,8 @@ void ProjectPanel::render() {
         if (m_projectManager && m_projectManager->currentProject()) {
             renderProjectInfo();
             ImGui::Separator();
+            auto items = m_projectManager->currentOpenItems();
+            renderWarningsSection(items);
             renderOpenItemsSection();
             renderModelsSection();
             renderGCodeSection();
@@ -101,6 +104,26 @@ void ProjectPanel::render() {
         }
     }
     ImGui::End();
+}
+
+void ProjectPanel::renderWarningsSection(const std::vector<ProjectOpenItem>& items) {
+    auto warnings = buildProjectOpenItemWarningLines(items);
+    if (warnings.empty()) {
+        return;
+    }
+
+    std::string header = std::string(Icons::Warning) + " Warnings (" +
+                         std::to_string(warnings.size()) + ")";
+    if (!ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    ImGui::Indent();
+    for (const auto& warning : warnings) {
+        ImGui::TextWrapped("%s", warning.c_str());
+    }
+    ImGui::Unindent();
+    ImGui::Separator();
 }
 
 void ProjectPanel::renderOpenItemsSection() {
