@@ -13,6 +13,7 @@
 #include "../../core/gcode/gcode_modal_scanner.h"
 #include "../../core/mesh/hash.h"
 #include "../../core/paths/path_resolver.h"
+#include "../../core/project/gcode_project_context.h"
 #include "../../core/project/project.h"
 #include "../../core/cnc/serial_port.h"
 #include "../../core/utils/file_utils.h"
@@ -1015,6 +1016,16 @@ std::vector<std::string> GCodePanel::getRawLines() const {
 void GCodePanel::buildSendProgram() {
     if (!m_cnc || !hasGCode())
         return;
+
+    if (m_projectManager && m_projectManager->currentProject()) {
+        auto contextLines = buildGCodeProjectContextLines(
+            m_projectManager->currentProject()->name(),
+            m_projectManager->currentOpenItems(),
+            m_currentGCodeId);
+        for (const auto& line : contextLines) {
+            addConsoleLine(line, ConsoleLine::Info);
+        }
+    }
 
     // Run pre-flight checks before streaming (with soft limit check)
     auto& profile = Config::instance().getActiveMachineProfile();

@@ -29,6 +29,7 @@ set(DW_TEST_SOURCES
     # Tier 1 — core logic
     test_types.cpp
     test_gcode_analyzer.cpp
+    test_gcode_project_context.cpp
     test_schema.cpp
     test_camera.cpp
     test_archive.cpp
@@ -146,6 +147,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/database/tool_database.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/toolbox_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/project/gcode_project_context.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_directory.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_costing_io.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/costing_engine.cpp

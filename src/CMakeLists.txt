@@ -79,6 +79,7 @@ set(DW_SOURCES
 
     # Project
     core/project/project.cpp
+    core/project/gcode_project_context.cpp
     core/project/project_directory.cpp
     core/project/project_costing_io.cpp
     core/project/costing_engine.cpp
