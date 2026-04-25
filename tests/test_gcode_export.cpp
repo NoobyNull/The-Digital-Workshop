@@ -1,10 +1,12 @@
 #include "core/carve/gcode_export.h"
+#include "core/cnc/machine_units.h"
 
 #include <gtest/gtest.h>
 
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 using namespace dw;
 using namespace dw::carve;
@@ -86,6 +88,29 @@ TEST(GcodeExport, MetricAbsolute)
     std::string gcode = generateGcode(tp, cfg, "test", "tool");
 
     EXPECT_NE(gcode.find("G90 G21"), std::string::npos);
+}
+
+TEST(GcodeExport, InchModeConvertsGeneratedCoordinatesAndFeeds)
+{
+    MultiPassToolpath tp;
+    tp.finishing.points = {
+        {Vec3{25.4f, 50.8f, -6.35f}, false},
+    };
+    tp.finishing.lineCount = 1;
+    tp.finishing.estimatedTimeSec = 1.0f;
+
+    auto cfg = makeTestConfig();
+    cfg.safeZMm = 12.7f;
+    cfg.feedRateMmMin = 254.0f;
+    cfg.plungeRateMmMin = 127.0f;
+
+    std::string gcode = generateGcode(tp, cfg, "test", "tool", cnc::SendUnits::Inches);
+
+    EXPECT_NE(gcode.find("G90 G20"), std::string::npos);
+    EXPECT_NE(gcode.find("(Feed: 10.0 in/min, Plunge: 5.0 in/min)"), std::string::npos);
+    EXPECT_NE(gcode.find("(Safe Z: 0.5 in)"), std::string::npos);
+    EXPECT_NE(gcode.find("G0 Z0.5"), std::string::npos);
+    EXPECT_NE(gcode.find("G1 X1.0 Y2.0 Z-0.25 F10.0"), std::string::npos);
 }
 
 TEST(GcodeExport, RapidAndFeed)
@@ -170,8 +195,9 @@ TEST(GcodeExport, FileWritable)
     std::ifstream file(tmpPath);
     EXPECT_TRUE(file.good());
 
-    std::string content((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
+    std::ostringstream contentStream;
+    contentStream << file.rdbuf();
+    std::string content = contentStream.str();
     EXPECT_FALSE(content.empty());
     EXPECT_NE(content.find("G90 G21"), std::string::npos);
 
@@ -227,4 +253,28 @@ TEST(GcodeExport, FeedRateOnlyOnFirstFeedMove)
         pos += 2;
     }
     EXPECT_EQ(fCount, 1u);
+}
+
+TEST(GcodeExport, DownwardMoveAfterRapidUsesPlungeRateThenCutFeed)
+{
+    MultiPassToolpath tp;
+    tp.finishing.points = {
+        {Vec3{0.0f, 0.0f, 5.0f}, true},
+        {Vec3{0.0f, 0.0f, -1.0f}, false},
+        {Vec3{10.0f, 0.0f, -1.0f}, false},
+    };
+    tp.finishing.lineCount = 3;
+    tp.finishing.estimatedTimeSec = 1.0f;
+
+    auto cfg = makeTestConfig();
+    cfg.feedRateMmMin = 1000.0f;
+    cfg.plungeRateMmMin = 300.0f;
+
+    std::string gcode = generateGcode(tp, cfg, "test", "tool");
+
+    const auto plunge = gcode.find("G1 X0.0 Y0.0 Z-1.0 F300");
+    const auto cut = gcode.find("G1 X10.0 Y0.0 Z-1.0 F1000");
+    ASSERT_NE(plunge, std::string::npos);
+    ASSERT_NE(cut, std::string::npos);
+    EXPECT_LT(plunge, cut);
 }

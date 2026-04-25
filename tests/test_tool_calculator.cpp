@@ -154,6 +154,26 @@ TEST(ToolCalculator, Calculate_QuarterInchEndMill_RedOak) {
     EXPECT_NEAR(result.plunge_rate, result.feed_rate * 0.5, 0.01);
 }
 
+TEST(ToolCalculator, Calculate_WoodUsesConfiguredRouterSpindleRPM) {
+    CalcInput input;
+    input.diameter = 0.375;
+    input.num_flutes = 2;
+    input.tool_type = VtdbToolType::BallNose;
+    input.units = VtdbUnits::Imperial;
+    input.janka_hardness = 1450.0; // Hard Maple, currently classified as medium wood
+    input.material_name = "Hard Maple";
+    input.max_rpm = 24000;
+    input.drive_type = DriveType::Belt;
+    input.spindle_power_watts = 1500.0;
+
+    auto result = ToolCalculator::calculate(input);
+
+    EXPECT_EQ(result.hardness_band, HardnessBand::Medium);
+    EXPECT_EQ(result.rpm, 24000);
+    EXPECT_NEAR(result.feed_rate, 230.4, 0.1);
+    EXPECT_NEAR(result.plunge_rate, 115.2, 0.1);
+}
+
 TEST(ToolCalculator, Calculate_BallScrewHigherFeed) {
     CalcInput base;
     base.diameter = 0.25;

@@ -145,9 +145,11 @@ void ToolpathGenerator::clearIslandRegion(Toolpath& path,
                 bool cellInIsland = false;
                 if (col >= 0 && col < islands.maskCols &&
                     row >= 0 && row < islands.maskRows) {
+                    size_t maskIndex = static_cast<size_t>(row) *
+                                           static_cast<size_t>(islands.maskCols) +
+                                       static_cast<size_t>(col);
                     cellInIsland =
-                        (islands.islandMask[row * islands.maskCols + col]
-                         == island.id);
+                        (islands.islandMask[maskIndex] == island.id);
                 }
 
                 if (cellInIsland && !inIsland) {
@@ -290,8 +292,6 @@ void ToolpathGenerator::computeMetrics(Toolpath& path,
 {
     if (path.points.size() < 2) return;
 
-    constexpr f32 kRapidRateMmMin = 5000.0f;  // Typical rapid traverse rate
-
     f32 totalDist = 0.0f;
     f32 totalTimeSec = 0.0f;
     int gcodeLines = 0;
@@ -307,7 +307,12 @@ void ToolpathGenerator::computeMetrics(Toolpath& path,
         totalDist += dist;
 
         if (dist > 0.0f) {
-            f32 rate = curr.rapid ? kRapidRateMmMin : config.feedRateMmMin;
+            f32 rate = config.rapidRateMmMin;
+            if (!curr.rapid) {
+                rate = linearMoveFeedRateMmMin(prev.position, prev.rapid,
+                                               curr.position, config);
+            }
+            rate = std::max(rate, 1.0f);
             totalTimeSec += (dist / rate) * 60.0f;  // rate is mm/min
             ++gcodeLines;
         }

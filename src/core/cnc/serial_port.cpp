@@ -99,18 +99,18 @@ bool SerialPort::open(const std::string& device, int baudRate) {
     cfmakeraw(&tty);
 
     // 8N1
-    tty.c_cflag &= ~(CSIZE | PARENB | CSTOPB);
+    tty.c_cflag &= static_cast<tcflag_t>(~static_cast<tcflag_t>(CSIZE | PARENB | CSTOPB));
     tty.c_cflag |= CS8;
 
     // Enable receiver, ignore modem status lines, suppress DTR on close
     tty.c_cflag |= (CLOCAL | CREAD);
-    tty.c_cflag &= ~HUPCL; // Prevent DTR toggle on close (Arduino auto-reset prevention)
+    tty.c_cflag &= static_cast<tcflag_t>(~static_cast<tcflag_t>(HUPCL)); // Prevent DTR toggle on close
 
     // No hardware flow control
     tty.c_cflag &= ~CRTSCTS;
 
     // No software flow control
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+    tty.c_iflag &= static_cast<tcflag_t>(~static_cast<tcflag_t>(IXON | IXOFF | IXANY));
 
     // Non-blocking reads (poll-based)
     tty.c_cc[VMIN] = 0;

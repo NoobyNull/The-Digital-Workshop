@@ -1,4 +1,5 @@
 #include "core/carve/carve_streamer.h"
+#include "core/cnc/machine_units.h"
 
 #include <gtest/gtest.h>
 
@@ -87,6 +88,27 @@ TEST(CarveStreamer, PreambleFirst)
     EXPECT_NE(first.find("G21"), std::string::npos);
 }
 
+TEST(CarveStreamer, InchModeConvertsMovesFeedAndRetract)
+{
+    MultiPassToolpath tp;
+    tp.finishing.points = {
+        {Vec3{25.4f, 50.8f, -6.35f}, false},
+    };
+    tp.finishing.lineCount = 1;
+    tp.finishing.estimatedTimeSec = 1.0f;
+
+    auto cfg = makeTestConfig();
+    cfg.safeZMm = 12.7f;
+    cfg.feedRateMmMin = 254.0f;
+
+    CarveStreamer s;
+    s.start(tp, cfg, cnc::SendUnits::Inches);
+
+    EXPECT_EQ(s.nextLine(), "G90 G20");
+    EXPECT_EQ(s.nextLine(), "G1 X1.0 Y2.0 Z-0.25 F10.0");
+    EXPECT_EQ(s.nextLine(), "G0 Z0.5");
+}
+
 TEST(CarveStreamer, RapidFormat)
 {
     CarveStreamer s;
@@ -113,19 +135,47 @@ TEST(CarveStreamer, LinearFormat)
     std::string cut = s.nextLine(); // first feed move
 
     EXPECT_NE(cut.find("G1"), std::string::npos);
-    EXPECT_NE(cut.find("F1000"), std::string::npos);
+    EXPECT_NE(cut.find("F300"), std::string::npos);
+}
+
+TEST(CarveStreamer, DownwardMoveAfterRapidUsesPlungeRateThenCutFeed)
+{
+    MultiPassToolpath tp;
+    tp.finishing.points = {
+        {Vec3{0.0f, 0.0f, 5.0f}, true},
+        {Vec3{0.0f, 0.0f, -1.0f}, false},
+        {Vec3{10.0f, 0.0f, -1.0f}, false},
+    };
+    tp.finishing.lineCount = 3;
+    tp.finishing.estimatedTimeSec = 1.0f;
+
+    auto cfg = makeTestConfig();
+    cfg.feedRateMmMin = 1000.0f;
+    cfg.plungeRateMmMin = 300.0f;
+
+    CarveStreamer s;
+    s.start(tp, cfg);
+
+    EXPECT_EQ(s.nextLine(), "G90 G21");
+    EXPECT_EQ(s.nextLine(), "G0 X0.0 Y0.0 Z5.0");
+    EXPECT_EQ(s.nextLine(), "G1 X0.0 Y0.0 Z-1.0 F300.0");
+    EXPECT_EQ(s.nextLine(), "G1 X10.0 Y0.0 Z-1.0 F1000.0");
 }
 
 TEST(CarveStreamer, FeedRateOptimization)
 {
+    auto tp = makeTestToolpath();
+    tp.finishing.points.push_back({Vec3{30.0f, 0.0f, -2.0f}, false});
+
     CarveStreamer s;
-    s.start(makeTestToolpath(), makeTestConfig());
+    s.start(tp, makeTestConfig());
 
     s.nextLine(); // preamble
     s.nextLine(); // rapid 1
     s.nextLine(); // rapid 2
-    std::string firstCut = s.nextLine();  // first feed — has F
-    std::string secondCut = s.nextLine(); // second feed — no F (same rate)
+    s.nextLine(); // plunge — has plunge F
+    std::string firstCut = s.nextLine();  // first lateral feed — has F
+    std::string secondCut = s.nextLine(); // second lateral feed — no F (same rate)
 
     EXPECT_NE(firstCut.find("F"), std::string::npos);
     EXPECT_EQ(secondCut.find("F"), std::string::npos);
@@ -146,17 +196,19 @@ TEST(CarveStreamer, ClearingThenFinishing)
     int clearingCutIdx = -1;
     int finishingCutIdx = -1;
     for (int i = 0; i < static_cast<int>(lines.size()); i++) {
-        if (lines[i].find("X5.0") != std::string::npos &&
-            lines[i].find("Y5.0") != std::string::npos &&
-            lines[i].find("G1") != std::string::npos) {
+        const auto& line = lines[static_cast<size_t>(i)];
+        if (line.find("X5.0") != std::string::npos &&
+            line.find("Y5.0") != std::string::npos &&
+            line.find("G1") != std::string::npos) {
             clearingCutIdx = i;
             break;
         }
     }
     for (int i = 0; i < static_cast<int>(lines.size()); i++) {
-        if (lines[i].find("X10.0") != std::string::npos &&
-            lines[i].find("Z-1.0") != std::string::npos &&
-            lines[i].find("G1") != std::string::npos) {
+        const auto& line = lines[static_cast<size_t>(i)];
+        if (line.find("X10.0") != std::string::npos &&
+            line.find("Z-1.0") != std::string::npos &&
+            line.find("G1") != std::string::npos) {
             finishingCutIdx = i;
             break;
         }

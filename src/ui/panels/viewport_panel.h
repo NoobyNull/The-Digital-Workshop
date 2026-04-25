@@ -24,6 +24,7 @@ namespace dw {
 class Mesh;
 using MeshPtr = std::shared_ptr<Mesh>;
 class ContextMenuManager;
+enum class ViewCubeFace;
 
 // 3D viewport panel
 class ViewportPanel : public Panel {
@@ -62,6 +63,8 @@ class ViewportPanel : public Panel {
     // Actions
     void resetView();
     void fitToModel();
+    bool recalculateModelNormals();
+    bool hasValidModel() const;
 
     // CNC status updates
     void onCncStatusUpdate(const MachineStatus& status) { m_machineStatus = status; }
@@ -94,6 +97,7 @@ class ViewportPanel : public Panel {
     void renderToolbar();
     void renderViewCube();
     void renderCncDro();
+    void snapCameraToView(ViewCubeFace face);
 
     // ViewCube geometry cache — invalidated when camera orientation changes
     struct ViewCubeCache {

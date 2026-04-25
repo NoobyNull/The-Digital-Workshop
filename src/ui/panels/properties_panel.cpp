@@ -8,6 +8,14 @@
 
 namespace dw {
 
+namespace {
+
+double toDouble(float value) {
+    return static_cast<double>(value);
+}
+
+} // namespace
+
 PropertiesPanel::PropertiesPanel() : Panel("Properties") {}
 
 void PropertiesPanel::render() {
@@ -96,13 +104,23 @@ void PropertiesPanel::renderModelRecordInfo() {
         if (ImGui::CollapsingHeader("Bounds", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Indent();
             ImGui::TextWrapped(
-                "Min: (%.3f, %.3f, %.3f)", r.boundsMin.x, r.boundsMin.y, r.boundsMin.z);
+                "Min: (%.3f, %.3f, %.3f)",
+                toDouble(r.boundsMin.x),
+                toDouble(r.boundsMin.y),
+                toDouble(r.boundsMin.z));
             ImGui::TextWrapped(
-                "Max: (%.3f, %.3f, %.3f)", r.boundsMax.x, r.boundsMax.y, r.boundsMax.z);
+                "Max: (%.3f, %.3f, %.3f)",
+                toDouble(r.boundsMax.x),
+                toDouble(r.boundsMax.y),
+                toDouble(r.boundsMax.z));
             Vec3 size{r.boundsMax.x - r.boundsMin.x,
                       r.boundsMax.y - r.boundsMin.y,
                       r.boundsMax.z - r.boundsMin.z};
-            ImGui::TextWrapped("Size: %.3f x %.3f x %.3f", size.x, size.y, size.z);
+            ImGui::TextWrapped(
+                "Size: %.3f x %.3f x %.3f",
+                toDouble(size.x),
+                toDouble(size.y),
+                toDouble(size.z));
             ImGui::Unindent();
         }
     }
@@ -173,9 +191,9 @@ void PropertiesPanel::renderMeshInfo() {
         // Vertex count
         size_t vertexCount = m_mesh->vertices().size();
         if (vertexCount >= 1000000) {
-            ImGui::Text("Vertices: %.2fM", vertexCount / 1000000.0);
+            ImGui::Text("Vertices: %.2fM", static_cast<double>(vertexCount) / 1000000.0);
         } else if (vertexCount >= 1000) {
-            ImGui::Text("Vertices: %.1fK", vertexCount / 1000.0);
+            ImGui::Text("Vertices: %.1fK", static_cast<double>(vertexCount) / 1000.0);
         } else {
             ImGui::Text("Vertices: %zu", vertexCount);
         }
@@ -183,9 +201,9 @@ void PropertiesPanel::renderMeshInfo() {
         // Triangle count
         size_t triangleCount = m_mesh->triangleCount();
         if (triangleCount >= 1000000) {
-            ImGui::Text("Triangles: %.2fM", triangleCount / 1000000.0);
+            ImGui::Text("Triangles: %.2fM", static_cast<double>(triangleCount) / 1000000.0);
         } else if (triangleCount >= 1000) {
-            ImGui::Text("Triangles: %.1fK", triangleCount / 1000.0);
+            ImGui::Text("Triangles: %.1fK", static_cast<double>(triangleCount) / 1000.0);
         } else {
             ImGui::Text("Triangles: %zu", triangleCount);
         }
@@ -208,17 +226,33 @@ void PropertiesPanel::renderBoundsInfo() {
 
         const AABB& bounds = m_mesh->bounds();
 
-        ImGui::TextWrapped("Min: (%.3f, %.3f, %.3f)", bounds.min.x, bounds.min.y, bounds.min.z);
-        ImGui::TextWrapped("Max: (%.3f, %.3f, %.3f)", bounds.max.x, bounds.max.y, bounds.max.z);
+        ImGui::TextWrapped(
+            "Min: (%.3f, %.3f, %.3f)",
+            toDouble(bounds.min.x),
+            toDouble(bounds.min.y),
+            toDouble(bounds.min.z));
+        ImGui::TextWrapped(
+            "Max: (%.3f, %.3f, %.3f)",
+            toDouble(bounds.max.x),
+            toDouble(bounds.max.y),
+            toDouble(bounds.max.z));
 
         Vec3 size = bounds.size();
-        ImGui::TextWrapped("Size: %.3f x %.3f x %.3f", size.x, size.y, size.z);
+        ImGui::TextWrapped(
+            "Size: %.3f x %.3f x %.3f",
+            toDouble(size.x),
+            toDouble(size.y),
+            toDouble(size.z));
 
         Vec3 center = bounds.center();
-        ImGui::TextWrapped("Center: (%.3f, %.3f, %.3f)", center.x, center.y, center.z);
+        ImGui::TextWrapped(
+            "Center: (%.3f, %.3f, %.3f)",
+            toDouble(center.x),
+            toDouble(center.y),
+            toDouble(center.z));
 
         float diagonal = bounds.diagonal();
-        ImGui::TextWrapped("Diagonal: %.3f", diagonal);
+        ImGui::TextWrapped("Diagonal: %.3f", toDouble(diagonal));
 
         ImGui::Unindent();
     }
@@ -358,16 +392,16 @@ void PropertiesPanel::renderMaterialInfo() {
             ImGui::Spacing();
 
             // Format Janka hardness as lbf
-            ImGui::Text("Janka Hardness: %.0f lbf", mat.jankaHardness);
+            ImGui::Text("Janka Hardness: %.0f lbf", toDouble(mat.jankaHardness));
 
             // Format feed rate as in/min
-            ImGui::Text("Feed Rate: %.0f in/min", mat.feedRate);
+            ImGui::Text("Feed Rate: %.0f in/min", toDouble(mat.feedRate));
 
             // Format spindle speed as RPM
-            ImGui::Text("Spindle Speed: %.0f RPM", mat.spindleSpeed);
+            ImGui::Text("Spindle Speed: %.0f RPM", toDouble(mat.spindleSpeed));
 
             // Format depth of cut as inches
-            ImGui::Text("Depth of Cut: %.3f in", mat.depthOfCut);
+            ImGui::Text("Depth of Cut: %.3f in", toDouble(mat.depthOfCut));
 
             // Grain direction slider (editable)
             ImGui::Spacing();

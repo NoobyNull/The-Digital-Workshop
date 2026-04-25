@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolpath_types.h"
+#include "../cnc/machine_units.h"
 
 #include <atomic>
 #include <string>
@@ -23,7 +24,8 @@ public:
 
     // Start streaming a toolpath
     void start(const MultiPassToolpath& toolpath,
-               const ToolpathConfig& config);
+               const ToolpathConfig& config,
+               cnc::SendUnits units = cnc::SendUnits::Millimeters);
 
     // Called by CncController when ready for next line.
     // Returns empty string when complete.
@@ -60,6 +62,10 @@ private:
 
     // Feed rate tracking for modal optimization
     f32 m_lastFeedRate = -1.0f;
+    cnc::SendUnits m_sendUnits = cnc::SendUnits::Millimeters;
+    bool m_hasLastPosition = false;
+    Vec3 m_lastPosition{0.0f};
+    bool m_lastRapid = true;
 
     // State
     std::atomic<bool> m_running{false};
@@ -69,6 +75,8 @@ private:
     // G-code generation helpers
     std::string formatRapid(const Vec3& pos) const;
     std::string formatLinear(const Vec3& pos, f32 feedRate);
+    f32 feedRateForLinearMove(const Vec3& pos) const;
+    void rememberMove(const Vec3& pos, bool rapid);
     std::string preamble() const;
     std::string postamble() const;
 };

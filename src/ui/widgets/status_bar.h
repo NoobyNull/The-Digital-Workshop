@@ -5,6 +5,8 @@
 // general status when idle. Not a Panel subclass — rendered directly by UIManager.
 
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace dw {
 
@@ -29,9 +31,15 @@ class StatusBar {
     // Set cancel callback (wired by Application to ImportQueue::cancel)
     void setOnCancel(std::function<void()> callback) { m_onCancel = std::move(callback); }
 
+    // Set idle context tips shown when no loading/import work is active.
+    void setContextTips(std::vector<std::string> tips) { m_contextTips = std::move(tips); }
+
   private:
+    void renderContextTip() const;
+
     const ImportProgress* m_progress = nullptr;
     std::function<void()> m_onCancel;
+    std::vector<std::string> m_contextTips;
 };
 
 } // namespace dw

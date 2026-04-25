@@ -128,8 +128,8 @@ LoadResult STLLoader::loadBinary(const ByteBuffer& data) {
         u32 base = i * 3;
 
         // 3 vertices starting at triData[3]
-        for (int j = 0; j < 3; ++j) {
-            int off = 3 + j * 3;
+        for (u32 j = 0; j < 3; ++j) {
+            u32 off = 3 + j * 3;
             if (!std::isfinite(triData[off]) || !std::isfinite(triData[off + 1]) ||
                 !std::isfinite(triData[off + 2])) {
                 return LoadResult{nullptr, "STL contains invalid vertex data (NaN or Inf values)"};
@@ -141,6 +141,7 @@ LoadResult STLLoader::loadBinary(const ByteBuffer& data) {
     }
 
     auto mesh = std::make_shared<Mesh>(std::move(vertices), std::move(indices));
+    mesh->recalculateNormals();
 
     log::infof("STL",
                "Loaded binary: %u vertices, %u triangles",
@@ -248,6 +249,7 @@ LoadResult STLLoader::loadAscii(const std::string& content) {
         return LoadResult{nullptr, "No triangles found in ASCII STL"};
     }
 
+    mesh->recalculateNormals();
     mesh->recalculateBounds();
 
     log::infof("STL",

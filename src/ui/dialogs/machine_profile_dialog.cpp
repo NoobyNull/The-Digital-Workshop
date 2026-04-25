@@ -176,7 +176,10 @@ void MachineProfileDialog::render() {
                     homeY = m_editProfile.maxTravelY * 0.5f;
                     break;
             }
-            ImGui::TextDisabled("Home position: (%.0f, %.0f) mm", homeX, homeY);
+            ImGui::TextDisabled(
+                "Home position: (%.0f, %.0f) mm",
+                static_cast<double>(homeX),
+                static_cast<double>(homeY));
             if (m_editProfile.homeCorner == gcode::HomeCorner::Center)
                 ImGui::TextDisabled("Center: homes to corners, then moves to midpoint");
             ImGui::Unindent();

@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 #include <glad/gl.h>
 #include <imgui.h>
@@ -16,6 +18,8 @@
 #include "core/carve/analysis_overlay.h"
 #include "core/carve/carve_job.h"
 #include "core/carve/gcode_export.h"
+#include "core/carve/heightmap_preview.h"
+#include "core/carve/material_blank_defaults.h"
 #include "core/carve/tool_recommender.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/tool_calculator.h"
@@ -78,6 +82,45 @@ void statusBullet(bool ok, const char* label) {
     ImGui::PushStyleColor(ImGuiCol_Text, ok ? kGreen : kRed);
     ImGui::BulletText("%s %s", ok ? "OK" : "FAIL", label);
     ImGui::PopStyleColor();
+}
+
+u32 activeLimitPins(const MachineStatus& status)
+{
+    return status.inputPins &
+        (cnc::PIN_X_LIMIT | cnc::PIN_Y_LIMIT | cnc::PIN_Z_LIMIT);
+}
+
+std::string activeLimitPinLabel(u32 pins)
+{
+    std::string label;
+    if ((pins & cnc::PIN_X_LIMIT) != 0) label += "X";
+    if ((pins & cnc::PIN_Y_LIMIT) != 0) {
+        if (!label.empty()) label += " ";
+        label += "Y";
+    }
+    if ((pins & cnc::PIN_Z_LIMIT) != 0) {
+        if (!label.empty()) label += " ";
+        label += "Z";
+    }
+    return label;
+}
+
+std::string fixedNumber(f32 value, int precision)
+{
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(precision)
+        << static_cast<double>(value);
+    return out.str();
+}
+
+std::string feedNumber(f32 value)
+{
+    return fixedNumber(value, 0);
+}
+
+std::string axisWord(char axis, f32 value)
+{
+    return std::string(1, axis) + fixedNumber(value, 3);
 }
 
 const char* scanAxisLabel(carve::ScanAxis axis) {
@@ -199,6 +242,128 @@ void DirectCarvePanel::setCutOptimizerPanel(CutOptimizerPanel* cop) { m_cutOptim
 void DirectCarvePanel::onConnectionChanged(bool connected) { m_cncConnected = connected; }
 void DirectCarvePanel::onStatusUpdate(const MachineStatus& status) { m_machineStatus = status; }
 
+void DirectCarvePanel::onRawLine(const std::string& line, bool isSent)
+{
+    if (isSent || !m_zeroingRunActive) {
+        return;
+    }
+
+    if (line.rfind("ALARM:", 0) == 0 || line.rfind("error:", 0) == 0) {
+        finishZeroingRun(false, "AutoZero stopped: " + line);
+        return;
+    }
+
+    if (auto result = carve::parseGrblProbeResult(line)) {
+        if (!result->contact) {
+            finishZeroingRun(false, "AutoZero probe did not make contact.");
+            return;
+        }
+        m_zeroingLastProbeResult = *result;
+        m_zeroingSawProbeResult = true;
+        return;
+    }
+
+    if (line != "ok" || !m_zeroingWaitingForOk) {
+        return;
+    }
+
+    if (m_zeroingPendingProbeStep != ZeroingStepKind::Command) {
+        if (!m_zeroingSawProbeResult || !m_zeroingLastProbeResult.has_value()) {
+            finishZeroingRun(false, "AutoZero expected a probe result before ok.");
+            return;
+        }
+
+        const auto pos = m_zeroingLastProbeResult->position;
+        switch (m_zeroingPendingProbeStep) {
+        case ZeroingStepKind::ProbeXFirst:
+            m_autoZeroXFirst = pos.x;
+            break;
+        case ZeroingStepKind::ProbeXSecond:
+            m_autoZeroXSecond = pos.x;
+            break;
+        case ZeroingStepKind::ProbeYFirst:
+            m_autoZeroYFirst = pos.y;
+            break;
+        case ZeroingStepKind::ProbeYSecond:
+            m_autoZeroYSecond = pos.y;
+            break;
+        default:
+            break;
+        }
+    }
+
+    m_zeroingWaitingForOk = false;
+    m_zeroingPendingProbeStep = ZeroingStepKind::Command;
+    m_zeroingSawProbeResult = false;
+    m_zeroingLastProbeResult.reset();
+    sendNextZeroingStep();
+}
+
+void DirectCarvePanel::clearHeightmapPreviewTexture()
+{
+    if (m_hmPreviewTex != 0) {
+        glDeleteTextures(1, &m_hmPreviewTex);
+        m_hmPreviewTex = 0;
+    }
+    m_hmPreviewW = 0;
+    m_hmPreviewH = 0;
+}
+
+void DirectCarvePanel::clearFinalConfirmation()
+{
+    m_commitConfirmed = false;
+    m_commitConfirmedSettingsVersion = -1;
+    m_commitConfirmedToolpathVersion = -1;
+}
+
+void DirectCarvePanel::markToolpathSettingsChanged()
+{
+    ++m_settingsVersion;
+    clearFinalConfirmation();
+}
+
+void DirectCarvePanel::markGeometryChanged()
+{
+    ++m_geometryVersion;
+    markToolpathSettingsChanged();
+    m_heightmapSaved = false;
+    m_hmInitAttempted = false;
+    m_toolpathGenerated = false;
+    m_generatedAtVersion = -1;
+    m_heightmapRequestedAtGeometryVersion = -1;
+    m_heightmapGeneratedAtGeometryVersion = -1;
+    clearHeightmapPreviewTexture();
+}
+
+void DirectCarvePanel::startHeightmapForCurrentGeometry()
+{
+    if (!m_carveJob) return;
+
+    m_fitter.setStock(m_stock);
+    carve::HeightmapConfig hmCfg;
+    m_heightmapRequestedAtGeometryVersion = m_geometryVersion;
+    m_heightmapGeneratedAtGeometryVersion = -1;
+    m_heightmapSaved = false;
+    clearHeightmapPreviewTexture();
+    m_carveJob->startHeightmap(m_vertices, m_indices, m_fitter,
+                                m_fitParams, hmCfg);
+}
+
+void DirectCarvePanel::syncToolpathRapidRateFromProfile()
+{
+    const auto& profile = Config::instance().getActiveMachineProfile();
+    if (profile.rapidRate <= 0.0f) return;
+
+    if (std::abs(m_toolpathConfig.rapidRateMmMin - profile.rapidRate) < 0.001f) {
+        return;
+    }
+
+    m_toolpathConfig.rapidRateMmMin = profile.rapidRate;
+    if (m_toolpathGenerated) {
+        markToolpathSettingsChanged();
+    }
+}
+
 void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
                                       const std::vector<u32>& indices,
                                       const Vec3& boundsMin,
@@ -216,15 +381,12 @@ void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
     if (!modelSourcePath.empty()) m_modelSourcePath = modelSourcePath;
     m_modelThumbnail = thumbnailTexture;
 
-    // Initialize stock from machine profile if not yet configured
+    // Initialize the material blank from the loaded model; machine travel is checked separately.
     if (m_stock.width <= 0.0f || m_stock.height <= 0.0f) {
-        const auto& prof = Config::instance().getActiveMachineProfile();
-        m_stock.width = prof.maxTravelX;
-        m_stock.height = prof.maxTravelY;
-        m_stock.thickness = prof.maxTravelZ;
+        m_stock = carve::materialBlankFromModelBounds(boundsMin, boundsMax);
     }
 
-    // Auto-fit model to stock
+    // Auto-fit model to the material blank.
     m_fitter.setStock(m_stock);
     m_fitParams.scale = m_fitter.autoScale();
     if (m_pendingOperationSetup) {
@@ -248,7 +410,8 @@ void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
     m_heightmapSaved = false;
     m_hmRegenConfirm = false;
     m_hmMissingPath.clear();
-    if (m_hmPreviewTex != 0) { glDeleteTextures(1, &m_hmPreviewTex); m_hmPreviewTex = 0; }
+    markGeometryChanged();
+    m_maxStepVisited = std::max(m_maxStepVisited, static_cast<int>(m_currentStep));
 }
 
 bool DirectCarvePanel::loadOperationOpenItem(const ProjectOpenItem& item) {
@@ -315,15 +478,18 @@ void DirectCarvePanel::applyOperationSetup(const carve::DirectCarveOperationSetu
     if (setup.finishingTool) {
         m_finishTool = *setup.finishingTool;
         m_finishingToolSelected = true;
+        m_toolSetupConfirmed = false;
     }
     if (setup.clearingTool) {
         m_clearTool = *setup.clearingTool;
         m_clearToolSelected = true;
+        m_toolSetupConfirmed = false;
     }
 
     m_toolpathGenerated = false;
-    ++m_settingsVersion;
+    markGeometryChanged();
     m_currentStep = m_finishingToolSelected ? Step::MaterialSetup : Step::ToolSelect;
+    m_maxStepVisited = std::max(m_maxStepVisited, static_cast<int>(m_currentStep));
 
     if (m_onFitParamsChanged && m_modelLoaded) {
         m_onFitParamsChanged(m_fitParams, m_modelBoundsMin, m_modelBoundsMax, m_stock);
@@ -352,6 +518,10 @@ std::string DirectCarvePanel::selectedMaterialName() const {
         return m_materialName;
     }
     return m_materialList[static_cast<size_t>(m_selectedMaterialIdx)].name;
+}
+
+cnc::SendUnits DirectCarvePanel::detectedSendUnits() const {
+    return m_cnc ? m_cnc->sendUnits() : cnc::SendUnits::Millimeters;
 }
 
 void DirectCarvePanel::syncSetupToOptimizerAndProject() {
@@ -427,6 +597,8 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
         return std::nullopt;
     }
 
+    syncToolpathRapidRateFromProfile();
+
     const auto partName = m_modelName.empty() ? std::string("Carve blank") : m_modelName;
     const auto materialId = selectedMaterialId();
     const auto materialName = selectedMaterialName();
@@ -458,6 +630,7 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
             {"safe_z_mm", m_toolpathConfig.safeZMm},
             {"feed_rate_mm_min", m_toolpathConfig.feedRateMmMin},
             {"plunge_rate_mm_min", m_toolpathConfig.plungeRateMmMin},
+            {"rapid_rate_mm_min", m_toolpathConfig.rapidRateMmMin},
             {"lead_in_mm", m_toolpathConfig.leadInMm},
             {"scan_resolution_mm", m_toolpathConfig.scanResolutionMm},
         }},
@@ -507,6 +680,7 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
     auto operationItemId = m_projectManager->upsertCurrentOpenItem(std::move(item));
     if (operationItemId) {
         const auto operationSourceKey = "direct_carve:" + ProjectDirectory::sanitizeName(partName);
+        (void)syncZeroingOpenItem(*operationItemId, operationSourceKey);
         if (m_finishingToolSelected) {
             (void)syncToolOpenItem(*operationItemId, operationSourceKey, "finish", m_finishTool);
         }
@@ -569,6 +743,91 @@ std::optional<i64> DirectCarvePanel::syncToolOpenItem(i64 operationItemId,
     return m_projectManager->upsertCurrentOpenItem(std::move(item));
 }
 
+carve::DirectCarveZeroProbeMode DirectCarvePanel::currentZeroProbeMode() const
+{
+    switch (m_probeMode) {
+    case ProbeMode::XOnly:
+        return carve::DirectCarveZeroProbeMode::XOnly;
+    case ProbeMode::YOnly:
+        return carve::DirectCarveZeroProbeMode::YOnly;
+    case ProbeMode::XYCorner:
+        return carve::DirectCarveZeroProbeMode::XYCorner;
+    case ProbeMode::XYZAuto:
+        return carve::DirectCarveZeroProbeMode::XYZAuto;
+    case ProbeMode::ZOnly:
+        return carve::DirectCarveZeroProbeMode::ZOnly;
+    }
+    return carve::DirectCarveZeroProbeMode::ZOnly;
+}
+
+carve::DirectCarveAutoZeroBitMode
+DirectCarvePanel::currentAutoZeroBitMode() const
+{
+    if (m_autoZeroBitModeManual) {
+        return m_autoZeroBitMode;
+    }
+
+    if (!m_finishingToolSelected) {
+        return m_autoZeroBitMode;
+    }
+
+    switch (m_finishTool.tool_type) {
+    case VtdbToolType::BallNose:
+    case VtdbToolType::TaperedBallNose:
+    case VtdbToolType::VBit:
+        return carve::DirectCarveAutoZeroBitMode::Tip;
+    default:
+        return carve::DirectCarveAutoZeroBitMode::Auto;
+    }
+}
+
+carve::DirectCarveZeroCorner DirectCarvePanel::currentZeroCorner() const
+{
+    switch (m_probeCorner) {
+    case 1:
+        return carve::DirectCarveZeroCorner::FrontRight;
+    case 2:
+        return carve::DirectCarveZeroCorner::BackRight;
+    case 3:
+        return carve::DirectCarveZeroCorner::BackLeft;
+    default:
+        return carve::DirectCarveZeroCorner::FrontLeft;
+    }
+}
+
+carve::DirectCarveZeroingSetup DirectCarvePanel::currentZeroingSetup() const
+{
+    carve::DirectCarveZeroingSetup setup;
+    setup.touchPlate = m_touchPlate;
+    setup.probeMode = currentZeroProbeMode();
+    setup.bitMode = currentAutoZeroBitMode();
+    setup.corner = currentZeroCorner();
+    setup.zPlateThicknessMm = m_probeZThickness;
+    setup.xyWallThicknessMm = m_probeXYThickness;
+    setup.fastProbeMmMin = m_probeFastSpeed;
+    setup.slowProbeMmMin = m_probeSlowSpeed;
+    setup.searchDistanceMm = m_probeSearchDist;
+    setup.retractMm = m_probeRetractDist;
+    setup.autoZeroOriginOffsetMm = m_autoZeroOriginOffset;
+    setup.autoZeroFinalZRetractMm = m_autoZeroFinalZRetract;
+    setup.toolDiameterMm = m_probeToolDiameter;
+    setup.zeroVerified = m_zeroConfirmed;
+    return setup;
+}
+
+std::optional<i64> DirectCarvePanel::syncZeroingOpenItem(
+    i64 operationItemId,
+    const std::string& operationSourceKey)
+{
+    if (!m_projectManager || operationItemId <= 0) {
+        return std::nullopt;
+    }
+
+    auto item = carve::makeDirectCarveZeroingOpenItem(
+        operationItemId, operationSourceKey, currentZeroingSetup());
+    return m_projectManager->upsertCurrentOpenItem(std::move(item));
+}
+
 const char* DirectCarvePanel::stepLabel(Step step) {
     switch (step) {
     case Step::ModelFit:     return "Model";
@@ -582,6 +841,93 @@ const char* DirectCarvePanel::stepLabel(Step step) {
     case Step::Running:      return "Running";
     }
     return "???";
+}
+
+carve::DirectCarveWorkflowStep DirectCarvePanel::workflowStep(Step step) const
+{
+    switch (step) {
+    case Step::ModelFit:
+        return carve::DirectCarveWorkflowStep::Model;
+    case Step::ToolSelect:
+        return carve::DirectCarveWorkflowStep::Tool;
+    case Step::MaterialSetup:
+        return carve::DirectCarveWorkflowStep::Material;
+    case Step::Preview:
+        return carve::DirectCarveWorkflowStep::Preview;
+    case Step::MachineCheck:
+        return carve::DirectCarveWorkflowStep::Machine;
+    case Step::ZeroConfirm:
+        return carve::DirectCarveWorkflowStep::Zero;
+    case Step::OutlineTest:
+        return carve::DirectCarveWorkflowStep::Outline;
+    case Step::Commit:
+        return carve::DirectCarveWorkflowStep::Confirm;
+    case Step::Running:
+        return carve::DirectCarveWorkflowStep::Running;
+    }
+    return carve::DirectCarveWorkflowStep::Running;
+}
+
+carve::DirectCarveWorkflowState DirectCarvePanel::workflowState() const
+{
+    carve::DirectCarveWorkflowState state;
+    state.modelLoaded = m_modelLoaded;
+
+    if (m_modelLoaded) {
+        const auto& profile = Config::instance().getActiveMachineProfile();
+        carve::ModelFitter fitter = m_fitter;
+        fitter.setStock(m_stock);
+        fitter.setMachineTravel(profile.maxTravelX,
+                                profile.maxTravelY,
+                                profile.maxTravelZ);
+        const auto fit = fitter.fit(m_fitParams);
+        state.modelFitsBlank = fit.fitsStock;
+        state.modelFitsMachine = fit.fitsMachine;
+    }
+
+    state.finishingToolSelected = m_finishingToolSelected;
+    state.toolSetupConfirmed = m_toolSetupConfirmed;
+    state.materialSelected = m_materialSelected;
+
+    const bool heightmapReady =
+        m_carveJob && m_carveJob->state() == carve::CarveJobState::Ready;
+    state.heightmapReady = heightmapReady;
+    state.heightmapFresh = heightmapReady &&
+        m_heightmapGeneratedAtGeometryVersion == m_geometryVersion;
+
+    state.toolpathGenerated = m_toolpathGenerated;
+    state.toolpathFresh = m_toolpathGenerated &&
+        m_generatedAtVersion == m_settingsVersion;
+
+    const auto& profile = Config::instance().getActiveMachineProfile();
+    state.machineConnected = m_cncConnected;
+    state.machineIdle = m_machineStatus.state == MachineState::Idle;
+    state.machineAlarmClear = m_machineStatus.state != MachineState::Alarm &&
+                              m_machineStatus.state != MachineState::Unknown;
+    state.machineProfileConfigured = profile.maxTravelX > 0.0f &&
+                                     profile.maxTravelY > 0.0f &&
+                                     profile.maxTravelZ > 0.0f;
+    state.machineHomed = m_homingVerified;
+    state.homingSkipped = m_homingSkipped;
+    state.limitSwitchesClear = activeLimitPins(m_machineStatus) == 0;
+    state.safeZVerified = m_safeZConfirmed;
+    state.zeroVerified = m_zeroConfirmed;
+    state.outlineCompleted = m_outlineCompleted;
+    state.outlineSkipped = m_outlineSkipped;
+    state.finalConfirmed = m_commitConfirmed &&
+        m_commitConfirmedSettingsVersion == m_settingsVersion &&
+        m_commitConfirmedToolpathVersion == m_generatedAtVersion;
+    return state;
+}
+
+bool DirectCarvePanel::isStepSatisfied(Step step) const
+{
+    return carve::isDirectCarveStepComplete(workflowStep(step), workflowState());
+}
+
+bool DirectCarvePanel::canStartCarve() const
+{
+    return carve::isDirectCarveReadyToRun(workflowState());
 }
 
 void DirectCarvePanel::render() {
@@ -628,11 +974,19 @@ void DirectCarvePanel::renderStepIndicator() {
     float totalH = circleR * 2.0f + fontSize + 4.0f; // circle + gap + label
 
     for (int i = 0; i < STEP_COUNT; ++i) {
-        const char* label = stepLabel(static_cast<Step>(i));
+        const auto step = static_cast<Step>(i);
+        const char* label = stepLabel(step);
         float labelW = ImGui::CalcTextSize(label).x;
         float cx = cursor.x + stepSpacing * (static_cast<float>(i) + 0.5f);
         float cy = cursor.y + circleR;
-        ImVec4 color = (i < curIdx) ? kGreen : (i == curIdx) ? kBright : kDimmed;
+        const bool visited = i <= m_maxStepVisited;
+        const bool satisfied = isStepSatisfied(step);
+        ImVec4 color = kDimmed;
+        if (satisfied) {
+            color = kGreen;
+        } else if (i == curIdx || visited) {
+            color = kYellow;
+        }
         ImU32 col = ImGui::ColorConvertFloat4ToU32(color);
 
         // Clickable invisible button over step region
@@ -642,22 +996,25 @@ void DirectCarvePanel::renderStepIndicator() {
         char btnId[32];
         std::snprintf(btnId, sizeof(btnId), "##step%d", i);
         if (ImGui::InvisibleButton(btnId, ImVec2(hitMax.x - hitMin.x, hitMax.y - hitMin.y))) {
-            // Allow clicking to any completed step or the current step
-            if (i <= curIdx)
+            // Allow returning to any visited step without marking it complete.
+            if (visited)
                 m_currentStep = static_cast<Step>(i);
         }
         bool hovered = ImGui::IsItemHovered();
-        if (hovered)
+        if (hovered && visited)
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (hovered && visited && !satisfied) {
+            ImGui::SetTooltip("Gate incomplete");
+        }
 
         // Circle
-        if (i <= curIdx)
+        if (visited)
             dl->AddCircleFilled(ImVec2(cx, cy), circleR, col);
         else
             dl->AddCircle(ImVec2(cx, cy), circleR, col, 0, 1.5f);
 
         // Hover highlight ring
-        if (hovered && i <= curIdx)
+        if (hovered && visited)
             dl->AddCircle(ImVec2(cx, cy), circleR + 2.0f, col, 0, 1.5f);
 
         // Label centered below circle
@@ -668,7 +1025,7 @@ void DirectCarvePanel::renderStepIndicator() {
             float nextCx = cursor.x + stepSpacing * (static_cast<float>(i) + 1.5f);
             float lx0 = cx + circleR + 2.0f;
             float lx1 = nextCx - circleR - 2.0f;
-            ImU32 lc = (i < curIdx) ?
+            ImU32 lc = (satisfied && i < m_maxStepVisited) ?
                 ImGui::ColorConvertFloat4ToU32(kGreen) :
                 ImGui::ColorConvertFloat4ToU32(kDimmed);
             dl->AddLine(ImVec2(lx0, cy), ImVec2(lx1, cy), lc, 1.5f);
@@ -691,16 +1048,30 @@ void DirectCarvePanel::renderNavButtons() {
 
     ImGui::SameLine();
     bool canGo = canAdvance();
+    const bool currentSatisfied = isStepSatisfied(m_currentStep);
+    const char* nextLabel = isCommit ? "Start Carving" :
+        (currentSatisfied ? "Next" : "Skip");
     if (!canGo) ImGui::BeginDisabled();
-    if (ImGui::Button(isCommit ? "Start Carving" : "Next", ImVec2(bw, 0))) advanceStep();
+    if (ImGui::Button(nextLabel, ImVec2(bw, 0))) advanceStep();
     if (!canGo) ImGui::EndDisabled();
+    const bool showSkipNote = !isCommit && !currentSatisfied && !isRunning;
+    if (showSkipNote) {
+        ImGui::SameLine();
+        ImGui::TextColored(kYellow,
+                           "Gate incomplete; skipping will not unlock final carve.");
+    }
 
-    ImGui::SameLine();
+    if (!showSkipNote) {
+        ImGui::SameLine();
+    }
     if (isRunning) ImGui::BeginDisabled();
     if (ImGui::Button("Cancel", ImVec2(bw, 0))) {
         m_currentStep = Step::ModelFit;
         m_safeZConfirmed = false;
+        m_homingVerified = false;
+        m_homingSkipped = false;
         m_finishingToolSelected = false;
+        m_toolSetupConfirmed = false;
         m_materialSelected = false;
         m_toolpathGenerated = false;
         m_settingsVersion = 0;
@@ -709,27 +1080,16 @@ void DirectCarvePanel::renderNavButtons() {
         m_outlineSkipped = false;
         m_outlineRunning = false;
         m_zeroConfirmed = false;
-        m_commitConfirmed = false;
+        clearFinalConfirmation();
+        m_maxStepVisited = 0;
     }
     if (isRunning) ImGui::EndDisabled();
 }
 
-bool DirectCarvePanel::canAdvance() const {
-    switch (m_currentStep) {
-    // Planning steps — no machine required
-    case Step::ModelFit:      return m_modelLoaded;
-    case Step::ToolSelect:    return m_finishingToolSelected;
-    case Step::MaterialSetup: return m_materialSelected;
-    case Step::Preview:       return m_toolpathGenerated
-                                     && (m_generatedAtVersion == m_settingsVersion);
-    // Machine steps — CNC required
-    case Step::MachineCheck:  return validateMachineReady();
-    case Step::ZeroConfirm:   return m_zeroConfirmed;
-    case Step::OutlineTest:   return m_outlineCompleted || m_outlineSkipped;
-    case Step::Commit:        return m_commitConfirmed;
-    case Step::Running:       return false;
-    }
-    return false;
+bool DirectCarvePanel::canAdvance() {
+    if (m_currentStep == Step::Running) return false;
+    if (m_currentStep == Step::Commit) return canStartCarve();
+    return true;
 }
 
 void DirectCarvePanel::advanceStep() {
@@ -737,7 +1097,11 @@ void DirectCarvePanel::advanceStep() {
         syncSetupToOptimizerAndProject();
     }
     int idx = static_cast<int>(m_currentStep);
-    if (idx < STEP_COUNT - 1) m_currentStep = static_cast<Step>(idx + 1);
+    if (idx < STEP_COUNT - 1) {
+        m_currentStep = static_cast<Step>(idx + 1);
+        m_maxStepVisited = std::max(m_maxStepVisited,
+                                    static_cast<int>(m_currentStep));
+    }
 }
 
 void DirectCarvePanel::retreatStep() {
@@ -746,11 +1110,8 @@ void DirectCarvePanel::retreatStep() {
 }
 
 bool DirectCarvePanel::validateMachineReady() const {
-    if (!m_cncConnected) return false;
-    if (m_machineStatus.state == MachineState::Alarm) return false;
-    if (m_machineStatus.state == MachineState::Unknown) return false;
-    if (!m_safeZConfirmed) return false;
-    return true;
+    return carve::isDirectCarveStepComplete(
+        carve::DirectCarveWorkflowStep::Machine, workflowState());
 }
 
 void DirectCarvePanel::renderMachineCheck() {
@@ -761,6 +1122,8 @@ void DirectCarvePanel::renderMachineCheck() {
     bool idle = (m_machineStatus.state == MachineState::Idle);
     bool notAlarm = (m_machineStatus.state != MachineState::Alarm &&
                      m_machineStatus.state != MachineState::Unknown);
+    const u32 limitPins = activeLimitPins(m_machineStatus);
+    const bool limitSwitchesClear = limitPins == 0;
     auto& cfg = Config::instance();
     const auto& profile = cfg.getActiveMachineProfile();
     bool profileOk = (profile.maxTravelX > 0.0f && profile.maxTravelY > 0.0f &&
@@ -781,6 +1144,13 @@ void DirectCarvePanel::renderMachineCheck() {
     statusBullet(notAlarm, "No alarm");
     statusBullet(idle, "Machine idle");
     statusBullet(profileOk, "Machine profile configured");
+    statusBullet(m_homingVerified || m_homingSkipped,
+                 "Machine homed or explicitly skipped");
+    statusBullet(limitSwitchesClear, "Limit switches clear");
+    if (!limitSwitchesClear) {
+        const auto axes = activeLimitPinLabel(limitPins);
+        ImGui::TextColored(kRed, "Active limit input(s): %s", axes.c_str());
+    }
     statusBullet(m_safeZConfirmed, "Safe Z verified");
     ImGui::Spacing();
 
@@ -792,8 +1162,21 @@ void DirectCarvePanel::renderMachineCheck() {
     if (!canSend) ImGui::BeginDisabled();
     if (ImGui::Button("Home Machine", ImVec2(bw, 0))) {
         m_cnc->sendCommand("$H");
+        m_homingVerified = false;
+        m_homingSkipped = false;
+        clearFinalConfirmation();
     }
     if (!canSend) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Machine has been homed", &m_homingVerified)) {
+        if (m_homingVerified) m_homingSkipped = false;
+        clearFinalConfirmation();
+    }
+    if (ImGui::Checkbox("Skip homing; position is already known",
+                        &m_homingSkipped)) {
+        if (m_homingSkipped) m_homingVerified = false;
+        clearFinalConfirmation();
+    }
 
     // Safe Z test
     ImGui::Spacing();
@@ -805,11 +1188,14 @@ void DirectCarvePanel::renderMachineCheck() {
                               static_cast<double>(m_toolpathConfig.safeZMm));
                 m_cnc->sendCommand(cmd);
                 m_safeZConfirmed = true;
+                clearFinalConfirmation();
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Skip (confirm safe Z)", ImVec2(bw * 1.2f, 0)))
+        if (ImGui::Button("Skip (confirm safe Z)", ImVec2(bw * 1.2f, 0))) {
             m_safeZConfirmed = true;
+            clearFinalConfirmation();
+        }
     }
 
     if (m_machineStatus.state == MachineState::Alarm) {
@@ -860,18 +1246,22 @@ void DirectCarvePanel::renderModelFit() {
     // Right column: all controls in 2/3 width
     ImGui::BeginChild("##controls_col", ImVec2(controlsW, 0), false);
 
-    // Stock dimensions — auto-fit recalculates whenever stock changes
+    // Material blank dimensions; auto-fit recalculates whenever the blank changes.
     float iw = ImGui::GetFontSize() * 8.0f;
-    ImGui::Text("Stock Dimensions:");
+    ImGui::Text("Material Blank:");
+    ImGui::PushStyleColor(ImGuiCol_Text, kDimmed);
+    ImGui::TextWrapped("Physical material to cut; machine travel is checked separately.");
+    ImGui::PopStyleColor();
     auto prevStock = m_stock;
+    auto prevFitParams = m_fitParams;
     ImGui::SetNextItemWidth(iw);
-    ImGui::InputFloat("Width (X) mm", &m_stock.width, 1.0f, 10.0f, "%.1f");
+    ImGui::InputFloat("Blank width (X) mm", &m_stock.width, 1.0f, 10.0f, "%.1f");
     m_stock.width = std::clamp(m_stock.width, 1.0f, 2000.0f);
     ImGui::SetNextItemWidth(iw);
-    ImGui::InputFloat("Height (Y) mm", &m_stock.height, 1.0f, 10.0f, "%.1f");
+    ImGui::InputFloat("Blank height (Y) mm", &m_stock.height, 1.0f, 10.0f, "%.1f");
     m_stock.height = std::clamp(m_stock.height, 1.0f, 2000.0f);
     ImGui::SetNextItemWidth(iw);
-    ImGui::InputFloat("Thickness (Z) mm", &m_stock.thickness, 0.5f, 5.0f, "%.1f");
+    ImGui::InputFloat("Blank thickness (Z) mm", &m_stock.thickness, 0.5f, 5.0f, "%.1f");
     m_stock.thickness = std::clamp(m_stock.thickness, 0.5f, 200.0f);
     bool stockChanged = (m_stock.width != prevStock.width ||
                          m_stock.height != prevStock.height ||
@@ -879,29 +1269,32 @@ void DirectCarvePanel::renderModelFit() {
 
     float fs = ImGui::GetFontSize();
     float bw = fs * 12.0f;
-    if (ImGui::Button("From Machine Profile", ImVec2(bw, 0))) {
+    if (ImGui::Button("Use Machine Travel", ImVec2(bw, 0))) {
         const auto& prof = Config::instance().getActiveMachineProfile();
         m_stock.width = prof.maxTravelX;
         m_stock.height = prof.maxTravelY;
         m_stock.thickness = prof.maxTravelZ;
         stockChanged = true;
     }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Copies the active machine travel into the material blank fields.");
+    }
     ImGui::SameLine();
-    if (ImGui::Button("Edit Profile")) {
-        m_profileDialog.setOnProfileChanged([this]() {
-            const auto& prof = Config::instance().getActiveMachineProfile();
-            m_stock.width = prof.maxTravelX;
-            m_stock.height = prof.maxTravelY;
-            m_stock.thickness = prof.maxTravelZ;
-        });
+    if (ImGui::Button("Edit Machine")) {
         m_profileDialog.open();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Edit machine travel limits. This does not change the material blank.");
     }
 
     // Cut list integration
     if (m_cutOptimizer) {
         ImGui::SameLine();
-        if (ImGui::Button("From Cut List"))
+        if (ImGui::Button("Use Cut Part"))
             ImGui::OpenPopup("PickCutListPart");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Copies a cut-list part into the material blank fields.");
+        }
 
         if (ImGui::BeginPopup("PickCutListPart")) {
             const auto& parts = m_cutOptimizer->parts();
@@ -949,7 +1342,7 @@ void DirectCarvePanel::renderModelFit() {
         }
     }
 
-    // Auto-fit whenever stock dimensions change
+    // Auto-fit whenever material blank dimensions change.
     if (stockChanged) {
         m_fitter.setStock(m_stock);
         m_fitParams.scale = m_fitter.autoScale();
@@ -993,6 +1386,14 @@ void DirectCarvePanel::renderModelFit() {
         m_fitParams.offsetY = (m_stock.height - modelH) * 0.5f;
     }
 
+    const bool fitChanged = m_fitParams.scale != prevFitParams.scale ||
+                            m_fitParams.depthMm != prevFitParams.depthMm ||
+                            m_fitParams.offsetX != prevFitParams.offsetX ||
+                            m_fitParams.offsetY != prevFitParams.offsetY;
+    if (stockChanged || fitChanged) {
+        markGeometryChanged();
+    }
+
     // Live fit result
     m_fitter.setStock(m_stock);
     const auto& mp = Config::instance().getActiveMachineProfile();
@@ -1006,24 +1407,24 @@ void DirectCarvePanel::renderModelFit() {
 
     ImGui::Spacing();
     Vec3 dim = result.modelMax - result.modelMin;
-    ImGui::Text("After transform: %.1f x %.1f x %.1f mm",
+    ImGui::Text("Model after transform: %.1f x %.1f x %.1f mm",
                 static_cast<double>(dim.x), static_cast<double>(dim.y),
                 static_cast<double>(dim.z));
     ImGui::TextColored(result.fitsStock ? kGreen : kRed,
-                       result.fitsStock ? "Fits stock" : "Exceeds stock");
+                       result.fitsStock ? "Fits blank" : "Exceeds blank");
     ImGui::SameLine();
     ImGui::TextColored(result.fitsMachine ? kGreen : kRed,
-                       result.fitsMachine ? "Fits machine" : "Exceeds machine");
+                       result.fitsMachine ? "Fits machine travel" : "Exceeds machine travel");
     if (!result.warning.empty())
         ImGui::TextColored(kYellow, "%s", result.warning.c_str());
 
     // Cut list integration: push carve blank as a cut piece
     if (m_cutOptimizer && m_modelLoaded) {
         ImGui::Spacing();
-        if (ImGui::Button("Sync Setup", ImVec2(bw, 0))) {
+        if (ImGui::Button("Sync Blank", ImVec2(bw, 0))) {
             syncSetupToOptimizerAndProject();
             char msg[64];
-            std::snprintf(msg, sizeof(msg), "Synced %.0fx%.0f mm setup",
+            std::snprintf(msg, sizeof(msg), "Synced %.0fx%.0f mm blank",
                           static_cast<double>(m_stock.width),
                           static_cast<double>(m_stock.height));
             ToastManager::instance().show(ToastType::Success, msg);
@@ -1031,13 +1432,13 @@ void DirectCarvePanel::renderModelFit() {
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Updates the cut optimizer part and project material line.");
 
-        // Show scrap: stock area vs carve footprint
+        // Show scrap: material blank area vs carve footprint.
         f32 stockArea = m_stock.width * m_stock.height;
         f32 carveArea = dim.x * dim.y;
         if (stockArea > 0.0f && carveArea > 0.0f && carveArea < stockArea) {
             f32 usedPct = (carveArea / stockArea) * 100.0f;
             f32 scrapArea = stockArea - carveArea;
-            ImGui::TextDisabled("Stock usage: %.0f%%  (%.0f mm%c scrap)",
+            ImGui::TextDisabled("Blank usage: %.0f%%  (%.0f mm%c scrap)",
                                 static_cast<double>(usedPct),
                                 static_cast<double>(scrapArea),
                                 '\xB2');
@@ -1201,6 +1602,8 @@ void DirectCarvePanel::renderToolSelect() {
                 m_clearTool = m_recommendation.clearing[0].geometry;
                 m_clearToolSelected = true;
                 m_selectedClearIdx = 0;
+                m_toolSetupConfirmed = false;
+                markToolpathSettingsChanged();
             }
         }
 
@@ -1251,7 +1654,8 @@ void DirectCarvePanel::renderToolSelect() {
                                 m_clearTool = tc.geometry;
                                 m_clearToolSelected = true;
                             }
-                            if (changed) ++m_settingsVersion;
+                            if (changed) markToolpathSettingsChanged();
+                            if (changed) m_toolSetupConfirmed = false;
                         }
                         // Show reasoning as tooltip
                         if (ImGui::IsItemHovered() && !tc.reasoning.empty())
@@ -1273,6 +1677,18 @@ void DirectCarvePanel::renderToolSelect() {
             } else {
                 ImGui::TextColored(kGreen, "%s No islands detected - no roughing pass needed.",
                                    Icons::Check);
+            }
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Checkbox("Tool setup verified", &m_toolSetupConfirmed)) {
+            clearFinalConfirmation();
+        }
+        if (ImGui::IsItemHovered()) {
+            if (m_clearToolSelected) {
+                ImGui::SetTooltip("Finishing and clearing tools are installed or ready for the planned change.");
+            } else {
+                ImGui::SetTooltip("The selected tool is installed and tightened.");
             }
         }
     }
@@ -1324,8 +1740,9 @@ void DirectCarvePanel::renderToolLibraryPicker() {
                 m_selectedLibToolIdx = i;
                 m_finishTool = g;
                 m_finishingToolSelected = true;
+                m_toolSetupConfirmed = false;
                 m_recommendationRun = false;
-                ++m_settingsVersion;
+                markToolpathSettingsChanged();
             }
         }
 
@@ -1394,13 +1811,16 @@ void DirectCarvePanel::renderManualToolEntry() {
         m_finishTool.tip_radius = static_cast<f64>(m_manualTipRadius);
         m_finishTool.units = VtdbUnits::Metric;
         m_finishingToolSelected = true;
+        m_toolSetupConfirmed = false;
         m_recommendationRun = false;
-        ++m_settingsVersion;
+        markToolpathSettingsChanged();
     }
     if (!canAccept) ImGui::EndDisabled();
 }
 
 void DirectCarvePanel::renderMaterialSetup() {
+    syncToolpathRapidRateFromProfile();
+
     ImGui::TextUnformatted("Material & Feeds");
     ImGui::Spacing();
     ImGui::TextWrapped("Select the workpiece material and confirm feed rates.");
@@ -1486,6 +1906,7 @@ void DirectCarvePanel::renderMaterialSetup() {
                             m_toolpathConfig.plungeRateMmMin =
                                 std::clamp(m_toolpathConfig.plungeRateMmMin, 50.0f, 5000.0f);
                         }
+                        markToolpathSettingsChanged();
                     }
                     if (selected) ImGui::SetItemDefaultFocus();
                 }
@@ -1519,6 +1940,8 @@ void DirectCarvePanel::renderMaterialSetup() {
                             mp.driveSystem == gcode::DriveSystem::Belt ? "Belt" :
                             mp.driveSystem == gcode::DriveSystem::BallScrew ? "Ball Screw" :
                             mp.driveSystem == gcode::DriveSystem::Acme ? "Acme" : "Lead Screw");
+        ImGui::TextDisabled("Rapid estimate: %.0f mm/min",
+                            static_cast<double>(m_toolpathConfig.rapidRateMmMin));
     }
 
     ImGui::Spacing();
@@ -1529,26 +1952,26 @@ void DirectCarvePanel::renderMaterialSetup() {
     f32 prevFeed = m_toolpathConfig.feedRateMmMin;
     ImGui::InputFloat("Feed Rate (mm/min)", &m_toolpathConfig.feedRateMmMin, 50.0f, 200.0f, "%.0f");
     m_toolpathConfig.feedRateMmMin = std::clamp(m_toolpathConfig.feedRateMmMin, 10.0f, 20000.0f);
-    if (m_toolpathConfig.feedRateMmMin != prevFeed) ++m_settingsVersion;
+    if (m_toolpathConfig.feedRateMmMin != prevFeed) markToolpathSettingsChanged();
 
     ImGui::SetNextItemWidth(iw);
     f32 prevPlunge = m_toolpathConfig.plungeRateMmMin;
     ImGui::InputFloat("Plunge Rate (mm/min)", &m_toolpathConfig.plungeRateMmMin, 10.0f, 50.0f, "%.0f");
     m_toolpathConfig.plungeRateMmMin = std::clamp(m_toolpathConfig.plungeRateMmMin, 5.0f, 5000.0f);
-    if (m_toolpathConfig.plungeRateMmMin != prevPlunge) ++m_settingsVersion;
+    if (m_toolpathConfig.plungeRateMmMin != prevPlunge) markToolpathSettingsChanged();
 
     ImGui::SetNextItemWidth(iw);
     f32 prevSafeZ = m_toolpathConfig.safeZMm;
     ImGui::InputFloat("Safe Z (mm)", &m_toolpathConfig.safeZMm, 0.5f, 2.0f, "%.1f");
     m_toolpathConfig.safeZMm = std::clamp(m_toolpathConfig.safeZMm, 1.0f, 50.0f);
-    if (m_toolpathConfig.safeZMm != prevSafeZ) ++m_settingsVersion;
+    if (m_toolpathConfig.safeZMm != prevSafeZ) markToolpathSettingsChanged();
 
     ImGui::SetNextItemWidth(iw);
     const char* stepoverLabels[] = {"Ultra Fine (1%)", "Fine (8%)", "Basic (12%)", "Rough (25%)", "Roughing (40%)"};
     int stepIdx = static_cast<int>(m_toolpathConfig.stepoverPreset);
     if (ImGui::Combo("Stepover", &stepIdx, stepoverLabels, 5)) {
         m_toolpathConfig.stepoverPreset = static_cast<carve::StepoverPreset>(stepIdx);
-        ++m_settingsVersion;
+        markToolpathSettingsChanged();
     }
 
     // Toolpath point resolution along scan lines
@@ -1560,7 +1983,7 @@ void DirectCarvePanel::renderMaterialSetup() {
         m_toolpathConfig.scanResolutionMm = std::max(hmRes, 0.2f);
     if (ImGui::SliderFloat("Path Detail (mm)", &m_toolpathConfig.scanResolutionMm,
                             hmRes, 2.0f, "%.2f"))
-        ++m_settingsVersion;
+        markToolpathSettingsChanged();
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Point spacing along each scan line.\n"
                           "Lower = more detail, more G-code lines.\n"
@@ -1575,7 +1998,7 @@ void DirectCarvePanel::renderMaterialSetup() {
     int axisIdx = static_cast<int>(m_toolpathConfig.axis);
     if (ImGui::Combo("Scan Axis", &axisIdx, axisLabels, 4)) {
         m_toolpathConfig.axis = static_cast<carve::ScanAxis>(axisIdx);
-        ++m_settingsVersion;
+        markToolpathSettingsChanged();
     }
 
     ImGui::SetNextItemWidth(iw);
@@ -1583,19 +2006,23 @@ void DirectCarvePanel::renderMaterialSetup() {
     int dirIdx = static_cast<int>(m_toolpathConfig.direction);
     if (ImGui::Combo("Mill Direction", &dirIdx, dirLabels, 3)) {
         m_toolpathConfig.direction = static_cast<carve::MillDirection>(dirIdx);
-        ++m_settingsVersion;
+        markToolpathSettingsChanged();
     }
 
     // Auto-confirm when material is selected
     if (!m_materialSelected && m_materialList.empty()) {
         ImGui::Spacing();
-        ImGui::Checkbox("Confirm settings", &m_materialSelected);
+        if (ImGui::Checkbox("Confirm settings", &m_materialSelected)) {
+            markToolpathSettingsChanged();
+        }
     }
 }
 
 // --- renderPreview (18-02): Heightmap overlay, toolpath lines, stats, controls ---
 
 void DirectCarvePanel::renderPreview() {
+    syncToolpathRapidRateFromProfile();
+
     ImGui::TextUnformatted("Toolpath Preview");
     ImGui::Spacing();
 
@@ -1614,10 +2041,23 @@ void DirectCarvePanel::renderPreview() {
     bool hmReady = (jobState == carve::CarveJobState::Ready);
     bool hmComputing = (jobState == carve::CarveJobState::Computing);
 
+    if (hmReady && m_heightmapRequestedAtGeometryVersion >= 0 &&
+        m_heightmapGeneratedAtGeometryVersion !=
+            m_heightmapRequestedAtGeometryVersion) {
+        m_heightmapGeneratedAtGeometryVersion =
+            m_heightmapRequestedAtGeometryVersion;
+    }
+
+    if (hmReady && m_heightmapGeneratedAtGeometryVersion != m_geometryVersion) {
+        startHeightmapForCurrentGeometry();
+        jobState = m_carveJob->state();
+        hmReady = false;
+        hmComputing = true;
+    }
+
     // Auto-load or auto-compute heightmap on first entry to Preview
     if (jobState == carve::CarveJobState::Idle && !m_hmInitAttempted && !m_hmFileMissing) {
         m_hmInitAttempted = true;
-        m_fitter.setStock(m_stock);
 
         // Check project manifest for cached heightmap
         bool loaded = false;
@@ -1630,6 +2070,8 @@ void DirectCarvePanel::renderPreview() {
                     if (m_carveJob->loadHeightmap(fullPath.string())) {
                         loaded = true;
                         m_heightmapSaved = true; // Already on disk
+                        m_heightmapRequestedAtGeometryVersion = m_geometryVersion;
+                        m_heightmapGeneratedAtGeometryVersion = m_geometryVersion;
                         ToastManager::instance().show(ToastType::Success,
                             "Heightmap Loaded", "Loaded cached heightmap from project");
                     }
@@ -1642,9 +2084,7 @@ void DirectCarvePanel::renderPreview() {
 
         // First time — no cache found, auto-compute
         if (!loaded && !m_hmFileMissing) {
-            carve::HeightmapConfig hmCfg;
-            m_carveJob->startHeightmap(m_vertices, m_indices, m_fitter,
-                                        m_fitParams, hmCfg);
+            startHeightmapForCurrentGeometry();
             hmComputing = true;
         }
 
@@ -1672,6 +2112,8 @@ void DirectCarvePanel::renderPreview() {
                         if (m_carveJob->loadHeightmap(path)) {
                             m_hmFileMissing = false;
                             m_heightmapSaved = true;
+                            m_heightmapRequestedAtGeometryVersion = m_geometryVersion;
+                            m_heightmapGeneratedAtGeometryVersion = m_geometryVersion;
                             ToastManager::instance().show(ToastType::Success,
                                 "Heightmap Loaded", path);
                         } else {
@@ -1692,12 +2134,7 @@ void DirectCarvePanel::renderPreview() {
             ImGui::Spacing();
             if (ImGui::Button("Continue", ImVec2(bw, 0))) {
                 m_hmFileMissing = false;
-                m_heightmapSaved = false;
-                if (m_hmPreviewTex != 0) { glDeleteTextures(1, &m_hmPreviewTex); m_hmPreviewTex = 0; }
-                m_fitter.setStock(m_stock);
-                carve::HeightmapConfig hmCfg;
-                m_carveJob->startHeightmap(m_vertices, m_indices, m_fitter,
-                                            m_fitParams, hmCfg);
+                startHeightmapForCurrentGeometry();
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -1717,10 +2154,7 @@ void DirectCarvePanel::renderPreview() {
         } else if (jobState == carve::CarveJobState::Error) {
             ImGui::TextColored(kRed, "1. Heightmap error: %s", m_carveJob->errorMessage().c_str());
             if (ImGui::Button("Retry", ImVec2(bw, 0))) {
-                m_fitter.setStock(m_stock);
-                carve::HeightmapConfig hmCfg;
-                m_carveJob->startHeightmap(m_vertices, m_indices, m_fitter,
-                                            m_fitParams, hmCfg);
+                startHeightmapForCurrentGeometry();
             }
         } else if (hmReady) {
             // Auto-save after first computation
@@ -1765,14 +2199,10 @@ void DirectCarvePanel::renderPreview() {
                     "This may take a while. Continue?");
                 ImGui::Spacing();
                 if (ImGui::Button("Continue", ImVec2(bw, 0))) {
-                    m_heightmapSaved = false;
                     m_toolpathGenerated = false;  // Hard reset: heightmap changed
-                    ++m_settingsVersion;
-                    if (m_hmPreviewTex != 0) { glDeleteTextures(1, &m_hmPreviewTex); m_hmPreviewTex = 0; }
-                    m_fitter.setStock(m_stock);
-                    carve::HeightmapConfig hmCfg;
-                    m_carveJob->startHeightmap(m_vertices, m_indices, m_fitter,
-                                                m_fitParams, hmCfg);
+                    m_generatedAtVersion = -1;
+                    markToolpathSettingsChanged();
+                    startHeightmapForCurrentGeometry();
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::SameLine();
@@ -2030,6 +2460,213 @@ void DirectCarvePanel::sendProbeXY(char axis, f32 direction,
     m_cnc->sendCommand(cmd);
 }
 
+void DirectCarvePanel::startSienciAutoZeroProbe()
+{
+    if (!m_cnc || !m_cncConnected) {
+        m_zeroingRunMessage = "AutoZero requires a connected controller.";
+        return;
+    }
+
+    auto profile = carve::defaultSienciAutoZeroProfile();
+    bool needsZ = (m_probeMode == ProbeMode::ZOnly ||
+                   m_probeMode == ProbeMode::XYZAuto);
+    bool needsX = (m_probeMode == ProbeMode::XOnly ||
+                   m_probeMode == ProbeMode::XYCorner ||
+                   m_probeMode == ProbeMode::XYZAuto);
+    bool needsY = (m_probeMode == ProbeMode::YOnly ||
+                   m_probeMode == ProbeMode::XYCorner ||
+                   m_probeMode == ProbeMode::XYZAuto);
+    bool needsXY = needsX || needsY;
+
+    auto addCommand = [this](const std::string& command) {
+        m_zeroingSteps.push_back({ZeroingStepKind::Command, command});
+    };
+    auto addStep = [this](ZeroingStepKind kind, const std::string& command = {}) {
+        m_zeroingSteps.push_back({kind, command});
+    };
+
+    m_zeroingSteps.clear();
+    m_zeroingStepIndex = 0;
+    m_zeroingPendingProbeStep = ZeroingStepKind::Command;
+    m_zeroingWaitingForOk = false;
+    m_zeroingSawProbeResult = false;
+    m_zeroingLastProbeResult.reset();
+    m_autoZeroXFirst = 0.0f;
+    m_autoZeroXSecond = 0.0f;
+    m_autoZeroYFirst = 0.0f;
+    m_autoZeroYSecond = 0.0f;
+    m_zeroingRunActive = true;
+    m_zeroingRunMessage = "AutoZero starting.";
+
+    f32 zSearch = std::max(1.0f, m_probeSearchDist);
+    f32 lateralSearch = std::max(1.0f, m_probeSearchDist);
+    f32 retract = std::clamp(m_probeRetractDist, 0.1f, 20.0f);
+    f32 slowProbeTravel = retract + 1.0f;
+    f32 zLiftForXY = std::max(3.0f, retract + 1.0f);
+    f32 zThickness = std::max(0.0f, m_probeZThickness);
+    f32 finalZ = std::max(1.0f, m_autoZeroFinalZRetract);
+
+    addCommand("G21");
+    addCommand("G91");
+
+    if (needsZ || needsXY) {
+        addCommand("G38.2 Z-" + fixedNumber(zSearch, 3) +
+                   " F" + feedNumber(m_probeFastSpeed));
+        addCommand("G0 Z" + fixedNumber(retract, 3));
+        addCommand("G38.2 Z-" + fixedNumber(slowProbeTravel, 3) +
+                   " F" + feedNumber(m_probeSlowSpeed));
+        if (needsZ) {
+            addCommand("G10 L20 P0 Z" + fixedNumber(zThickness, 3));
+        }
+        addCommand("G0 Z" + fixedNumber(needsXY ? zLiftForXY : finalZ, 3));
+    }
+
+    auto bitMode = currentAutoZeroBitMode();
+    f32 approach = bitMode == carve::DirectCarveAutoZeroBitMode::Tip
+                       ? profile.tipModeApproachMm
+                       : profile.autoModeApproachMm;
+    f32 span = bitMode == carve::DirectCarveAutoZeroBitMode::Tip
+                   ? profile.tipModeSpanMm
+                   : profile.autoModeSpanMm;
+
+    auto addAxisCentering = [&](char axis,
+                                ZeroingStepKind first,
+                                ZeroingStepKind second,
+                                ZeroingStepKind moveToCenter,
+                                ZeroingStepKind setOffset) {
+        addCommand("G0 " + axisWord(axis, -approach));
+        addCommand("G38.2 " + axisWord(axis, -lateralSearch) +
+                   " F" + feedNumber(m_probeFastSpeed));
+        addCommand("G0 " + axisWord(axis, retract));
+        addStep(first, "G38.2 " + axisWord(axis, -slowProbeTravel) +
+                       " F" + feedNumber(m_probeSlowSpeed));
+        addCommand("G0 " + axisWord(axis, span));
+        addCommand("G38.2 " + axisWord(axis, lateralSearch) +
+                   " F" + feedNumber(m_probeFastSpeed));
+        addCommand("G0 " + axisWord(axis, -retract));
+        addStep(second, "G38.2 " + axisWord(axis, slowProbeTravel) +
+                        " F" + feedNumber(m_probeSlowSpeed));
+        addStep(moveToCenter);
+        addStep(setOffset);
+    };
+
+    if (needsX) {
+        addAxisCentering('X',
+                         ZeroingStepKind::ProbeXFirst,
+                         ZeroingStepKind::ProbeXSecond,
+                         ZeroingStepKind::MoveToXCenter,
+                         ZeroingStepKind::SetXOffset);
+    }
+    if (needsY) {
+        addAxisCentering('Y',
+                         ZeroingStepKind::ProbeYFirst,
+                         ZeroingStepKind::ProbeYSecond,
+                         ZeroingStepKind::MoveToYCenter,
+                         ZeroingStepKind::SetYOffset);
+    }
+
+    if (needsXY) {
+        addCommand("G90");
+        addCommand("G0 X0 Y0");
+        if (needsZ) {
+            addCommand("G0 Z" + fixedNumber(finalZ, 3));
+        }
+    } else {
+        addCommand("G90");
+    }
+
+    sendNextZeroingStep();
+}
+
+void DirectCarvePanel::sendNextZeroingStep()
+{
+    if (!m_zeroingRunActive || !m_cnc) {
+        return;
+    }
+
+    if (m_zeroingStepIndex >= m_zeroingSteps.size()) {
+        finishZeroingRun(true,
+                         "AutoZero probe sequence completed. Confirm zero before carving.");
+        return;
+    }
+
+    auto step = m_zeroingSteps[m_zeroingStepIndex++];
+    std::string command = step.command;
+    char buf[160];
+
+    switch (step.kind) {
+    case ZeroingStepKind::MoveToXCenter: {
+        f32 delta = (m_autoZeroXFirst - m_autoZeroXSecond) * 0.5f;
+        std::snprintf(buf, sizeof(buf), "G0 X%.3f", static_cast<double>(delta));
+        command = buf;
+        break;
+    }
+    case ZeroingStepKind::SetXOffset: {
+        f32 offset = (m_probeCorner == 1 || m_probeCorner == 2)
+                         ? -m_autoZeroOriginOffset
+                         : m_autoZeroOriginOffset;
+        std::snprintf(buf, sizeof(buf), "G10 L20 P0 X%.3f",
+                      static_cast<double>(offset));
+        command = buf;
+        break;
+    }
+    case ZeroingStepKind::MoveToYCenter: {
+        f32 delta = (m_autoZeroYFirst - m_autoZeroYSecond) * 0.5f;
+        std::snprintf(buf, sizeof(buf), "G0 Y%.3f", static_cast<double>(delta));
+        command = buf;
+        break;
+    }
+    case ZeroingStepKind::SetYOffset: {
+        f32 offset = (m_probeCorner == 2 || m_probeCorner == 3)
+                         ? -m_autoZeroOriginOffset
+                         : m_autoZeroOriginOffset;
+        std::snprintf(buf, sizeof(buf), "G10 L20 P0 Y%.3f",
+                      static_cast<double>(offset));
+        command = buf;
+        break;
+    }
+    default:
+        break;
+    }
+
+    if (command.empty()) {
+        finishZeroingRun(false, "AutoZero generated an empty probe step.");
+        return;
+    }
+
+    m_zeroingPendingProbeStep =
+        (step.kind == ZeroingStepKind::ProbeXFirst ||
+         step.kind == ZeroingStepKind::ProbeXSecond ||
+         step.kind == ZeroingStepKind::ProbeYFirst ||
+         step.kind == ZeroingStepKind::ProbeYSecond)
+            ? step.kind
+            : ZeroingStepKind::Command;
+    m_zeroingWaitingForOk = true;
+    m_zeroingSawProbeResult = false;
+    m_zeroingLastProbeResult.reset();
+    m_zeroingRunMessage = "AutoZero: " + command;
+    m_cnc->sendCommand(command);
+}
+
+void DirectCarvePanel::finishZeroingRun(bool success, const std::string& message)
+{
+    m_zeroingRunActive = false;
+    m_zeroingWaitingForOk = false;
+    m_zeroingPendingProbeStep = ZeroingStepKind::Command;
+    m_zeroingSawProbeResult = false;
+    m_zeroingLastProbeResult.reset();
+    m_zeroingSteps.clear();
+    m_zeroingStepIndex = 0;
+    m_zeroingRunMessage = message;
+
+    if (success) {
+        clearFinalConfirmation();
+        (void)syncOperationOpenItem();
+    } else if (m_cnc && m_cncConnected) {
+        m_cnc->sendCommand("G90");
+    }
+}
+
 void DirectCarvePanel::renderZeroConfirm() {
     ImGui::TextUnformatted("Zero Position Confirmation");
     ImGui::Spacing();
@@ -2078,6 +2715,7 @@ void DirectCarvePanel::renderZeroConfirm() {
     // --- Touch Plate Probe ---
     if (ImGui::CollapsingHeader("Touch Plate Probe", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
+        bool zeroingConfigChanged = false;
 
         // Probe pin indicator
         bool probeActive = (m_machineStatus.inputPins & cnc::PIN_PROBE) != 0;
@@ -2088,14 +2726,53 @@ void DirectCarvePanel::renderZeroConfirm() {
                            probeActive ? "ACTIVE (circuit closed)" : "inactive");
         ImGui::Spacing();
 
+        const char* plateLabels[] = {"Generic touch plate", "Sienci AutoZero"};
+        int plateIdx = m_touchPlate == carve::DirectCarveTouchPlate::SienciAutoZero ? 1 : 0;
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14.0f);
+        if (ImGui::Combo("Touch Plate", &plateIdx, plateLabels, 2)) {
+            m_touchPlate = plateIdx == 1
+                ? carve::DirectCarveTouchPlate::SienciAutoZero
+                : carve::DirectCarveTouchPlate::Generic;
+            if (m_touchPlate == carve::DirectCarveTouchPlate::SienciAutoZero) {
+                auto profile = carve::defaultSienciAutoZeroProfile();
+                if (std::fabs(m_probeZThickness - 15.0f) < 0.001f) {
+                    m_probeZThickness = profile.zPlateThicknessMm;
+                }
+                m_autoZeroOriginOffset = profile.originOffsetMm;
+                m_autoZeroFinalZRetract = profile.finalZRetractMm;
+                m_probeSearchDist = profile.lateralSearchMm;
+            }
+            zeroingConfigChanged = true;
+        }
+        if (m_touchPlate == carve::DirectCarveTouchPlate::SienciAutoZero) {
+            const char* bitModeLabels[] = {
+                "Auto (straight bits)",
+                "Tip (V, ball, tapered)"
+            };
+            int bitModeIdx = currentAutoZeroBitMode() ==
+                    carve::DirectCarveAutoZeroBitMode::Tip ? 1 : 0;
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 16.0f);
+            if (ImGui::Combo("Bit Geometry", &bitModeIdx, bitModeLabels, 2)) {
+                m_autoZeroBitMode = bitModeIdx == 1
+                    ? carve::DirectCarveAutoZeroBitMode::Tip
+                    : carve::DirectCarveAutoZeroBitMode::Auto;
+                m_autoZeroBitModeManual = true;
+                zeroingConfigChanged = true;
+            }
+            ImGui::TextDisabled("Z-only uses back lip; XY/XYZ starts over inner square.");
+        }
+        ImGui::Spacing();
+
         // --- Mode selector ---
         const char* modeLabels[] = {
             "Z Only", "X Only", "Y Only", "XY Corner", "XYZ Auto"
         };
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
         int modeInt = static_cast<int>(m_probeMode);
-        if (ImGui::Combo("Probe Mode", &modeInt, modeLabels, 5))
+        if (ImGui::Combo("Probe Mode", &modeInt, modeLabels, 5)) {
             m_probeMode = static_cast<ProbeMode>(modeInt);
+            zeroingConfigChanged = true;
+        }
 
         bool needsXY = (m_probeMode == ProbeMode::XOnly ||
                         m_probeMode == ProbeMode::YOnly ||
@@ -2111,7 +2788,9 @@ void DirectCarvePanel::renderZeroConfirm() {
                 "Top-Left (probe -X, +Y)"
             };
             ImGui::SetNextItemWidth(ImGui::GetFontSize() * 16.0f);
-            ImGui::Combo("Probe Direction", &m_probeCorner, cornerLabels, 4);
+            if (ImGui::Combo("Probe Direction", &m_probeCorner, cornerLabels, 4)) {
+                zeroingConfigChanged = true;
+            }
         }
 
         ImGui::Spacing();
@@ -2124,46 +2803,79 @@ void DirectCarvePanel::renderZeroConfirm() {
                        m_probeMode == ProbeMode::XYZAuto);
         if (needsZ) {
             ImGui::SetNextItemWidth(fieldW);
-            ImGui::InputFloat("Z Plate Thickness (mm)", &m_probeZThickness, 0.5f, 1.0f, "%.2f");
+            zeroingConfigChanged |= ImGui::InputFloat("Z Plate Thickness (mm)",
+                                                      &m_probeZThickness,
+                                                      0.5f, 1.0f, "%.2f");
             m_probeZThickness = std::max(0.0f, m_probeZThickness);
         }
 
-        // XY wall thickness (for XY modes)
+        // XY compensation geometry
         if (needsXY) {
-            ImGui::SetNextItemWidth(fieldW);
-            ImGui::InputFloat("XY Wall Thickness (mm)", &m_probeXYThickness, 0.5f, 1.0f, "%.2f");
-            m_probeXYThickness = std::max(0.0f, m_probeXYThickness);
+            if (m_touchPlate == carve::DirectCarveTouchPlate::SienciAutoZero) {
+                ImGui::SetNextItemWidth(fieldW);
+                zeroingConfigChanged |= ImGui::InputFloat("Origin Offset (mm)",
+                                                          &m_autoZeroOriginOffset,
+                                                          0.1f, 1.0f, "%.3f");
+                m_autoZeroOriginOffset = std::max(0.0f, m_autoZeroOriginOffset);
+            } else {
+                ImGui::SetNextItemWidth(fieldW);
+                zeroingConfigChanged |= ImGui::InputFloat("XY Wall Thickness (mm)",
+                                                          &m_probeXYThickness,
+                                                          0.5f, 1.0f, "%.2f");
+                m_probeXYThickness = std::max(0.0f, m_probeXYThickness);
+            }
         }
 
         // Tool diameter (auto-populated from selected finishing tool)
-        if (needsXY) {
+        if (needsXY && m_touchPlate == carve::DirectCarveTouchPlate::Generic) {
             if (m_probeToolDiameter <= 0.0f && m_finishingToolSelected)
                 m_probeToolDiameter = static_cast<f32>(m_finishTool.diameter);
 
             ImGui::SetNextItemWidth(fieldW);
-            ImGui::InputFloat("Tool Diameter (mm)", &m_probeToolDiameter, 0.1f, 1.0f, "%.3f");
+            zeroingConfigChanged |= ImGui::InputFloat("Tool Diameter (mm)",
+                                                      &m_probeToolDiameter,
+                                                      0.1f, 1.0f, "%.3f");
             m_probeToolDiameter = std::max(0.0f, m_probeToolDiameter);
             if (m_finishingToolSelected) {
                 ImGui::SameLine();
                 ImGui::TextDisabled("(from %s)", m_finishTool.name_format.c_str());
             }
+        } else if (needsXY) {
+            ImGui::TextDisabled("AutoZero measures center from probe contacts; tool diameter is not assumed.");
         }
 
         ImGui::SetNextItemWidth(fieldW);
-        ImGui::InputFloat("Fast Speed (mm/min)", &m_probeFastSpeed, 10, 50, "%.0f");
+        zeroingConfigChanged |= ImGui::InputFloat("Fast Speed (mm/min)",
+                                                  &m_probeFastSpeed,
+                                                  10, 50, "%.0f");
         m_probeFastSpeed = std::clamp(m_probeFastSpeed, 10.0f, 1000.0f);
 
         ImGui::SetNextItemWidth(fieldW);
-        ImGui::InputFloat("Slow Speed (mm/min)", &m_probeSlowSpeed, 5, 25, "%.0f");
+        zeroingConfigChanged |= ImGui::InputFloat("Slow Speed (mm/min)",
+                                                  &m_probeSlowSpeed,
+                                                  5, 25, "%.0f");
         m_probeSlowSpeed = std::clamp(m_probeSlowSpeed, 5.0f, 500.0f);
 
         ImGui::SetNextItemWidth(fieldW);
-        ImGui::InputFloat("Search Distance (mm)", &m_probeSearchDist, 5, 10, "%.1f");
+        zeroingConfigChanged |= ImGui::InputFloat("Search Distance (mm)",
+                                                  &m_probeSearchDist,
+                                                  5, 10, "%.1f");
         m_probeSearchDist = std::clamp(m_probeSearchDist, 1.0f, 200.0f);
 
         ImGui::SetNextItemWidth(fieldW);
-        ImGui::InputFloat("Retract (mm)", &m_probeRetractDist, 0.5f, 1, "%.1f");
+        zeroingConfigChanged |= ImGui::InputFloat("Retract (mm)",
+                                                  &m_probeRetractDist,
+                                                  0.5f, 1, "%.1f");
         m_probeRetractDist = std::clamp(m_probeRetractDist, 0.1f, 20.0f);
+
+        if (m_touchPlate == carve::DirectCarveTouchPlate::SienciAutoZero) {
+            ImGui::SetNextItemWidth(fieldW);
+            zeroingConfigChanged |= ImGui::InputFloat("Final Z Retract (mm)",
+                                                      &m_autoZeroFinalZRetract,
+                                                      0.1f, 1.0f, "%.2f");
+            m_autoZeroFinalZRetract =
+                std::clamp(m_autoZeroFinalZRetract, 1.0f, 50.0f);
+        }
 
         ImGui::Spacing();
 
@@ -2178,55 +2890,75 @@ void DirectCarvePanel::renderZeroConfirm() {
 
         ImGui::TextDisabled("G21 G91  (metric, incremental)");
 
-        switch (m_probeMode) {
-        case ProbeMode::ZOnly:
-            ImGui::TextDisabled("G38.2 Z-%.1f F%.0f  (fast)",
-                                static_cast<double>(m_probeSearchDist),
-                                static_cast<double>(m_probeFastSpeed));
-            ImGui::TextDisabled("G0 Z%.1f  (retract)",
-                                static_cast<double>(m_probeRetractDist));
-            ImGui::TextDisabled("G38.2 Z-%.1f F%.0f  (slow)",
-                                static_cast<double>(m_probeRetractDist + 1.0f),
-                                static_cast<double>(m_probeSlowSpeed));
-            ImGui::TextDisabled("G10 L20 P0 Z%.2f",
-                                static_cast<double>(m_probeZThickness));
-            break;
+        if (m_touchPlate == carve::DirectCarveTouchPlate::SienciAutoZero) {
+            ImGui::TextDisabled("Runs one command at a time and reads [PRB] contacts.");
+            if (needsZ) {
+                ImGui::TextDisabled("Z: two-pass probe, then G10 L20 P0 Z%.3f",
+                                    static_cast<double>(m_probeZThickness));
+            }
+            if (needsXY) {
+                f32 xOffset = (m_probeCorner == 1 || m_probeCorner == 2)
+                                  ? -m_autoZeroOriginOffset
+                                  : m_autoZeroOriginOffset;
+                f32 yOffset = (m_probeCorner == 2 || m_probeCorner == 3)
+                                  ? -m_autoZeroOriginOffset
+                                  : m_autoZeroOriginOffset;
+                ImGui::TextDisabled("XY: probe both sides, move to measured center.");
+                ImGui::TextDisabled("G10 L20 P0 X%.3f Y%.3f",
+                                    static_cast<double>(xOffset),
+                                    static_cast<double>(yOffset));
+            }
+        } else {
+            switch (m_probeMode) {
+            case ProbeMode::ZOnly:
+                ImGui::TextDisabled("G38.2 Z-%.1f F%.0f  (fast)",
+                                    static_cast<double>(m_probeSearchDist),
+                                    static_cast<double>(m_probeFastSpeed));
+                ImGui::TextDisabled("G0 Z%.1f  (retract)",
+                                    static_cast<double>(m_probeRetractDist));
+                ImGui::TextDisabled("G38.2 Z-%.1f F%.0f  (slow)",
+                                    static_cast<double>(m_probeRetractDist + 1.0f),
+                                    static_cast<double>(m_probeSlowSpeed));
+                ImGui::TextDisabled("G10 L20 P0 Z%.2f",
+                                    static_cast<double>(m_probeZThickness));
+                break;
 
-        case ProbeMode::XOnly:
-            ImGui::TextDisabled("G38.2 X%.1f F%.0f  (fast)",
-                                static_cast<double>(xDir * m_probeSearchDist),
-                                static_cast<double>(m_probeFastSpeed));
-            ImGui::TextDisabled("G10 L20 P0 X%.3f  (wall + tool radius)",
-                                static_cast<double>(-xDir * (m_probeXYThickness + toolR)));
-            break;
+            case ProbeMode::XOnly:
+                ImGui::TextDisabled("G38.2 X%.1f F%.0f  (fast)",
+                                    static_cast<double>(xDir * m_probeSearchDist),
+                                    static_cast<double>(m_probeFastSpeed));
+                ImGui::TextDisabled("G10 L20 P0 X%.3f  (wall + tool radius)",
+                                    static_cast<double>(-xDir * (m_probeXYThickness + toolR)));
+                break;
 
-        case ProbeMode::YOnly:
-            ImGui::TextDisabled("G38.2 Y%.1f F%.0f  (fast)",
-                                static_cast<double>(yDir * m_probeSearchDist),
-                                static_cast<double>(m_probeFastSpeed));
-            ImGui::TextDisabled("G10 L20 P0 Y%.3f  (wall + tool radius)",
-                                static_cast<double>(-yDir * (m_probeXYThickness + toolR)));
-            break;
+            case ProbeMode::YOnly:
+                ImGui::TextDisabled("G38.2 Y%.1f F%.0f  (fast)",
+                                    static_cast<double>(yDir * m_probeSearchDist),
+                                    static_cast<double>(m_probeFastSpeed));
+                ImGui::TextDisabled("G10 L20 P0 Y%.3f  (wall + tool radius)",
+                                    static_cast<double>(-yDir * (m_probeXYThickness + toolR)));
+                break;
 
-        case ProbeMode::XYCorner:
-            ImGui::TextDisabled("Probe X -> set X offset");
-            ImGui::TextDisabled("Probe Y -> set Y offset");
-            ImGui::TextDisabled("Compensation: wall(%.1f) + radius(%.2f) = %.2f mm",
-                                static_cast<double>(m_probeXYThickness),
-                                static_cast<double>(toolR),
-                                static_cast<double>(m_probeXYThickness + toolR));
-            break;
+            case ProbeMode::XYCorner:
+                ImGui::TextDisabled("Probe X -> set X offset");
+                ImGui::TextDisabled("Probe Y -> set Y offset");
+                ImGui::TextDisabled("Compensation: wall(%.1f) + radius(%.2f) = %.2f mm",
+                                    static_cast<double>(m_probeXYThickness),
+                                    static_cast<double>(toolR),
+                                    static_cast<double>(m_probeXYThickness + toolR));
+                break;
 
-        case ProbeMode::XYZAuto:
-            ImGui::TextDisabled("1. Probe Z on top of block -> set Z");
-            ImGui::TextDisabled("2. Move past X edge, drop Z, probe X -> set X");
-            ImGui::TextDisabled("3. Move past Y edge, probe Y -> set Y");
-            ImGui::TextDisabled("4. Return to work zero");
-            ImGui::TextDisabled("Compensation: wall(%.1f) + radius(%.2f) = %.2f mm",
-                                static_cast<double>(m_probeXYThickness),
-                                static_cast<double>(toolR),
-                                static_cast<double>(m_probeXYThickness + toolR));
-            break;
+            case ProbeMode::XYZAuto:
+                ImGui::TextDisabled("1. Probe Z on top of block -> set Z");
+                ImGui::TextDisabled("2. Move past X edge, drop Z, probe X -> set X");
+                ImGui::TextDisabled("3. Move past Y edge, probe Y -> set Y");
+                ImGui::TextDisabled("4. Return to work zero");
+                ImGui::TextDisabled("Compensation: wall(%.1f) + radius(%.2f) = %.2f mm",
+                                    static_cast<double>(m_probeXYThickness),
+                                    static_cast<double>(toolR),
+                                    static_cast<double>(m_probeXYThickness + toolR));
+                break;
+            }
         }
 
         ImGui::TextDisabled("G90  (restore absolute)");
@@ -2234,76 +2966,77 @@ void DirectCarvePanel::renderZeroConfirm() {
         ImGui::Spacing();
 
         // --- Run Probe ---
-        bool canProbe = isIdle;
+        bool canProbe = isIdle && !m_zeroingRunActive;
         if (!canProbe) ImGui::BeginDisabled();
 
-        const char* probeLabel = "Run Probe";
+        const char* probeLabel = m_zeroingRunActive ? "Probing..." : "Run Probe";
         float probeW = ImGui::CalcTextSize(probeLabel).x
                        + ImGui::GetStyle().FramePadding.x * 4;
         float probeH = ImGui::GetFrameHeight() * 1.5f;
 
         if (ImGui::Button(probeLabel, ImVec2(probeW, probeH))) {
-            char cmd[256];
-            m_cnc->sendCommand("G21 G91");
+            if (m_touchPlate == carve::DirectCarveTouchPlate::SienciAutoZero) {
+                startSienciAutoZeroProbe();
+            } else {
+                char cmd[256];
+                m_cnc->sendCommand("G21 G91");
 
-            switch (m_probeMode) {
-            case ProbeMode::ZOnly:
-                sendProbeZ(m_probeZThickness);
-                break;
+                switch (m_probeMode) {
+                case ProbeMode::ZOnly:
+                    sendProbeZ(m_probeZThickness);
+                    break;
 
-            case ProbeMode::XOnly:
-                sendProbeXY('X', xDir, m_probeXYThickness, toolR);
-                break;
+                case ProbeMode::XOnly:
+                    sendProbeXY('X', xDir, m_probeXYThickness, toolR);
+                    break;
 
-            case ProbeMode::YOnly:
-                sendProbeXY('Y', yDir, m_probeXYThickness, toolR);
-                break;
+                case ProbeMode::YOnly:
+                    sendProbeXY('Y', yDir, m_probeXYThickness, toolR);
+                    break;
 
-            case ProbeMode::XYCorner:
-                sendProbeXY('X', xDir, m_probeXYThickness, toolR);
-                sendProbeXY('Y', yDir, m_probeXYThickness, toolR);
-                break;
+                case ProbeMode::XYCorner:
+                    sendProbeXY('X', xDir, m_probeXYThickness, toolR);
+                    sendProbeXY('Y', yDir, m_probeXYThickness, toolR);
+                    break;
 
-            case ProbeMode::XYZAuto: {
-                // Phase 1: Probe Z on top of block
-                sendProbeZ(m_probeZThickness);
+                case ProbeMode::XYZAuto: {
+                    sendProbeZ(m_probeZThickness);
 
-                // Phase 2: Move out past X edge, drop beside block, probe X
-                f32 clearance = m_probeXYThickness + m_probeRetractDist + toolR + 6.0f;
-                std::snprintf(cmd, sizeof(cmd), "G0 %c%.1f",
-                              'X', static_cast<double>(-xDir * clearance));
-                m_cnc->sendCommand(cmd);
+                    f32 clearance = m_probeXYThickness + m_probeRetractDist + toolR + 6.0f;
+                    std::snprintf(cmd, sizeof(cmd), "G0 %c%.1f",
+                                  'X', static_cast<double>(-xDir * clearance));
+                    m_cnc->sendCommand(cmd);
 
-                f32 zDrop = m_probeZThickness + m_probeRetractDist + 2.0f;
-                std::snprintf(cmd, sizeof(cmd), "G0 Z-%.1f",
-                              static_cast<double>(zDrop));
-                m_cnc->sendCommand(cmd);
+                    f32 zDrop = m_probeZThickness + m_probeRetractDist + 2.0f;
+                    std::snprintf(cmd, sizeof(cmd), "G0 Z-%.1f",
+                                  static_cast<double>(zDrop));
+                    m_cnc->sendCommand(cmd);
 
-                sendProbeXY('X', xDir, m_probeXYThickness, toolR);
+                    sendProbeXY('X', xDir, m_probeXYThickness, toolR);
 
-                // Phase 3: Move out past Y edge, return X, probe Y
-                std::snprintf(cmd, sizeof(cmd), "G0 %c%.1f",
-                              'Y', static_cast<double>(-yDir * clearance));
-                m_cnc->sendCommand(cmd);
-                std::snprintf(cmd, sizeof(cmd), "G0 %c%.1f",
-                              'X', static_cast<double>(xDir * clearance));
-                m_cnc->sendCommand(cmd);
+                    std::snprintf(cmd, sizeof(cmd), "G0 %c%.1f",
+                                  'Y', static_cast<double>(-yDir * clearance));
+                    m_cnc->sendCommand(cmd);
+                    std::snprintf(cmd, sizeof(cmd), "G0 %c%.1f",
+                                  'X', static_cast<double>(xDir * clearance));
+                    m_cnc->sendCommand(cmd);
 
-                sendProbeXY('Y', yDir, m_probeXYThickness, toolR);
+                    sendProbeXY('Y', yDir, m_probeXYThickness, toolR);
 
-                // Phase 4: Raise and return to zero
-                std::snprintf(cmd, sizeof(cmd), "G0 Z%.1f",
-                              static_cast<double>(zDrop + m_probeRetractDist));
-                m_cnc->sendCommand(cmd);
+                    std::snprintf(cmd, sizeof(cmd), "G0 Z%.1f",
+                                  static_cast<double>(zDrop + m_probeRetractDist));
+                    m_cnc->sendCommand(cmd);
+
+                    m_cnc->sendCommand("G90");
+                    m_cnc->sendCommand("G0 X0 Y0");
+                    m_cnc->sendCommand("G91");
+                    break;
+                }
+                }
 
                 m_cnc->sendCommand("G90");
-                m_cnc->sendCommand("G0 X0 Y0");
-                m_cnc->sendCommand("G91");
-                break;
+                (void)syncOperationOpenItem();
             }
-            }
-
-            m_cnc->sendCommand("G90");
         }
         if (!canProbe) ImGui::EndDisabled();
 
@@ -2311,11 +3044,21 @@ void DirectCarvePanel::renderZeroConfirm() {
             ImGui::TextColored(ImVec4(1, 0.5f, 0, 1),
                                "Machine must be Idle to probe");
         }
+        if (!m_zeroingRunMessage.empty()) {
+            ImGui::TextWrapped("%s", m_zeroingRunMessage.c_str());
+        }
+        if (zeroingConfigChanged) {
+            (void)syncOperationOpenItem();
+        }
         ImGui::Unindent();
     }
 
     ImGui::Spacing();
-    ImGui::Checkbox("Zero position is set and verified", &m_zeroConfirmed);
+    if (ImGui::Checkbox("Work zero has been set and verified",
+                        &m_zeroConfirmed)) {
+        clearFinalConfirmation();
+        (void)syncOperationOpenItem();
+    }
 }
 
 void DirectCarvePanel::renderCommit() {
@@ -2323,6 +3066,9 @@ void DirectCarvePanel::renderCommit() {
     ImGui::Spacing();
     ImGui::TextWrapped("Review the carve job parameters before starting:");
     ImGui::Spacing();
+    auto state = workflowState();
+    const auto missingBeforeFinal =
+        carve::missingDirectCarveRequirements(state, false);
 
     ImGui::BulletText("Machine: %s", m_cncConnected ? "Connected" : "DISCONNECTED");
     ImGui::BulletText("Stock: %.0f x %.0f x %.0f mm",
@@ -2333,6 +3079,10 @@ void DirectCarvePanel::renderCommit() {
                       static_cast<double>(m_toolpathConfig.feedRateMmMin),
                       static_cast<double>(m_toolpathConfig.plungeRateMmMin));
     ImGui::BulletText("Safe Z: %.1f mm", static_cast<double>(m_toolpathConfig.safeZMm));
+    const auto units = detectedSendUnits();
+    ImGui::BulletText("Send units: %s (%s)",
+                      cnc::unitLabel(units),
+                      cnc::gcodeUnitMode(units));
 
     if (m_carveJob) {
         const auto& tp = m_carveJob->toolpath();
@@ -2340,6 +3090,18 @@ void DirectCarvePanel::renderCommit() {
         ImGui::BulletText("G-code lines: %d", tp.totalLineCount);
     }
 
+    ImGui::Spacing();
+
+    ImGui::SeparatorText("Requirements");
+    if (missingBeforeFinal.empty()) {
+        ImGui::TextColored(kGreen, "All workflow requirements are satisfied.");
+    } else {
+        ImGui::TextColored(kRed, "Start Carving is locked. Missing:");
+        for (const auto requirement : missingBeforeFinal) {
+            ImGui::BulletText("%s",
+                carve::directCarveRequirementLabel(requirement));
+        }
+    }
     ImGui::Spacing();
 
     // G-code export button
@@ -2353,7 +3115,19 @@ void DirectCarvePanel::renderCommit() {
                        "Ensure the work area is clear and the spindle is ready.");
     ImGui::PopStyleColor();
     ImGui::Spacing();
-    ImGui::Checkbox("I confirm the above and am ready to carve", &m_commitConfirmed);
+    if (!missingBeforeFinal.empty()) ImGui::BeginDisabled();
+    if (ImGui::Checkbox("I confirm the above and am ready to carve", &m_commitConfirmed)) {
+        if (m_commitConfirmed) {
+            m_commitConfirmedSettingsVersion = m_settingsVersion;
+            m_commitConfirmedToolpathVersion = m_generatedAtVersion;
+        } else {
+            clearFinalConfirmation();
+        }
+    }
+    if (!missingBeforeFinal.empty()) {
+        ImGui::EndDisabled();
+        clearFinalConfirmation();
+    }
 }
 
 void DirectCarvePanel::renderRunning() {
@@ -2559,26 +3333,8 @@ void DirectCarvePanel::uploadHeightmapPreview() {
 
     int w = hm.cols();
     int h = hm.rows();
-    f32 range = hm.maxZ() - hm.minZ();
-    if (range < 1e-6f) range = 1.0f;
-
-    // Build RGBA pixels (grayscale mapped to a warm depth palette)
-    std::vector<u8> pixels(static_cast<size_t>(w * h * 4));
-    for (int r = 0; r < h; ++r) {
-        for (int c = 0; c < w; ++c) {
-            f32 z = hm.at(c, r);
-            f32 t = std::clamp((z - hm.minZ()) / range, 0.0f, 1.0f);
-            // Deep = dark blue, surface = bright white-gold
-            u8 rv = static_cast<u8>(std::clamp(t * 255.0f, 0.0f, 255.0f));
-            u8 gv = static_cast<u8>(std::clamp(t * 240.0f, 0.0f, 255.0f));
-            u8 bv = static_cast<u8>(std::clamp((0.3f + t * 0.7f) * 200.0f, 0.0f, 255.0f));
-            size_t idx = static_cast<size_t>((r * w + c) * 4);
-            pixels[idx + 0] = rv;
-            pixels[idx + 1] = gv;
-            pixels[idx + 2] = bv;
-            pixels[idx + 3] = 255;
-        }
-    }
+    auto pixels = carve::generateHeightmapPreviewPixels(hm);
+    if (pixels.empty()) return;
 
     if (m_hmPreviewTex == 0)
         glGenTextures(1, &m_hmPreviewTex);
@@ -2613,7 +3369,8 @@ void DirectCarvePanel::saveGCodeToProject() {
     const auto& tp = m_carveJob->toolpath();
     std::string toolName = m_finishTool.name_format;
 
-    if (!carve::exportGcode(destPath.string(), tp, m_toolpathConfig, m_modelName, toolName)) {
+    if (!carve::exportGcode(destPath.string(), tp, m_toolpathConfig,
+                            m_modelName, toolName, detectedSendUnits())) {
         ToastManager::instance().show(ToastType::Error,
             "Export Failed", "Could not write " + destPath.string());
         return;
@@ -2723,11 +3480,12 @@ void DirectCarvePanel::showExportDialog() {
     std::string modelName = m_modelName;
     std::string toolName = m_finishTool.name_format;
     carve::ToolpathConfig config = m_toolpathConfig;
+    auto units = detectedSendUnits();
     m_fileDialog->showSave("Save G-code",
         {{  "G-code Files", "*.nc;*.gcode;*.ngc"}},
         "carve.nc",
-        [tp, config, modelName, toolName](const std::string& path) {
-            bool ok = carve::exportGcode(path, tp, config, modelName, toolName);
+        [tp, config, modelName, toolName, units](const std::string& path) {
+            bool ok = carve::exportGcode(path, tp, config, modelName, toolName, units);
             if (ok)
                 ToastManager::instance().show(ToastType::Success,
                     "G-code Saved", path);

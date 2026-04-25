@@ -15,6 +15,8 @@
 #include "../../core/config/input_binding.h"
 #include "../../core/coordinate_utils.h"
 #include "../../core/mesh/mesh.h"
+#include "../../core/mesh/mesh_repair.h"
+#include "../../core/viewport/view_cube_orientation.h"
 #include "../../render/gl_utils.h"
 #include "../context_menu_manager.h"
 #include "../icons.h"
@@ -303,6 +305,27 @@ void ViewportPanel::fitToModel() {
     m_viewCubeCache.valid = false;
 }
 
+bool ViewportPanel::hasValidModel() const {
+    return m_mesh != nullptr && m_mesh->isValid();
+}
+
+bool ViewportPanel::recalculateModelNormals() {
+    if (!hasValidModel()) {
+        return false;
+    }
+
+    auto result = mesh_repair::recalculateNormals(*m_mesh);
+    if (!result.repaired) {
+        return false;
+    }
+
+    if (m_gpuMesh.vao != 0) {
+        m_gpuMesh.destroy();
+    }
+    m_gpuMesh = m_renderer.uploadMesh(*m_mesh);
+    return true;
+}
+
 void ViewportPanel::registerContextMenuEntries() {
     if (m_contextMenuManager == nullptr) {
         return;
@@ -331,54 +354,42 @@ void ViewportPanel::registerContextMenuEntries() {
     ContextMenuEntry frontEntry;
     frontEntry.label = "Front";
     frontEntry.action = [this]() {
-        m_camera.setYaw(0.0f);
-        m_camera.setPitch(0.0f);
-        m_viewCubeCache.valid = false;
+        snapCameraToView(ViewCubeFace::Front);
     };
     entries.push_back(frontEntry);
 
     ContextMenuEntry backEntry;
     backEntry.label = "Back";
     backEntry.action = [this]() {
-        m_camera.setYaw(180.0f);
-        m_camera.setPitch(0.0f);
-        m_viewCubeCache.valid = false;
+        snapCameraToView(ViewCubeFace::Back);
     };
     entries.push_back(backEntry);
 
     ContextMenuEntry leftEntry;
     leftEntry.label = "Left";
     leftEntry.action = [this]() {
-        m_camera.setYaw(90.0f);
-        m_camera.setPitch(0.0f);
-        m_viewCubeCache.valid = false;
+        snapCameraToView(ViewCubeFace::Left);
     };
     entries.push_back(leftEntry);
 
     ContextMenuEntry rightEntry;
     rightEntry.label = "Right";
     rightEntry.action = [this]() {
-        m_camera.setYaw(-90.0f);
-        m_camera.setPitch(0.0f);
-        m_viewCubeCache.valid = false;
+        snapCameraToView(ViewCubeFace::Right);
     };
     entries.push_back(rightEntry);
 
     ContextMenuEntry topEntry;
     topEntry.label = "Top";
     topEntry.action = [this]() {
-        m_camera.setYaw(0.0f);
-        m_camera.setPitch(90.0f);
-        m_viewCubeCache.valid = false;
+        snapCameraToView(ViewCubeFace::Top);
     };
     entries.push_back(topEntry);
 
     ContextMenuEntry bottomEntry;
     bottomEntry.label = "Bottom";
     bottomEntry.action = [this]() {
-        m_camera.setYaw(0.0f);
-        m_camera.setPitch(-90.0f);
-        m_viewCubeCache.valid = false;
+        snapCameraToView(ViewCubeFace::Bottom);
     };
     entries.push_back(bottomEntry);
 
@@ -430,6 +441,19 @@ void ViewportPanel::registerContextMenuEntries() {
         cfg.setCncShowModelBounds(!cfg.getCncShowModelBounds());
     };
     entries.push_back(modelBoundsEntry);
+
+    entries.push_back(ContextMenuEntry::separator());
+
+    // Mesh repair
+    ContextMenuEntry recalcNormalsEntry;
+    recalcNormalsEntry.label = "Recalculate Normals";
+    recalcNormalsEntry.action = [this]() {
+        recalculateModelNormals();
+    };
+    recalcNormalsEntry.enabled = [this]() {
+        return hasValidModel();
+    };
+    entries.push_back(recalcNormalsEntry);
 
     entries.push_back(ContextMenuEntry::separator());
 
@@ -905,21 +929,20 @@ void ViewportPanel::renderViewCube() {
         {-1, 1, 1},
     }};
 
-    // Face definitions: 4 vertex indices, label, target yaw, target pitch
+    // Face definitions: 4 vertex indices, label, snap face
     struct Face {
         int v[4];
         const char* label;
-        f32 yaw;
-        f32 pitch;
+        ViewCubeFace snapFace;
     };
 
     const std::array<Face, 6> faces = {{
-        {{0, 1, 2, 3}, "Bk", 0.0f, 0.0f},   // Back (-Z)
-        {{5, 4, 7, 6}, "F", 180.0f, 0.0f},  // Front (+Z)
-        {{1, 5, 6, 2}, "R", 90.0f, 0.0f},   // Right (+X)
-        {{4, 0, 3, 7}, "L", 270.0f, 0.0f},  // Left (-X)
-        {{3, 2, 6, 7}, "T", 0.0f, 89.0f},   // Top (+Y)
-        {{4, 5, 1, 0}, "Bt", 0.0f, -89.0f}, // Bottom (-Y)
+        {{0, 1, 2, 3}, "Bk", ViewCubeFace::Back},   // Back (-Z)
+        {{5, 4, 7, 6}, "F", ViewCubeFace::Front},   // Front (+Z)
+        {{1, 5, 6, 2}, "R", ViewCubeFace::Right},   // Right (+X)
+        {{4, 0, 3, 7}, "L", ViewCubeFace::Left},    // Left (-X)
+        {{3, 2, 6, 7}, "T", ViewCubeFace::Top},     // Top (+Y)
+        {{4, 5, 1, 0}, "Bt", ViewCubeFace::Bottom}, // Bottom (-Y)
     }};
 
     // Face colors (RGBA)
@@ -1079,9 +1102,15 @@ void ViewportPanel::renderViewCube() {
     // Handle click: snap camera to target orientation
     if (clickedFace >= 0) {
         const auto& f = faces[static_cast<usize>(clickedFace)];
-        m_camera.setYaw(f.yaw);
-        m_camera.setPitch(f.pitch);
+        snapCameraToView(f.snapFace);
     }
+}
+
+void ViewportPanel::snapCameraToView(ViewCubeFace face) {
+    auto snap = snapViewCubeOrientation(face, m_camera.yaw());
+    m_camera.setYaw(snap.yawDeg);
+    m_camera.setPitch(snap.pitchDeg);
+    m_viewCubeCache.valid = false;
 }
 
 // --- G-code line rendering ---

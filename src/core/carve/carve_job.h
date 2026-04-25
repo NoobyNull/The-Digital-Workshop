@@ -71,7 +71,7 @@ public:
     const MultiPassToolpath& toolpath() const;
 
     // Start streaming the generated toolpath
-    void startStreaming(CncController* cnc);
+    void startStreaming(CncController* controller);
 
     // Streaming state accessors
     CarveStreamer* streamer();
@@ -84,6 +84,7 @@ private:
     CurvatureResult m_curvature;
     IslandResult m_islands;
     MultiPassToolpath m_toolpath;
+    ToolpathConfig m_toolpathConfig;
     bool m_analyzed = false;
     std::string m_error;
     std::future<void> m_future;

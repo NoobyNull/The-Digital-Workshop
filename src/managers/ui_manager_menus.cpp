@@ -12,6 +12,7 @@
 #include "ui/dialogs/lighting_dialog.h"
 #include "ui/icons.h"
 #include "ui/panels/cnc_jog_panel.h"
+#include "ui/panels/viewport_panel.h"
 #include "ui/ui_colors.h"
 #include "version.h"
 
@@ -269,6 +270,17 @@ void UIManager::renderToolsMenu() {
     if (!ImGui::BeginMenu("Tools"))
         return;
 
+    bool hasViewportModel = m_viewportPanel != nullptr && m_viewportPanel->hasValidModel();
+    if (!hasViewportModel) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::MenuItem("Recalculate Model Normals") && m_viewportPanel) {
+        m_viewportPanel->recalculateModelNormals();
+    }
+    if (!hasViewportModel) {
+        ImGui::EndDisabled();
+    }
+    ImGui::Separator();
     if (ImGui::MenuItem("Library Maintenance...") && m_onLibraryMaintenance)
         m_onLibraryMaintenance();
     if (ImGui::MenuItem("Relocate Workspace...") && m_onRelocateWorkspace)

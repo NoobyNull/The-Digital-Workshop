@@ -126,6 +126,23 @@ TEST_F(ProjectOpenItemRepoTest, InsertOpenItem_PersistsIntentAndSnapshot) {
     EXPECT_EQ(found->snapshotJson, R"({"hash":"abc123","bounds":{"x":10}})");
 }
 
+TEST_F(ProjectOpenItemRepoTest, InsertOpenItem_PersistsZeroingType) {
+    auto projectId = insertProject("Zeroing Type Project");
+    auto item = makeItem(projectId, "Zeroing: Sienci AutoZero");
+    item.itemType = dw::ProjectOpenItemType::Zeroing;
+    item.sourceTable.clear();
+    item.sourceId.reset();
+    item.sourceKey = "direct_carve:relief:zeroing";
+
+    auto id = m_repo->insertOpenItem(item);
+
+    ASSERT_TRUE(id.has_value());
+    auto found = m_repo->findOpenItemById(id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->itemType, dw::ProjectOpenItemType::Zeroing);
+    EXPECT_EQ(found->displayName, "Zeroing: Sienci AutoZero");
+}
+
 TEST_F(ProjectOpenItemRepoTest, ListOpenItemsForProject_OrdersParentsBeforeChildren) {
     auto projectId = insertProject("Tree Project");
 

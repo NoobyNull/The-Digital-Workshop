@@ -67,6 +67,7 @@ set(DW_SOURCES
 
     # Mesh
     core/mesh/mesh.cpp
+    core/mesh/mesh_repair.cpp
     core/mesh/hash.cpp
 
     # Loaders
@@ -95,6 +96,7 @@ set(DW_SOURCES
     core/import/file_handler.cpp
     core/import/file_validator.cpp
     core/import/filesystem_detector.cpp
+    core/import/import_mode_policy.cpp
 
     # Library
     core/library/library_manager.cpp
@@ -119,6 +121,7 @@ set(DW_SOURCES
     core/cnc/tool_calculator.cpp
     core/cnc/grbl_settings.cpp
     core/cnc/unified_settings.cpp
+    core/cnc/machine_units.cpp
     core/cnc/macro_manager.cpp
     core/cnc/gamepad_input.cpp
 
@@ -133,10 +136,14 @@ set(DW_SOURCES
 
     # Carve (Direct Carve pipeline)
     core/carve/heightmap.cpp
+    core/carve/heightmap_preview.cpp
     core/carve/model_fitter.cpp
+    core/carve/material_blank_defaults.cpp
     core/carve/alignment_validator.cpp
     core/carve/carve_job.cpp
     core/carve/direct_carve_operation_state.cpp
+    core/carve/direct_carve_zeroing_probe.cpp
+    core/carve/direct_carve_workflow.cpp
     core/carve/surface_analysis.cpp
     core/carve/island_detector.cpp
     core/carve/analysis_overlay.cpp
@@ -150,6 +157,9 @@ set(DW_SOURCES
 
     # Workspace
     core/workspace/workspace_relocator.cpp
+
+    # Viewport
+    core/viewport/view_cube_orientation.cpp
 
     # Materials
     core/materials/default_materials.cpp
@@ -200,6 +210,7 @@ set(DW_SOURCES
     # UI Widgets
     ui/widgets/binding_recorder.cpp
     ui/widgets/status_bar.cpp
+    ui/widgets/status_tips.cpp
     ui/widgets/toast.cpp
     ui/widgets/tool_recommendation_widget.cpp
 
@@ -234,7 +245,7 @@ target_link_libraries(digital_workshop PRIVATE
     glad_gl33_core
     OpenGL::GL
     glm::glm
-    SQLite::SQLite3
+    ${DW_SQLITE_TARGET}
     ZLIB::ZLIB
     miniz_static
     nlohmann_json::nlohmann_json
@@ -246,6 +257,8 @@ target_link_libraries(digital_workshop PRIVATE
 target_include_directories(digital_workshop PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_BINARY_DIR}/generated
+)
+target_include_directories(digital_workshop SYSTEM PRIVATE
     ${stb_SOURCE_DIR}
 )
 

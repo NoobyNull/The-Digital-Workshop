@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -42,7 +43,9 @@ std::vector<std::string> collectFiles(const std::vector<std::string>& dirs,
 
 std::string readFile(const std::string& path) {
     std::ifstream f(path);
-    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    std::ostringstream content;
+    content << f.rdbuf();
+    return content.str();
 }
 
 // All Tier 2 directories (GL/SDL/ImGui dependent — no functional tests)

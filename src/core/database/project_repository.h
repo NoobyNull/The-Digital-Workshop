@@ -41,6 +41,7 @@ enum class ProjectOpenItemType {
     Job,
     Labor,
     Consumable,
+    Zeroing,
 };
 
 enum class ProjectOpenItemStatus {

@@ -23,8 +23,9 @@ WasteBreakdown computeWasteBreakdown(const CutPlan& plan,
     f32 totalKerfArea = 0.0f;
     f32 totalScrapArea = 0.0f;
 
-    for (int si = 0; si < static_cast<int>(plan.sheets.size()); ++si) {
+    for (size_t si = 0; si < plan.sheets.size(); ++si) {
         const SheetResult& sr = plan.sheets[si];
+        int sheetIndex = static_cast<int>(si);
 
         // Compute bounding box of all placements on this sheet
         f32 maxRight = 0.0f;
@@ -60,7 +61,7 @@ WasteBreakdown computeWasteBreakdown(const CutPlan& plan,
             sp.y = 0.0f;
             sp.width = rightW;
             sp.height = sheetTemplate.height;
-            sp.sheetIndex = si;
+            sp.sheetIndex = sheetIndex;
             wb.scrapPieces.push_back(sp);
             totalScrapArea += sp.area();
         }
@@ -71,7 +72,7 @@ WasteBreakdown computeWasteBreakdown(const CutPlan& plan,
             sp.y = maxBottom;
             sp.width = maxRight;
             sp.height = bottomH;
-            sp.sheetIndex = si;
+            sp.sheetIndex = sheetIndex;
             wb.scrapPieces.push_back(sp);
             totalScrapArea += sp.area();
         }

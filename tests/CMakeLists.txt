@@ -14,6 +14,7 @@ set(DW_TEST_SOURCES
     test_string_utils.cpp
     test_file_utils.cpp
     test_mesh.cpp
+    test_mesh_repair.cpp
     test_database.cpp
     test_model_repository.cpp
     test_material_repository.cpp
@@ -33,10 +34,13 @@ set(DW_TEST_SOURCES
     test_gcode_project_context.cpp
     test_schema.cpp
     test_camera.cpp
+    test_status_tips.cpp
+    test_view_cube_orientation.cpp
     test_archive.cpp
     test_library_manager.cpp
     test_threemf_loader.cpp
     test_import_pipeline.cpp
+    test_import_mode_policy.cpp
     test_config_watcher.cpp
     test_app_paths.cpp
     test_path_resolver.cpp
@@ -64,6 +68,7 @@ set(DW_TEST_SOURCES
     test_serial_port.cpp
     test_tcp_socket.cpp
     test_cnc_controller.cpp
+    test_machine_units.cpp
     test_gcode_modal_scanner.cpp
     test_tool_database.cpp
     test_tool_calculator.cpp
@@ -72,16 +77,21 @@ set(DW_TEST_SOURCES
     # Carve (Direct Carve pipeline)
     test_heightmap.cpp
     test_model_fitter.cpp
+    test_material_blank_defaults.cpp
     test_carve_job.cpp
     test_direct_carve_operation_state.cpp
+    test_direct_carve_zeroing_probe.cpp
+    test_direct_carve_workflow.cpp
     test_surface_analysis.cpp
     test_island_detector.cpp
     test_analysis_overlay.cpp
+    test_heightmap_preview.cpp
     test_tool_recommender.cpp
     test_toolpath_generator.cpp
     test_gcode_export.cpp
     test_carve_streamer.cpp
     test_carve_integration.cpp
+    test_direct_carve_ui_copy.cpp
     test_unit_conversion.cpp
     test_costing_engine.cpp
     test_board_foot.cpp
@@ -109,6 +119,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/utils/unit_conversion.cpp
     ${CMAKE_SOURCE_DIR}/src/core/utils/board_foot.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh_repair.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/hash.cpp
     ${CMAKE_SOURCE_DIR}/src/core/loaders/stl_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/loaders/obj_loader.cpp
@@ -119,12 +130,16 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_analyzer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_modal_scanner.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/machine_profile.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/status_tips.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/viewport/view_cube_orientation.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/serial_port.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/tcp_socket.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/cnc_controller.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/preflight_check.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/tool_calculator.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/grbl_settings.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cnc/unified_settings.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cnc/machine_units.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/macro_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap.cpp
     ${CMAKE_SOURCE_DIR}/src/core/optimizer/cut_optimizer.cpp
@@ -166,6 +181,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/import/file_handler.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/file_validator.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/filesystem_detector.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/import/import_mode_policy.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/config.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/config_watcher.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/input_binding.cpp
@@ -177,11 +193,15 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/export/project_import.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/model_fitter.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/carve/material_blank_defaults.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/carve_job.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_operation_state.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_zeroing_probe.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_workflow.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/surface_analysis.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/island_detector.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/analysis_overlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/tool_recommender.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/toolpath_generator.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/gcode_export.cpp
@@ -202,7 +222,7 @@ target_link_libraries(dw_tests PRIVATE
     GTest::gtest_main
     imgui
     glm::glm
-    SQLite::SQLite3
+    ${DW_SQLITE_TARGET}
     ZLIB::ZLIB
     miniz_static
     nlohmann_json::nlohmann_json
@@ -212,6 +232,8 @@ target_link_libraries(dw_tests PRIVATE
 target_include_directories(dw_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}/generated
+)
+target_include_directories(dw_tests SYSTEM PRIVATE
     ${stb_SOURCE_DIR}
 )
 

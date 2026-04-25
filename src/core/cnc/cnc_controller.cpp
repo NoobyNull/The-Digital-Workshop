@@ -60,6 +60,7 @@ bool CncController::connectTcp(const std::string& host, int port) {
 void CncController::initializeConnection() {
     m_running = true;
     m_connected = false;
+    setSendUnits(cnc::SendUnits::Millimeters);
     m_consecutiveTimeouts = 0;
     m_statusPending = false;
     m_pendingRtCommands.store(0, std::memory_order_relaxed);
@@ -72,6 +73,7 @@ bool CncController::connectSimulator() {
 
     m_simulating = true;
     m_sim = SimState{};
+    setSendUnits(cnc::SendUnits::Millimeters);
 
     // Initialize default GRBL settings (common 3-axis CNC)
     m_sim.settings[0]  = 10.0f;   // $0  Step pulse time (usec)
@@ -140,6 +142,7 @@ void CncController::disconnect() {
     }
     m_consecutiveTimeouts = 0;
     m_statusPending = false;
+    setSendUnits(cnc::SendUnits::Millimeters);
 
     bool wasConnected = m_connected.exchange(false);
     bool wasSim = m_simulating.exchange(false);
@@ -286,6 +289,17 @@ void CncController::unlock() {
 void CncController::sendCommand(const std::string& cmd) {
     std::lock_guard<std::mutex> lock(m_cmdStringMutex);
     m_pendingStringCmds.push_back(cmd + "\n");
+}
+
+cnc::SendUnits CncController::sendUnits() const {
+    return m_sendUnits.load(std::memory_order_acquire) == 1
+        ? cnc::SendUnits::Inches
+        : cnc::SendUnits::Millimeters;
+}
+
+void CncController::setSendUnits(cnc::SendUnits units) {
+    m_sendUnits.store(units == cnc::SendUnits::Inches ? 1 : 0,
+                      std::memory_order_release);
 }
 
 StreamProgress CncController::streamProgress() const {
@@ -491,7 +505,7 @@ void CncController::processResponse(const std::string& line) {
                 streamErr.errorCode = ack.errorCode;
                 streamErr.errorMessage = ack.errorMessage;
                 if (ack.lineIndex >= 0 && ack.lineIndex < static_cast<int>(m_program.size()))
-                    streamErr.failedLine = m_program[ack.lineIndex];
+                    streamErr.failedLine = m_program[static_cast<size_t>(ack.lineIndex)];
                 streamErr.linesInFlight = static_cast<int>(m_sentLengths.size());
 
                 // Stop streaming and clear buffer accounting
@@ -559,7 +573,7 @@ void CncController::sendNextLines() {
     if (m_toolChangePending.load()) return;
 
     while (m_sendIndex < static_cast<int>(m_program.size())) {
-        const std::string& line = m_program[m_sendIndex];
+        const std::string& line = m_program[static_cast<size_t>(m_sendIndex)];
 
         // Check for M6 tool change before sending (GRBL doesn't implement M6)
         {
@@ -867,7 +881,7 @@ void CncController::simIoThreadFunc() {
         if (m_streaming && !m_held && m_sim.state != MachineState::Hold) {
             std::lock_guard<std::mutex> lock(m_streamMutex);
             if (!m_toolChangePending.load() && m_ackIndex < static_cast<int>(m_program.size())) {
-                const std::string& line = m_program[m_ackIndex];
+                const std::string& line = m_program[static_cast<size_t>(m_ackIndex)];
 
                 // Check for M6 tool change
                 std::string upper = line;
@@ -1119,8 +1133,25 @@ void CncController::simProcessCommand(const std::string& cmd) {
 
     // G38.2/G38.3 — probe (simulate contact partway to target)
     if (upper.find("G38.2") != std::string::npos || upper.find("G38.3") != std::string::npos) {
+        auto [hx, xv] = parseAxis('X');
+        auto [hy, yv] = parseAxis('Y');
         auto [hz, zv] = parseAxis('Z');
-        if (hz) m_sim.machinePos.z += (zv - m_sim.machinePos.z) * 0.5f;
+
+        Vec3 target = m_sim.machinePos;
+        if (m_sim.absoluteMode) {
+            Vec3 wcs = m_sim.wcsOffsets[m_sim.activeWcs];
+            if (hx) target.x = xv + wcs.x + m_sim.g92Offset.x;
+            if (hy) target.y = yv + wcs.y + m_sim.g92Offset.y;
+            if (hz) target.z = zv + wcs.z + m_sim.g92Offset.z;
+        } else {
+            if (hx) target.x = m_sim.machinePos.x + xv;
+            if (hy) target.y = m_sim.machinePos.y + yv;
+            if (hz) target.z = m_sim.machinePos.z + zv;
+        }
+
+        if (hx) m_sim.machinePos.x += (target.x - m_sim.machinePos.x) * 0.5f;
+        if (hy) m_sim.machinePos.y += (target.y - m_sim.machinePos.y) * 0.5f;
+        if (hz) m_sim.machinePos.z += (target.z - m_sim.machinePos.z) * 0.5f;
         m_sim.targetPos = m_sim.machinePos;
         char buf[80];
         snprintf(buf, sizeof(buf), "[PRB:%.3f,%.3f,%.3f:1]",

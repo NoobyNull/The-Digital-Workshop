@@ -1,8 +1,10 @@
 // Tests for MacroManager -- SQLite CRUD, built-in macros, parseLines, reorder
 #include <gtest/gtest.h>
 
-#include <cstdio>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
+#include <sstream>
 
 #include "core/cnc/macro_manager.h"
 
@@ -12,10 +14,12 @@ namespace {
 
 // Helper to create a unique temp DB path per test
 std::string tempDbPath() {
-    auto path = std::filesystem::temp_directory_path() / "test_macro_manager_XXXXXX.db";
-    // Use a unique name based on current time and random
-    auto unique = std::tmpnam(nullptr);
-    return std::string(unique) + "_macros.db";
+    static std::atomic<unsigned long long> counter{0};
+    auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+
+    std::ostringstream name;
+    name << "test_macro_manager_" << now << "_" << counter.fetch_add(1) << ".db";
+    return (std::filesystem::temp_directory_path() / name.str()).string();
 }
 
 class MacroManagerTest : public ::testing::Test {

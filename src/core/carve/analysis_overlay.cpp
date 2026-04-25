@@ -54,9 +54,11 @@ std::vector<u8> generateAnalysisOverlay(
         for (int px = 0; px < width; ++px) {
             const auto pixIdx = static_cast<usize>((py * width + px) * 4);
 
-            // Map pixel to heightmap grid coords
+            // Map display Y down to world Y up so the top row is max Y.
             const int hc = (hmCols > 1) ? (px * (hmCols - 1)) / std::max(1, width - 1) : 0;
-            const int hr = (hmRows > 1) ? (py * (hmRows - 1)) / std::max(1, height - 1) : 0;
+            const int displayHr =
+                (hmRows > 1) ? (py * (hmRows - 1)) / std::max(1, height - 1) : 0;
+            const int hr = hmRows - 1 - displayHr;
             const int clampC = std::clamp(hc, 0, hmCols - 1);
             const int clampR = std::clamp(hr, 0, hmRows - 1);
 
@@ -74,8 +76,9 @@ std::vector<u8> generateAnalysisOverlay(
             if (islands.maskCols > 0 && islands.maskRows > 0) {
                 const int mc = (islands.maskCols > 1)
                     ? (px * (islands.maskCols - 1)) / std::max(1, width - 1) : 0;
-                const int mr = (islands.maskRows > 1)
+                const int displayMr = (islands.maskRows > 1)
                     ? (py * (islands.maskRows - 1)) / std::max(1, height - 1) : 0;
+                const int mr = islands.maskRows - 1 - displayMr;
                 const int cmc = std::clamp(mc, 0, islands.maskCols - 1);
                 const int cmr = std::clamp(mr, 0, islands.maskRows - 1);
 
@@ -104,8 +107,10 @@ std::vector<u8> generateAnalysisOverlay(
     if (curvature.concavePointCount > 0 && hmCols > 0 && hmRows > 0) {
         const int markerPx = (curvature.minRadiusCol * std::max(1, width - 1)) /
                              std::max(1, hmCols - 1);
-        const int markerPy = (curvature.minRadiusRow * std::max(1, height - 1)) /
-                             std::max(1, hmRows - 1);
+        const int markerSourcePy =
+            (curvature.minRadiusRow * std::max(1, height - 1)) /
+            std::max(1, hmRows - 1);
+        const int markerPy = height - 1 - markerSourcePy;
         // Draw a 3x3 bright marker
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {

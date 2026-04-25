@@ -2,6 +2,7 @@
 #include "surface_analysis.h"
 #include "island_detector.h"
 #include "toolpath_generator.h"
+#include "../cnc/cnc_controller.h"
 
 #include <stdexcept>
 
@@ -148,6 +149,7 @@ void CarveJob::generateToolpath(const ToolpathConfig& config,
         return;
     }
 
+    m_toolpathConfig = config;
     ToolpathGenerator gen;
 
     // Use flat_diameter when available (end mills); fall back to full diameter
@@ -181,15 +183,16 @@ const MultiPassToolpath& CarveJob::toolpath() const
     return m_toolpath;
 }
 
-void CarveJob::startStreaming(CncController* cnc)
+void CarveJob::startStreaming(CncController* controller)
 {
     if (!m_analyzed || m_toolpath.finishing.points.empty()) {
         return;
     }
 
     m_streamer = std::make_unique<CarveStreamer>();
-    m_streamer->setCncController(cnc);
-    m_streamer->start(m_toolpath, ToolpathConfig{});
+    m_streamer->setCncController(controller);
+    const auto units = controller ? controller->sendUnits() : cnc::SendUnits::Millimeters;
+    m_streamer->start(m_toolpath, m_toolpathConfig, units);
 }
 
 CarveStreamer* CarveJob::streamer()

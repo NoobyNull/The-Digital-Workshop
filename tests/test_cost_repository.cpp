@@ -457,8 +457,9 @@ TEST_F(CostRepoTest, ItemsSerialization_ManyItems) {
     ASSERT_EQ(found->items.size(), 10u);
 
     for (int i = 0; i < 10; ++i) {
-        EXPECT_EQ(found->items[i].name, "Item " + std::to_string(i));
-        EXPECT_DOUBLE_EQ(found->items[i].rate, 10.0 + i);
+        const auto& item = found->items[static_cast<size_t>(i)];
+        EXPECT_EQ(item.name, "Item " + std::to_string(i));
+        EXPECT_DOUBLE_EQ(item.rate, 10.0 + i);
     }
 }
 

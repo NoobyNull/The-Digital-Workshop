@@ -118,7 +118,12 @@ void FileDialog::render() {
         if (!m_filters.empty() && m_mode != FileDialogMode::SelectFolder) {
             ImGui::SameLine();
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
-            if (ImGui::BeginCombo("##Filter", m_filters[m_selectedFilter].name.c_str())) {
+            size_t selectedFilter = static_cast<size_t>(m_selectedFilter);
+            if (selectedFilter >= m_filters.size()) {
+                selectedFilter = 0;
+                m_selectedFilter = 0;
+            }
+            if (ImGui::BeginCombo("##Filter", m_filters[selectedFilter].name.c_str())) {
                 for (size_t i = 0; i < m_filters.size(); ++i) {
                     if (ImGui::Selectable(m_filters[i].name.c_str(),
                                           i == static_cast<size_t>(m_selectedFilter))) {
@@ -280,11 +285,12 @@ void FileDialog::refreshDirectory() {
 }
 
 bool FileDialog::matchesFilter(const std::string& filename) const {
-    if (m_filters.empty() || m_selectedFilter >= static_cast<int>(m_filters.size())) {
+    if (m_filters.empty() || m_selectedFilter < 0 ||
+        static_cast<size_t>(m_selectedFilter) >= m_filters.size()) {
         return true;
     }
 
-    const auto& filter = m_filters[m_selectedFilter];
+    const auto& filter = m_filters[static_cast<size_t>(m_selectedFilter)];
     if (filter.extensions == "*" || filter.extensions == "*.*") {
         return true;
     }

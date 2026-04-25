@@ -68,7 +68,8 @@ std::vector<uint8_t> base64Decode(const std::string& encoded) {
 
     uint32_t val = 0;
     int bits = -8;
-    for (unsigned char c : encoded) {
+    for (char raw : encoded) {
+        auto c = static_cast<unsigned char>(raw);
         if (c == '=' || c == '\n' || c == '\r') {
             continue;
         }

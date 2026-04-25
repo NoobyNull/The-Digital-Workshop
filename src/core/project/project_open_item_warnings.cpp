@@ -17,6 +17,7 @@ const char* labelForOpenItemType(ProjectOpenItemType type) {
     case ProjectOpenItemType::Job: return "Job";
     case ProjectOpenItemType::Labor: return "Labor";
     case ProjectOpenItemType::Consumable: return "Consumable";
+    case ProjectOpenItemType::Zeroing: return "Zeroing";
     }
     return "Item";
 }

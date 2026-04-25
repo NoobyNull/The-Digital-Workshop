@@ -80,9 +80,13 @@ static std::string toUpper(const std::string& s) {
 ModalState GCodeModalScanner::scanToLine(const std::vector<std::string>& program, int endLine) {
     ModalState state;
 
-    int limit = std::min(endLine, static_cast<int>(program.size()));
+    if (endLine <= 0) {
+        return state;
+    }
 
-    for (int i = 0; i < limit; ++i) {
+    size_t limit = std::min(static_cast<size_t>(endLine), program.size());
+
+    for (size_t i = 0; i < limit; ++i) {
         std::string line = toUpper(stripComments(program[i]));
 
         if (line.empty())

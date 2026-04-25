@@ -230,6 +230,27 @@ TEST(Mesh, RecalculateNormals) {
     }
 }
 
+TEST(Mesh, GeometryHashChangesWhenNormalsChange) {
+    auto mesh = makeTriangle();
+    for (auto& v : mesh.vertices()) {
+        v.normal = dw::Vec3(0.0f, 0.0f, -1.0f);
+    }
+    auto hashBefore = mesh.geometryHash();
+
+    mesh.recalculateNormals();
+
+    EXPECT_NE(hashBefore, mesh.geometryHash());
+}
+
+TEST(Mesh, GeometryHashChangesWhenTexCoordsChange) {
+    auto mesh = makeTriangle();
+    auto hashBefore = mesh.geometryHash();
+
+    mesh.generatePlanarUVs();
+
+    EXPECT_NE(hashBefore, mesh.geometryHash());
+}
+
 // --- AABB tests (header-only) ---
 
 TEST(AABB, DefaultInvalid) {

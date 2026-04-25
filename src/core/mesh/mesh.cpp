@@ -41,6 +41,8 @@ u64 Mesh::geometryHash() const {
     mix(&vc, sizeof(vc));
     for (const auto& v : m_vertices) {
         mix(&v.position.x, sizeof(f32) * 3);
+        mix(&v.normal.x, sizeof(f32) * 3);
+        mix(&v.texCoord.x, sizeof(f32) * 2);
     }
     for (u32 idx : m_indices) {
         h ^= idx;
@@ -60,6 +62,8 @@ void Mesh::recalculateBounds() {
 }
 
 void Mesh::recalculateNormals() {
+    m_hashCached = false;
+
     // Reset all normals to zero
     for (auto& vertex : m_vertices) {
         vertex.normal = Vec3{0.0f, 0.0f, 0.0f};
@@ -114,6 +118,7 @@ void Mesh::transform(const Mat4& matrix) {
 }
 
 void Mesh::centerOnOrigin() {
+    m_hashCached = false;
     Vec3 center = m_bounds.center();
 
     for (auto& vertex : m_vertices) {
@@ -291,6 +296,7 @@ void Mesh::generatePlanarUVs(float grainRotationDeg) {
     if (m_vertices.empty()) {
         return;
     }
+    m_hashCached = false;
 
     // Ensure bounds are current
     recalculateBounds();

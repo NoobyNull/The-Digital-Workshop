@@ -12,6 +12,7 @@
 
 #include "core/import/import_queue.h"
 #include "core/import/import_task.h"
+#include "core/config/config.h"
 #include "core/threading/loading_state.h"
 #include "core/utils/thread_utils.h"
 #include "ui/context_menu_manager.h"
@@ -48,6 +49,7 @@
 #include "ui/panels/tool_browser_panel.h"
 #include "ui/panels/viewport_panel.h"
 #include "ui/widgets/status_bar.h"
+#include "ui/widgets/status_tips.h"
 #include "ui/widgets/toast.h"
 
 namespace dw {
@@ -270,8 +272,10 @@ void UIManager::renderPanels() {
 }
 
 void UIManager::renderBackgroundUI(float deltaTime, const LoadingState* loadingState) {
-    if (m_statusBar)
+    if (m_statusBar) {
+        m_statusBar->setContextTips(currentStatusTips());
         m_statusBar->render(loadingState);
+    }
 
     if (m_progressDialog)
         m_progressDialog->render();
@@ -285,6 +289,28 @@ void UIManager::renderBackgroundUI(float deltaTime, const LoadingState* loadingS
 
     if (m_settingsImportDialog)
         m_settingsImportDialog->render();
+}
+
+std::vector<std::string> UIManager::currentStatusTips() const {
+    auto& cfg = Config::instance();
+    StatusTipState state;
+    state.hasLoadedModel = m_viewportPanel != nullptr && m_viewportPanel->hasValidModel();
+    state.cncConnected = m_cncConnected;
+    state.cncStreaming = m_cncStreaming;
+    state.lightDirection = cfg.getBinding(BindAction::LightDirDrag);
+    state.lightIntensity = cfg.getBinding(BindAction::LightIntensityDrag);
+    state.feedOverridePlus = cfg.getBinding(BindAction::FeedOverridePlus);
+    state.feedOverrideMinus = cfg.getBinding(BindAction::FeedOverrideMinus);
+    state.spindleOverridePlus = cfg.getBinding(BindAction::SpindleOverridePlus);
+    state.spindleOverrideMinus = cfg.getBinding(BindAction::SpindleOverrideMinus);
+
+    if (m_workspaceMode == WorkspaceMode::CNC) {
+        return buildStatusTips(StatusTipContext::Sender, state);
+    }
+    if (m_showViewport) {
+        return buildStatusTips(StatusTipContext::WorkshopViewport, state);
+    }
+    return buildStatusTips(StatusTipContext::Workshop, state);
 }
 
 void UIManager::setImportProgress(const ImportProgress* progress) {

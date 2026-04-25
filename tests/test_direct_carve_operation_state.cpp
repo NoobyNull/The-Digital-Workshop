@@ -22,6 +22,7 @@ TEST(DirectCarveOperationState, ParsesSetupIntentFromOpenItem) {
             "safe_z_mm":7.0,
             "feed_rate_mm_min":1450.0,
             "plunge_rate_mm_min":350.0,
+            "rapid_rate_mm_min":4200.0,
             "lead_in_mm":1.5,
             "scan_resolution_mm":0.25
         }
@@ -73,6 +74,7 @@ TEST(DirectCarveOperationState, ParsesSetupIntentFromOpenItem) {
     EXPECT_FLOAT_EQ(parsed->toolpath.safeZMm, 7.0f);
     EXPECT_FLOAT_EQ(parsed->toolpath.feedRateMmMin, 1450.0f);
     EXPECT_FLOAT_EQ(parsed->toolpath.plungeRateMmMin, 350.0f);
+    EXPECT_FLOAT_EQ(parsed->toolpath.rapidRateMmMin, 4200.0f);
     EXPECT_FLOAT_EQ(parsed->toolpath.leadInMm, 1.5f);
     EXPECT_FLOAT_EQ(parsed->toolpath.scanResolutionMm, 0.25f);
     ASSERT_TRUE(parsed->finishingTool.has_value());
@@ -93,4 +95,76 @@ TEST(DirectCarveOperationState, RejectsNonDirectCarveOperation) {
     item.intentJson = R"({"operation_kind":"direct_carve"})";
 
     EXPECT_FALSE(dw::carve::parseDirectCarveOperationSetup(item).has_value());
+}
+
+TEST(DirectCarveOperationState, UsesMachineSnapshotRapidRateWhenToolpathOmitsIt) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({
+        "operation_kind":"direct_carve",
+        "toolpath":{
+            "feed_rate_mm_min":1200.0,
+            "plunge_rate_mm_min":300.0
+        }
+    })";
+    item.snapshotJson = R"({
+        "machine":{
+            "name":"Legacy snapshot",
+            "rapid_rate_mm_min":3600.0
+        }
+    })";
+
+    auto parsed = dw::carve::parseDirectCarveOperationSetup(item);
+
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_FLOAT_EQ(parsed->toolpath.rapidRateMmMin, 3600.0f);
+}
+
+TEST(DirectCarveOperationState, BuildsAndParsesSienciAutoZeroItem) {
+    dw::carve::DirectCarveZeroingSetup setup;
+    setup.touchPlate = dw::carve::DirectCarveTouchPlate::SienciAutoZero;
+    setup.probeMode = dw::carve::DirectCarveZeroProbeMode::XYZAuto;
+    setup.bitMode = dw::carve::DirectCarveAutoZeroBitMode::Tip;
+    setup.corner = dw::carve::DirectCarveZeroCorner::FrontLeft;
+    setup.zPlateThicknessMm = 12.7f;
+    setup.xyWallThicknessMm = 6.35f;
+    setup.fastProbeMmMin = 150.0f;
+    setup.slowProbeMmMin = 75.0f;
+    setup.searchDistanceMm = 30.0f;
+    setup.retractMm = 2.0f;
+    setup.autoZeroOriginOffsetMm = 22.5f;
+    setup.autoZeroFinalZRetractMm = 1.0f;
+    setup.toolDiameterMm = 3.175f;
+    setup.zeroVerified = true;
+
+    auto item = dw::carve::makeDirectCarveZeroingOpenItem(
+        55, "direct_carve:relief", setup);
+
+    EXPECT_EQ(item.itemType, dw::ProjectOpenItemType::Zeroing);
+    EXPECT_EQ(item.parentItemId, std::optional<dw::i64>(55));
+    EXPECT_EQ(item.sourceKey, "direct_carve:relief:zeroing");
+    EXPECT_EQ(item.status, dw::ProjectOpenItemStatus::Ready);
+    EXPECT_EQ(item.displayName, "Zeroing: Sienci AutoZero");
+
+    auto parsed = dw::carve::parseDirectCarveZeroingSetup(item);
+
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed->touchPlate, dw::carve::DirectCarveTouchPlate::SienciAutoZero);
+    EXPECT_EQ(parsed->probeMode, dw::carve::DirectCarveZeroProbeMode::XYZAuto);
+    EXPECT_EQ(parsed->bitMode, dw::carve::DirectCarveAutoZeroBitMode::Tip);
+    EXPECT_EQ(parsed->corner, dw::carve::DirectCarveZeroCorner::FrontLeft);
+    EXPECT_FLOAT_EQ(parsed->zPlateThicknessMm, 12.7f);
+    EXPECT_FLOAT_EQ(parsed->xyWallThicknessMm, 6.35f);
+    EXPECT_FLOAT_EQ(parsed->autoZeroOriginOffsetMm, 22.5f);
+    EXPECT_FLOAT_EQ(parsed->autoZeroFinalZRetractMm, 1.0f);
+    EXPECT_FLOAT_EQ(parsed->toolDiameterMm, 3.175f);
+    EXPECT_TRUE(parsed->zeroVerified);
+}
+
+TEST(DirectCarveOperationState, RejectsNonZeroingOpenItem) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({"setup_kind":"direct_carve_zeroing"})";
+
+    EXPECT_FALSE(dw::carve::parseDirectCarveZeroingSetup(item).has_value());
 }

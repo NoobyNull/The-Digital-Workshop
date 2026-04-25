@@ -4,6 +4,10 @@
 
 cmake_minimum_required(VERSION 3.20)
 
+# Keep vendored FetchContent projects with older cmake_minimum_required()
+# declarations from emitting compatibility warnings under newer CMake releases.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
+
 # Project definition (C needed for SQLite3)
 project(DigitalWorkshop
     VERSION 0.5.3

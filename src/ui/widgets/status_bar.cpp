@@ -29,17 +29,21 @@ void StatusBar::render(const LoadingState* loadingState) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         ImVec2(ImGui::GetStyle().WindowPadding.x, ImGui::GetStyle().FramePadding.y));
     if (ImGui::Begin("##StatusBar", nullptr, flags)) {
+        bool loadingActive = loadingState && loadingState->active.load();
+        bool importActive = m_progress && m_progress->active.load();
+
         // Left side: loading status or "Ready"
-        if (loadingState && loadingState->active.load()) {
+        if (loadingActive) {
             int dots = (static_cast<int>(ImGui::GetTime() * 3.0) % 3) + 1;
             std::string dotsStr(static_cast<size_t>(dots), '.');
             ImGui::Text("Loading %s%s", loadingState->getName().c_str(), dotsStr.c_str());
-        } else if (!m_progress || !m_progress->active.load()) {
+        } else if (!importActive) {
             ImGui::TextDisabled("Ready");
+            renderContextTip();
         }
 
         // Right side: import progress if active
-        if (m_progress && m_progress->active.load()) {
+        if (importActive) {
             // Show import progress
             int completed = m_progress->completedFiles.load();
             int total = m_progress->totalFiles.load();
@@ -89,6 +93,33 @@ void StatusBar::render(const LoadingState* loadingState) {
     }
     ImGui::End();
     ImGui::PopStyleVar();
+}
+
+void StatusBar::renderContextTip() const {
+    if (m_contextTips.empty()) {
+        return;
+    }
+
+    constexpr double TIP_ROTATE_SECONDS = 7.0;
+    size_t tipIndex =
+        static_cast<size_t>(ImGui::GetTime() / TIP_ROTATE_SECONDS) % m_contextTips.size();
+    const std::string& tip = m_contextTips[tipIndex];
+    if (tip.empty()) {
+        return;
+    }
+
+    const auto& style = ImGui::GetStyle();
+    float tipWidth = ImGui::CalcTextSize(tip.c_str()).x;
+    float windowWidth = ImGui::GetWindowWidth();
+    float minX = ImGui::GetCursorPosX() + style.ItemSpacing.x;
+    float rightAlignedX = windowWidth - tipWidth - style.WindowPadding.x;
+    float x = std::max(minX, rightAlignedX);
+    if (windowWidth - x < ImGui::GetFontSize() * 8.0f) {
+        return;
+    }
+
+    ImGui::SameLine(x);
+    ImGui::TextDisabled("%s", tip.c_str());
 }
 
 void StatusBar::setImportProgress(const ImportProgress* progress) {

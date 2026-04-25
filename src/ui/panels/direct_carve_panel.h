@@ -9,8 +9,11 @@
 
 #include "core/carve/model_fitter.h"
 #include "core/carve/direct_carve_operation_state.h"
+#include "core/carve/direct_carve_zeroing_probe.h"
+#include "core/carve/direct_carve_workflow.h"
 #include "core/carve/tool_recommender.h"
 #include "core/carve/toolpath_types.h"
+#include "core/cnc/machine_units.h"
 #include "core/cnc/cnc_tool.h"
 #include "core/cnc/cnc_types.h"
 #include "core/materials/material.h"
@@ -81,6 +84,7 @@ class DirectCarvePanel : public Panel {
     // Callbacks
     void onConnectionChanged(bool connected);
     void onStatusUpdate(const MachineStatus& status);
+    void onRawLine(const std::string& line, bool isSent);
     void onModelLoaded(const std::vector<Vertex>& vertices,
                        const std::vector<u32>& indices,
                        const Vec3& boundsMin,
@@ -122,13 +126,29 @@ class DirectCarvePanel : public Panel {
     void renderToolLibraryPicker();
     void renderManualToolEntry();
     void applyOperationSetup(const carve::DirectCarveOperationSetup& setup);
+    void syncToolpathRapidRateFromProfile();
+    std::optional<i64> syncZeroingOpenItem(i64 operationItemId,
+                                           const std::string& operationSourceKey);
+    carve::DirectCarveZeroingSetup currentZeroingSetup() const;
+    carve::DirectCarveZeroProbeMode currentZeroProbeMode() const;
+    carve::DirectCarveAutoZeroBitMode currentAutoZeroBitMode() const;
+    carve::DirectCarveZeroCorner currentZeroCorner() const;
 
     // Navigation
     void renderStepIndicator();
     void renderNavButtons();
-    bool canAdvance() const;
+    bool canAdvance();
     void advanceStep();
     void retreatStep();
+    carve::DirectCarveWorkflowState workflowState() const;
+    carve::DirectCarveWorkflowStep workflowStep(Step step) const;
+    bool isStepSatisfied(Step step) const;
+    bool canStartCarve() const;
+    void clearFinalConfirmation();
+    void markToolpathSettingsChanged();
+    void markGeometryChanged();
+    void clearHeightmapPreviewTexture();
+    void startHeightmapForCurrentGeometry();
 
     // Validation
     bool validateMachineReady() const;
@@ -151,6 +171,8 @@ class DirectCarvePanel : public Panel {
 
     // Machine check state
     bool m_safeZConfirmed = false;
+    bool m_homingVerified = false;
+    bool m_homingSkipped = false;
 
     // Model data (set via onModelLoaded)
     std::vector<Vertex> m_vertices;
@@ -171,6 +193,7 @@ class DirectCarvePanel : public Panel {
     VtdbToolGeometry m_clearTool;
     bool m_finishingToolSelected = false;
     bool m_clearToolSelected = false;
+    bool m_toolSetupConfirmed = false;
     bool m_toolLibraryLoaded = false;
     std::vector<VtdbToolGeometry> m_libraryTools;  // Currently displayed tool list
     std::vector<VtdbToolGeometry> m_toolboxTools;  // My Toolbox subset
@@ -213,6 +236,9 @@ class DirectCarvePanel : public Panel {
     bool m_toolpathGenerated = false;
     int m_settingsVersion = 0;       // Bumped when toolpath-affecting settings change
     int m_generatedAtVersion = -1;   // Version when toolpath was last generated
+    int m_geometryVersion = 0;       // Bumped when stock/model/fit changes
+    int m_heightmapRequestedAtGeometryVersion = -1;
+    int m_heightmapGeneratedAtGeometryVersion = -1;
     f32 m_previewZoom = 1.0f;
     bool m_showFinishing = true;
     bool m_showClearing = true;
@@ -228,6 +254,11 @@ class DirectCarvePanel : public Panel {
 
     // Zero confirm state
     bool m_zeroConfirmed = false;
+    carve::DirectCarveTouchPlate m_touchPlate =
+        carve::DirectCarveTouchPlate::Generic;
+    carve::DirectCarveAutoZeroBitMode m_autoZeroBitMode =
+        carve::DirectCarveAutoZeroBitMode::Auto;
+    bool m_autoZeroBitModeManual = false;
 
     // Touch plate probe parameters
     enum class ProbeMode { ZOnly, XOnly, YOnly, XYCorner, XYZAuto };
@@ -240,15 +271,52 @@ class DirectCarvePanel : public Panel {
     f32 m_probeSearchDist = 30.0f;       // Max travel for probe seek (mm)
     f32 m_probeRetractDist = 2.0f;       // Retract between passes (mm)
     f32 m_probeToolDiameter = 0.0f;      // Tool diameter for XY compensation (mm)
+    f32 m_autoZeroOriginOffset = 22.5f;  // Center-to-work-origin offset
+    f32 m_autoZeroFinalZRetract = 1.0f;  // Final retract after AutoZero Z set
 
     // Probe helpers
     void sendProbeAxis(char axis, f32 direction, f32 searchDist, f32 fastSpeed,
                        f32 slowSpeed, f32 retractDist);
     void sendProbeZ(f32 plateThickness);
     void sendProbeXY(char axis, f32 direction, f32 xyThickness, f32 toolRadius);
+    void startSienciAutoZeroProbe();
+    void sendNextZeroingStep();
+    void finishZeroingRun(bool success, const std::string& message);
+
+    enum class ZeroingStepKind {
+        Command,
+        ProbeXFirst,
+        ProbeXSecond,
+        MoveToXCenter,
+        SetXOffset,
+        ProbeYFirst,
+        ProbeYSecond,
+        MoveToYCenter,
+        SetYOffset,
+    };
+
+    struct ZeroingStep {
+        ZeroingStepKind kind = ZeroingStepKind::Command;
+        std::string command;
+    };
+
+    std::vector<ZeroingStep> m_zeroingSteps;
+    size_t m_zeroingStepIndex = 0;
+    ZeroingStepKind m_zeroingPendingProbeStep = ZeroingStepKind::Command;
+    bool m_zeroingRunActive = false;
+    bool m_zeroingWaitingForOk = false;
+    bool m_zeroingSawProbeResult = false;
+    std::optional<carve::DirectCarveProbeResult> m_zeroingLastProbeResult;
+    f32 m_autoZeroXFirst = 0.0f;
+    f32 m_autoZeroXSecond = 0.0f;
+    f32 m_autoZeroYFirst = 0.0f;
+    f32 m_autoZeroYSecond = 0.0f;
+    std::string m_zeroingRunMessage;
 
     // Commit state
     bool m_commitConfirmed = false;
+    int m_commitConfirmedSettingsVersion = -1;
+    int m_commitConfirmedToolpathVersion = -1;
 
     // Running state
     enum class RunState { Active, Paused, Completed, Aborted };
@@ -271,12 +339,14 @@ class DirectCarvePanel : public Panel {
     MaterialPartSyncCallback m_onMaterialPartSync;
     Path m_modelSourcePath;
     MachineProfileDialog m_profileDialog;
+    int m_maxStepVisited = 0;
 
     // Project-aware save helpers
     void saveHeightmapToProject();
     void saveImageToProject();
     void saveGCodeToProject();
     void syncSetupToOptimizerAndProject();
+    cnc::SendUnits detectedSendUnits() const;
     std::optional<i64> syncOperationOpenItem();
     std::optional<i64> currentModelOpenItemId();
     std::optional<i64> syncToolOpenItem(i64 operationItemId,

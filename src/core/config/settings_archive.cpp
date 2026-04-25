@@ -340,9 +340,12 @@ bool importSettings(const Path& archivePath,
             std::vector<uint8_t> imguiData;
             if (readArchiveFile(archivePath, "imgui.ini", imguiData)) {
                 Path imguiIni = configDir / "imgui.ini";
-                file::writeBinary(imguiIni.string(), imguiData);
-                log::info("SettingsArchive", "Restored window layout (imgui.ini)");
-                anyRestored = true;
+                if (file::writeBinary(imguiIni.string(), imguiData)) {
+                    log::info("SettingsArchive", "Restored window layout (imgui.ini)");
+                    anyRestored = true;
+                } else {
+                    log::warning("SettingsArchive", "Failed to restore window layout");
+                }
             }
             continue;
         }
@@ -352,9 +355,12 @@ bool importSettings(const Path& archivePath,
             std::vector<uint8_t> vtdbData;
             if (readArchiveFile(archivePath, "tools.vtdb", vtdbData)) {
                 Path vtdbPath = paths::getToolDatabasePath();
-                file::writeBinary(vtdbPath.string(), vtdbData);
-                log::info("SettingsArchive", "Restored tool database (tools.vtdb)");
-                anyRestored = true;
+                if (file::writeBinary(vtdbPath.string(), vtdbData)) {
+                    log::info("SettingsArchive", "Restored tool database (tools.vtdb)");
+                    anyRestored = true;
+                } else {
+                    log::warning("SettingsArchive", "Failed to restore tool database");
+                }
             }
             continue;
         }

@@ -49,7 +49,7 @@ std::vector<uint8_t> GeminiDescriptorService::tgaToPng(const std::string& tgaPat
         return {};
     }
 
-    size_t pixelCount = static_cast<size_t>(width) * height;
+    size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
     std::vector<uint8_t> bgra(pixelCount * 4);
     file.read(reinterpret_cast<char*>(bgra.data()), static_cast<std::streamsize>(bgra.size()));
     if (!file) {

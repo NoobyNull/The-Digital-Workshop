@@ -27,6 +27,7 @@ std::string_view toDbString(ProjectOpenItemType type) {
     case ProjectOpenItemType::Job: return "job";
     case ProjectOpenItemType::Labor: return "labor";
     case ProjectOpenItemType::Consumable: return "consumable";
+    case ProjectOpenItemType::Zeroing: return "zeroing";
     }
     return "model";
 }
@@ -42,6 +43,7 @@ ProjectOpenItemType openItemTypeFromDb(const std::string& value) {
     if (value == "job") return ProjectOpenItemType::Job;
     if (value == "labor") return ProjectOpenItemType::Labor;
     if (value == "consumable") return ProjectOpenItemType::Consumable;
+    if (value == "zeroing") return ProjectOpenItemType::Zeroing;
     return ProjectOpenItemType::Model;
 }
 

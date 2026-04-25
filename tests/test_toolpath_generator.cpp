@@ -294,10 +294,12 @@ TEST(ToolpathGen, TimeEstimation)
     cfgFast.axis = ScanAxis::XOnly;
     cfgFast.direction = MillDirection::Climb;
     cfgFast.feedRateMmMin = 2000.0f;
+    cfgFast.plungeRateMmMin = 2000.0f;
     cfgFast.customStepoverPct = 25.0f;
 
     ToolpathConfig cfgSlow = cfgFast;
     cfgSlow.feedRateMmMin = 1000.0f;
+    cfgSlow.plungeRateMmMin = 1000.0f;
 
     ToolpathGenerator gen;
     Toolpath fast = gen.generateFinishing(hm, cfgFast, 4.0f, defaultTool());
@@ -310,6 +312,51 @@ TEST(ToolpathGen, TimeEstimation)
     f32 ratio = slow.estimatedTimeSec / fast.estimatedTimeSec;
     EXPECT_GT(ratio, 1.5f);
     EXPECT_LT(ratio, 2.5f);
+}
+
+TEST(ToolpathGen, PlungeRateAffectsTimeEstimate)
+{
+    Heightmap hm = makeFlatHeightmap(-5.0f, 1.0f, 1.0f, 1.0f);
+
+    ToolpathConfig slowPlunge;
+    slowPlunge.axis = ScanAxis::XOnly;
+    slowPlunge.direction = MillDirection::Climb;
+    slowPlunge.safeZMm = 10.0f;
+    slowPlunge.feedRateMmMin = 10000.0f;
+    slowPlunge.plungeRateMmMin = 100.0f;
+    slowPlunge.customStepoverPct = 100.0f;
+
+    ToolpathConfig fastPlunge = slowPlunge;
+    fastPlunge.plungeRateMmMin = 1000.0f;
+
+    ToolpathGenerator gen;
+    Toolpath slow = gen.generateFinishing(hm, slowPlunge, 4.0f, defaultTool());
+    Toolpath fast = gen.generateFinishing(hm, fastPlunge, 4.0f, defaultTool());
+
+    EXPECT_GT(slow.estimatedTimeSec, fast.estimatedTimeSec * 2.0f);
+}
+
+TEST(ToolpathGen, RapidRateAffectsTimeEstimate)
+{
+    Heightmap hm = makeFlatHeightmap(-1.0f, 20.0f, 20.0f, 1.0f);
+
+    ToolpathConfig slowRapid;
+    slowRapid.axis = ScanAxis::XOnly;
+    slowRapid.direction = MillDirection::Climb;
+    slowRapid.safeZMm = 10.0f;
+    slowRapid.feedRateMmMin = 10000.0f;
+    slowRapid.plungeRateMmMin = 10000.0f;
+    slowRapid.rapidRateMmMin = 500.0f;
+    slowRapid.customStepoverPct = 100.0f;
+
+    ToolpathConfig fastRapid = slowRapid;
+    fastRapid.rapidRateMmMin = 10000.0f;
+
+    ToolpathGenerator gen;
+    Toolpath slow = gen.generateFinishing(hm, slowRapid, 4.0f, defaultTool());
+    Toolpath fast = gen.generateFinishing(hm, fastRapid, 4.0f, defaultTool());
+
+    EXPECT_GT(slow.estimatedTimeSec, fast.estimatedTimeSec * 2.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +402,10 @@ static IslandResult makeSingleIsland(const Heightmap& hm,
 
     for (int r = r0; r <= r1; ++r) {
         for (int c = c0; c <= c1; ++c) {
-            result.islandMask[r * result.maskCols + c] = 0;
+            size_t index = static_cast<size_t>(r) *
+                               static_cast<size_t>(result.maskCols) +
+                           static_cast<size_t>(c);
+            result.islandMask[index] = 0;
             island.cells.push_back({c, r});
         }
     }
@@ -531,7 +581,10 @@ TEST(ClearingPass, MultipleIslands)
     is0.minClearDiameter = 2.0f;
     for (int r = 2; r <= 5; ++r)
         for (int c = 2; c <= 5; ++c) {
-            islands.islandMask[r * islands.maskCols + c] = 0;
+            size_t index = static_cast<size_t>(r) *
+                               static_cast<size_t>(islands.maskCols) +
+                           static_cast<size_t>(c);
+            islands.islandMask[index] = 0;
             is0.cells.push_back({c, r});
         }
 
@@ -549,7 +602,10 @@ TEST(ClearingPass, MultipleIslands)
     is1.minClearDiameter = 2.0f;
     for (int r = 12; r <= 16; ++r)
         for (int c = 12; c <= 16; ++c) {
-            islands.islandMask[r * islands.maskCols + c] = 1;
+            size_t index = static_cast<size_t>(r) *
+                               static_cast<size_t>(islands.maskCols) +
+                           static_cast<size_t>(c);
+            islands.islandMask[index] = 1;
             is1.cells.push_back({c, r});
         }
 

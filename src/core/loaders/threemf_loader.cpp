@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 #include <zlib.h>
@@ -429,15 +430,24 @@ bool ThreeMFLoader::parseTriangles(const std::string& trianglesBlock,
         std::string v3Str = getXmlAttribute(tag, "v3");
 
         if (!v1Str.empty() && !v2Str.empty() && !v3Str.empty()) {
-            uint32_t v1 = std::stoul(v1Str);
-            uint32_t v2 = std::stoul(v2Str);
-            uint32_t v3 = std::stoul(v3Str);
+            unsigned long v1Long = std::stoul(v1Str);
+            unsigned long v2Long = std::stoul(v2Str);
+            unsigned long v3Long = std::stoul(v3Str);
+            constexpr auto maxIndex = static_cast<unsigned long>(std::numeric_limits<uint32_t>::max());
+            if (v1Long > maxIndex || v2Long > maxIndex || v3Long > maxIndex) {
+                pos = tagEnd + 1;
+                continue;
+            }
+
+            uint32_t v1 = static_cast<uint32_t>(v1Long);
+            uint32_t v2 = static_cast<uint32_t>(v2Long);
+            uint32_t v3 = static_cast<uint32_t>(v3Long);
 
             if (v1 < vertices.size() && v2 < vertices.size() && v3 < vertices.size()) {
                 // Calculate face normal
-                Vec3 p1 = vertices[v1];
-                Vec3 p2 = vertices[v2];
-                Vec3 p3 = vertices[v3];
+                Vec3 p1 = vertices[static_cast<size_t>(v1)];
+                Vec3 p2 = vertices[static_cast<size_t>(v2)];
+                Vec3 p3 = vertices[static_cast<size_t>(v3)];
 
                 Vec3 edge1 = p2 - p1;
                 Vec3 edge2 = p3 - p1;

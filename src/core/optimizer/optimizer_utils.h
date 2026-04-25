@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include <vector>
 
 #include "sheet.h"
@@ -21,10 +22,12 @@ struct ExpandedPart {
 // Each Part with quantity N produces N ExpandedPart entries.
 inline std::vector<ExpandedPart> expandParts(const std::vector<Part>& parts) {
     std::vector<ExpandedPart> expanded;
-    for (int i = 0; i < static_cast<int>(parts.size()); ++i) {
+    for (size_t i = 0; i < parts.size(); ++i) {
         const Part& part = parts[i];
+        int partIndex = static_cast<int>(
+            std::min(i, static_cast<size_t>(std::numeric_limits<int>::max())));
         for (int j = 0; j < part.quantity; ++j) {
-            expanded.push_back({&part, i, j, part.area()});
+            expanded.push_back({&part, partIndex, j, part.area()});
         }
     }
 

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <system_error>
 
 #include "../utils/file_utils.h"
@@ -42,6 +43,14 @@ bool readU32(std::istream& in, uint32_t& value) {
 
 bool readU64(std::istream& in, uint64_t& value) {
     return !in.read(reinterpret_cast<char*>(&value), sizeof(value)).fail();
+}
+
+bool fitsStreamSize(uint64_t value) {
+    return value <= static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max());
+}
+
+bool fitsSizeT(uint64_t value) {
+    return value <= static_cast<uint64_t>(std::numeric_limits<size_t>::max());
 }
 
 std::vector<std::string> collectFiles(const std::string& dir) {
@@ -114,7 +123,11 @@ ArchiveResult ProjectArchive::create(const std::string& archivePath,
         if (!writeU64(out, contentSize)) {
             return ArchiveResult::fail("Failed to write content size");
         }
-        out.write(reinterpret_cast<const char*>(content->data()), contentSize);
+        if (!fitsStreamSize(contentSize)) {
+            return ArchiveResult::fail("File too large to write: " + relativePath);
+        }
+        out.write(reinterpret_cast<const char*>(content->data()),
+                  static_cast<std::streamsize>(contentSize));
 
         archivedFiles.push_back(relativePath);
     }
@@ -179,8 +192,11 @@ ArchiveResult ProjectArchive::extract(const std::string& archivePath,
         }
 
         // Read content
-        std::vector<uint8_t> content(contentSize);
-        in.read(reinterpret_cast<char*>(content.data()), contentSize);
+        if (!fitsSizeT(contentSize) || !fitsStreamSize(contentSize)) {
+            return ArchiveResult::fail("Archived file too large: " + relativePath);
+        }
+        std::vector<uint8_t> content(static_cast<size_t>(contentSize));
+        in.read(reinterpret_cast<char*>(content.data()), static_cast<std::streamsize>(contentSize));
 
         // Create output path
         std::string outputPath = outputDir + "/" + relativePath;
@@ -242,7 +258,10 @@ std::vector<ArchiveEntry> ProjectArchive::list(const std::string& archivePath) {
         entry.compressedSize = entry.uncompressedSize; // No compression
 
         // Skip content
-        in.seekg(entry.uncompressedSize, std::ios::cur);
+        if (!fitsStreamSize(entry.uncompressedSize)) {
+            break;
+        }
+        in.seekg(static_cast<std::streamoff>(entry.uncompressedSize), std::ios::cur);
 
         entries.push_back(std::move(entry));
     }

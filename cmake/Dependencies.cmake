@@ -71,6 +71,9 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(glm)
+if(TARGET glm)
+    target_include_directories(glm SYSTEM INTERFACE ${glm_SOURCE_DIR})
+endif()
 
 # SQLite3
 # macOS system SQLite disables load_extension; always use FetchContent there
@@ -94,7 +97,15 @@ if(NOT SQLite3_FOUND)
     )
     target_include_directories(sqlite3 PUBLIC ${sqlite3_SOURCE_DIR})
     target_compile_definitions(sqlite3 PRIVATE SQLITE_ENABLE_FTS5 SQLITE_ENABLE_LOAD_EXTENSION)
-    add_library(SQLite::SQLite3 ALIAS sqlite3)
+    add_library(SQLite3::SQLite3 ALIAS sqlite3)
+endif()
+
+if(TARGET SQLite3::SQLite3)
+    set(DW_SQLITE_TARGET SQLite3::SQLite3)
+elseif(TARGET SQLite::SQLite3)
+    set(DW_SQLITE_TARGET SQLite::SQLite3)
+else()
+    message(FATAL_ERROR "SQLite3 target was not created by dependency setup")
 endif()
 
 # zlib - Compression (needed for deflate in ZIP/3MF files)
@@ -135,10 +146,13 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/richgel999/miniz.git
     GIT_TAG 3.0.2
     GIT_SHALLOW TRUE
+    # Populate the sources only. The pinned upstream CMake requires compatibility
+    # removed by CMake 4.x, so Digital Workshop owns the small static target.
+    SOURCE_SUBDIR cmake-no-subdir
 )
+FetchContent_MakeAvailable(miniz)
 FetchContent_GetProperties(miniz)
-if(NOT miniz_POPULATED)
-    FetchContent_Populate(miniz)
+if(NOT TARGET miniz_static)
     # miniz 3.0.2 splits the library into multiple .c files:
     #   miniz.c         - zlib API (deflate/inflate)
     #   miniz_tdef.c    - deflate compressor
@@ -152,8 +166,6 @@ if(NOT miniz_POPULATED)
         ${miniz_SOURCE_DIR}/miniz_zip.c
     )
     target_include_directories(miniz_static PUBLIC ${miniz_SOURCE_DIR} ${miniz_BINARY_DIR})
-    # Define MINIZ_EXPORT as empty to avoid export header dependency
-    # Also generate minimal miniz_export.h if it doesn't exist
     target_compile_definitions(miniz_static PUBLIC MINIZ_EXPORT=)
     if(NOT EXISTS "${miniz_BINARY_DIR}/miniz_export.h")
         file(WRITE "${miniz_BINARY_DIR}/miniz_export.h" "#ifndef MINIZ_EXPORT_H\n#define MINIZ_EXPORT_H\n#endif\n")
@@ -213,6 +225,9 @@ FetchContent_Declare(
 )
 set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nfd)
+if(TARGET nfd)
+    target_include_directories(nfd SYSTEM INTERFACE ${nfd_SOURCE_DIR}/src/include)
+endif()
 
 # GoogleTest (for testing only)
 if(DW_BUILD_TESTS)

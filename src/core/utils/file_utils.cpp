@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <sstream>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -64,8 +65,9 @@ Result<std::string> readText(const Path& path) {
         return std::nullopt;
     }
 
-    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    return content;
+    std::ostringstream content;
+    content << file.rdbuf();
+    return content.str();
 }
 
 Result<ByteBuffer> readBinary(const Path& path) {

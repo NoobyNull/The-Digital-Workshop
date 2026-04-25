@@ -76,17 +76,17 @@ FitResult ModelFitter::fit(const FitParams& params) const
         std::string warn;
         if (extX > m_stock.width) {
             warn += "Model width (" + std::to_string(extX) +
-                    " mm) exceeds stock width (" +
+                    " mm) exceeds material blank width (" +
                     std::to_string(m_stock.width) + " mm). ";
         }
         if (extY > m_stock.height) {
             warn += "Model height (" + std::to_string(extY) +
-                    " mm) exceeds stock height (" +
+                    " mm) exceeds material blank height (" +
                     std::to_string(m_stock.height) + " mm). ";
         }
         if (depth > m_stock.thickness) {
             warn += "Carve depth (" + std::to_string(depth) +
-                    " mm) exceeds stock thickness (" +
+                    " mm) exceeds material blank thickness (" +
                     std::to_string(m_stock.thickness) + " mm). ";
         }
         if (!result.fitsMachine && result.fitsStock) {

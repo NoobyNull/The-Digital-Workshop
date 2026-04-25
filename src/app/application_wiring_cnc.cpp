@@ -6,6 +6,7 @@
 
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/macro_manager.h"
+#include "core/cnc/machine_units.h"
 #include "core/cnc/unified_settings.h"
 #include "core/config/config.h"
 #include "core/gcode/gcode_analyzer.h"
@@ -242,16 +243,21 @@ void Application::wireCncPanels() {
             gcp->onGrblError(message);
             if (conp) conp->onError(message);
         };
-        cncCb.onRawLine = [gcp, conp, wcsp, settsp](const std::string& line, bool isSent) {
+        cncCb.onRawLine = [this, gcp, conp, wcsp, settsp, dcarvep](
+            const std::string& line, bool isSent) {
             gcp->onGrblRawLine(line, isSent);
             if (conp) conp->onRawLine(line, isSent);
             if (wcsp) wcsp->onRawLine(line, isSent);
+            if (dcarvep) dcarvep->onRawLine(line, isSent);
             if (settsp) {
                 settsp->onRawLine(line, isSent);
                 if (!isSent && line == "ok" && settsp->hasSettings()) {
                     auto& cfg = Config::instance();
                     auto profile = cfg.getActiveMachineProfile();
                     const auto& us = settsp->unifiedSettings();
+                    if (m_cncController) {
+                        m_cncController->setSendUnits(cnc::sendUnitsFromUnifiedSettings(us));
+                    }
                     bool changed = false;
                     auto syncSetting = [&](const char* key, float& field) {
                         if (auto* s = us.get(key)) {

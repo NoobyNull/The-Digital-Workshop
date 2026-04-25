@@ -4,10 +4,12 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <sstream>
 
 #include <imgui.h>
 
 #include "core/cnc/cnc_controller.h"
+#include "core/cnc/machine_units.h"
 #include "core/config/config.h"
 #include "core/paths/app_paths.h"
 #include "core/utils/log.h"
@@ -870,7 +872,10 @@ void CncSettingsPanel::renderSafetyTab() {
     if (ImGui::RadioButton("Inches (in)", !metric)) {
         cfg.setDisplayUnitsMetric(false); cfg.save();
     }
-    ImGui::TextDisabled("Display-only -- G-code commands always use millimeters");
+    const auto sendUnits = m_cnc ? m_cnc->sendUnits() : cnc::SendUnits::Millimeters;
+    ImGui::TextDisabled("Display-only. Generated carve G-code sends %s (%s).",
+                        cnc::unitLabel(sendUnits),
+                        cnc::gcodeUnitMode(sendUnits));
 
     ImGui::Spacing();
 
@@ -1058,8 +1063,9 @@ void CncSettingsPanel::restoreFromFile() {
         [this](const std::string& path) {
             std::ifstream ifs(path);
             if (!ifs.is_open()) return;
-            std::string content((std::istreambuf_iterator<char>(ifs)),
-                                 std::istreambuf_iterator<char>());
+            std::ostringstream contentStream;
+            contentStream << ifs.rdbuf();
+            std::string content = contentStream.str();
             UnifiedSettingsMap backup;
             if (!backup.fromJsonString(content)) return;
 

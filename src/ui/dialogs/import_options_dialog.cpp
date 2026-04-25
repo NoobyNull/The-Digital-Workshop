@@ -6,6 +6,7 @@
 
 #include <imgui.h>
 
+#include "core/import/import_mode_policy.h"
 #include "ui/icons.h"
 #include "ui/ui_colors.h"
 
@@ -15,7 +16,6 @@ ImportOptionsDialog::ImportOptionsDialog() : Dialog("Import Options") {}
 
 void ImportOptionsDialog::open(const std::vector<Path>& paths) {
     m_paths = paths;
-    m_selectedMode = static_cast<int>(FileHandlingMode::LeaveInPlace);
     m_queueForTagging = false;
     m_detectedLocation = StorageLocation::Unknown;
 
@@ -28,12 +28,10 @@ void ImportOptionsDialog::open(const std::vector<Path>& paths) {
         m_detectedLocation = info.location;
     }
 
-    // Auto-select based on detection
-    if (m_detectedLocation == StorageLocation::Network) {
-        m_selectedMode = static_cast<int>(FileHandlingMode::CopyToLibrary);
-    } else {
-        m_selectedMode = static_cast<int>(FileHandlingMode::MoveToLibrary);
-    }
+    auto initialMode =
+        import_mode_policy::initialModeFor(m_detectedLocation,
+                                           Config::instance().getFileHandlingMode());
+    m_selectedMode = static_cast<int>(initialMode);
 
     m_open = true;
     ImGui::OpenPopup(m_title.c_str());
@@ -100,10 +98,20 @@ void ImportOptionsDialog::render() {
         ImGui::RadioButton("Move to library", &m_selectedMode, moveToLib);
         ImGui::Indent();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
-        ImGui::TextWrapped("Moves files from current location to library.");
+        ImGui::TextWrapped("Moves files into the local library and removes the originals after "
+                           "they are stored.");
         ImGui::PopStyleColor();
         ImGui::Unindent();
         ImGui::Spacing();
+
+        if (m_selectedMode == moveToLib) {
+            ImGui::PushStyleColor(ImGuiCol_Text, colors::kWarning);
+            ImGui::TextWrapped("%s Originals will be deleted from their current location after "
+                               "import succeeds.",
+                               Icons::Warning);
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+        }
 
         // Network-specific recommendations
         if (m_detectedLocation == StorageLocation::Network) {
@@ -144,8 +152,11 @@ void ImportOptionsDialog::render() {
         float cancelDlgBtnW = ImGui::CalcTextSize("Cancel").x + ImGui::GetStyle().FramePadding.x * 4;
         float dlgBtnW = std::max(importDlgBtnW, cancelDlgBtnW);
         if (ImGui::Button("Import", ImVec2(dlgBtnW, 0))) {
+            auto selectedMode = static_cast<FileHandlingMode>(m_selectedMode);
+            Config::instance().setFileHandlingMode(selectedMode);
+            Config::instance().save();
             if (m_onConfirm) {
-                m_onConfirm(static_cast<FileHandlingMode>(m_selectedMode), m_queueForTagging, m_paths);
+                m_onConfirm(selectedMode, m_queueForTagging, m_paths);
             }
             m_open = false;
             ImGui::CloseCurrentPopup();

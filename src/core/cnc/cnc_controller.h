@@ -10,6 +10,7 @@
 
 #include "byte_stream.h"
 #include "cnc_types.h"
+#include "machine_units.h"
 #include "unified_settings.h"
 
 namespace dw {
@@ -71,6 +72,8 @@ class CncController {
 
     // Firmware type detected during connection
     FirmwareType firmwareType() const { return m_firmwareType; }
+    cnc::SendUnits sendUnits() const;
+    void setSendUnits(cnc::SendUnits units);
 
     // Parse a GRBL status report string (public for testing)
     static MachineStatus parseStatusReport(const std::string& report);
@@ -147,6 +150,7 @@ class CncController {
 
     // Firmware detection
     FirmwareType m_firmwareType = FirmwareType::GRBL;
+    std::atomic<int> m_sendUnits{0}; // cnc::SendUnits, default millimeters
 
     // Simulator state
     std::atomic<bool> m_simulating{false};

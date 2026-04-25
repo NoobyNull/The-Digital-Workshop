@@ -788,7 +788,8 @@ void ToolBrowserPanel::renderAddToolPopup() {
                 char autoName[128];
                 std::snprintf(autoName, sizeof(autoName), "%s %.4f\" %dF",
                               toolTypeName(static_cast<VtdbToolType>(m_addToolType)),
-                              m_addToolDiameter, m_addToolFlutes);
+                              static_cast<double>(m_addToolDiameter),
+                              m_addToolFlutes);
                 m_addToolName = autoName;
             }
 

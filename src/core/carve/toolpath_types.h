@@ -37,6 +37,7 @@ struct ToolpathConfig {
     f32 safeZMm = 5.0f;
     f32 feedRateMmMin = 1000.0f;
     f32 plungeRateMmMin = 300.0f;
+    f32 rapidRateMmMin = 5000.0f;
     f32 leadInMm = 2.0f;  // Ramp distance for clearing lead-in/out
     f32 scanResolutionMm = 0.0f;  // Point spacing along scan lines (0 = heightmap resolution)
 };
@@ -67,6 +68,31 @@ struct MultiPassToolpath {
 
 // Convert preset to percentage
 f32 stepoverPercent(StepoverPreset preset);
+
+inline bool isPlungeFeedMove(const Vec3& previous,
+                             bool previousRapid,
+                             const Vec3& current)
+{
+    constexpr f32 kEpsilon = 0.001f;
+    const f32 dx = current.x - previous.x;
+    const f32 dy = current.y - previous.y;
+    const f32 dz = current.z - previous.z;
+    const f32 lateralSq = dx * dx + dy * dy;
+    return dz < -kEpsilon &&
+           (previousRapid || lateralSq <= kEpsilon * kEpsilon);
+}
+
+inline f32 linearMoveFeedRateMmMin(const Vec3& previous,
+                                   bool previousRapid,
+                                   const Vec3& current,
+                                   const ToolpathConfig& config)
+{
+    if (config.plungeRateMmMin > 0.0f &&
+        isPlungeFeedMove(previous, previousRapid, current)) {
+        return config.plungeRateMmMin;
+    }
+    return config.feedRateMmMin;
+}
 
 } // namespace carve
 } // namespace dw

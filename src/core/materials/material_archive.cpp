@@ -14,7 +14,7 @@ namespace {
 
 constexpr const char* kTextureEntry = "texture.png";
 constexpr const char* kMetadataEntry = "metadata.json";
-constexpr int kCompressionLevel = MZ_DEFAULT_COMPRESSION;
+constexpr mz_uint kCompressionLevel = static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION);
 
 } // namespace
 

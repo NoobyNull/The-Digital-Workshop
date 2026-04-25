@@ -114,7 +114,8 @@ void CncJogPanel::renderStepSizeSelector() {
     } else {
         feed = cfg.getJogFeedLarge(); group = "large";
     }
-    ImGui::TextDisabled("Feed: %.0f %s (%s)", static_cast<double>(feed * uf), fu, group);
+    double feedRate = static_cast<double>(feed) * static_cast<double>(uf);
+    ImGui::TextDisabled("Feed: %.0f %s (%s)", feedRate, fu, group);
 }
 
 void CncJogPanel::renderJogButtons() {

@@ -315,6 +315,7 @@ class UIManager {
     void buildPanelRegistry();
     void enforceWorkspaceBoundary();
     void syncWorkspaceModeToPanels();
+    std::vector<std::string> currentStatusTips() const;
     bool senderSurfaceVisible() const;
     static bool isBuiltInWorkshopPreset(int presetIndex) { return presetIndex == 0; }
     static bool isBuiltInSenderPreset(int presetIndex) { return presetIndex == 1; }

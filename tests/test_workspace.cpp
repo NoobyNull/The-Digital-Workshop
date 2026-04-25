@@ -127,13 +127,13 @@ TEST_F(WorkspaceTest, ClearAllRemovesAllFocusedObjects) {
 TEST_F(WorkspaceTest, WorkspaceDoesNotHoldExtraneousReferences) {
     {
         auto mesh = createTestMesh();
-        int refCountBefore = mesh.use_count(); // mesh + this scope
+        auto refCountBefore = mesh.use_count(); // mesh + this scope
         workspace.setFocusedMesh(mesh);
-        int refCountAfter = mesh.use_count(); // mesh + this scope + workspace
+        auto refCountAfter = mesh.use_count(); // mesh + this scope + workspace
         EXPECT_EQ(refCountAfter, refCountBefore + 1);
 
         workspace.clearFocusedMesh();
-        int refCountAfterClear = mesh.use_count();
+        auto refCountAfterClear = mesh.use_count();
         EXPECT_EQ(refCountAfterClear, refCountBefore);
     }
 }

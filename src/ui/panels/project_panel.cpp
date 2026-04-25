@@ -31,6 +31,7 @@ const char* iconForOpenItemType(ProjectOpenItemType type) {
     case ProjectOpenItemType::Job: return Icons::Play;
     case ProjectOpenItemType::Labor: return Icons::Cost;
     case ProjectOpenItemType::Consumable: return Icons::Material;
+    case ProjectOpenItemType::Zeroing: return Icons::Home;
     }
     return Icons::File;
 }
@@ -48,6 +49,7 @@ const char* labelForOpenItemType(ProjectOpenItemType type) {
     case ProjectOpenItemType::Job: return "Job";
     case ProjectOpenItemType::Labor: return "Labor";
     case ProjectOpenItemType::Consumable: return "Consumable";
+    case ProjectOpenItemType::Zeroing: return "Zeroing";
     }
     return "Item";
 }
@@ -372,7 +374,7 @@ void ProjectPanel::renderGCodeSection() {
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Time: %.1f min | Tools: %zu",
-                    gc.estimatedTime / 60.0f, gc.toolNumbers.size());
+                    static_cast<double>(gc.estimatedTime) / 60.0, gc.toolNumbers.size());
             }
             if (ImGui::BeginPopupContextItem()) {
                 if (ImGui::MenuItem("Remove from Project")) {
@@ -460,7 +462,7 @@ void ProjectPanel::renderCutPlansSection() {
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Sheets: %d | Efficiency: %.1f%%",
-                    plan.sheetsUsed, plan.efficiency * 100.0f);
+                    plan.sheetsUsed, static_cast<double>(plan.efficiency) * 100.0);
             }
             if (ImGui::BeginPopupContextItem()) {
                 if (ImGui::MenuItem("Remove from Project")) {

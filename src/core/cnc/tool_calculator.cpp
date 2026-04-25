@@ -9,6 +9,38 @@
 
 namespace dw {
 
+namespace {
+
+bool isRouterMaterial(HardnessBand band) {
+    switch (band) {
+    case HardnessBand::Soft:
+    case HardnessBand::Medium:
+    case HardnessBand::Hard:
+    case HardnessBand::VeryHard:
+    case HardnessBand::Composite:
+    case HardnessBand::Plastic:
+        return true;
+    case HardnessBand::Metal:
+        return false;
+    }
+    return false;
+}
+
+bool isRouterCuttingTool(VtdbToolType toolType) {
+    switch (toolType) {
+    case VtdbToolType::BallNose:
+    case VtdbToolType::EndMill:
+    case VtdbToolType::Radiused:
+    case VtdbToolType::VBit:
+    case VtdbToolType::TaperedBallNose:
+        return true;
+    default:
+        return false;
+    }
+}
+
+} // namespace
+
 HardnessBand ToolCalculator::classifyMaterial(f64 jankaHardness, const std::string& name) {
     // Zero Janka means non-wood — classify by name
     if (jankaHardness <= 0.0) {
@@ -155,9 +187,17 @@ CalcResult ToolCalculator::calculate(const CalcInput& input) {
     // 2. Get rigidity derating
     result.rigidity_factor = rigidityFactor(input.drive_type);
 
-    // 3. Calculate RPM from SFM
+    if (input.max_rpm <= 0) return result;
+
+    // 3. Select spindle RPM. Router woodworking and plastic jobs normally use
+    // the configured spindle RPM, then feed is derived from chip load. Keep
+    // SFM-limited RPM for metals and non-cutting/specialty tool types.
     f64 sfm = recommendedSFM(result.hardness_band, input.tool_type);
-    result.rpm = calculateRPM(sfm, diameterInches, input.max_rpm);
+    if (isRouterMaterial(result.hardness_band) && isRouterCuttingTool(input.tool_type)) {
+        result.rpm = input.max_rpm;
+    } else {
+        result.rpm = calculateRPM(sfm, diameterInches, input.max_rpm);
+    }
     if (result.rpm <= 0) return result;
 
     // 4. Get chip load

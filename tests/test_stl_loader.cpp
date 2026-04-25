@@ -77,6 +77,39 @@ TEST(STLLoader, LoadFromBuffer_SingleTriangle) {
     EXPECT_FLOAT_EQ(verts[2].position.z, 0.0f);
 }
 
+TEST(STLLoader, LoadFromBuffer_RebuildsNormalsFromTriangleWinding) {
+    // Stored normal deliberately disagrees with winding. The loader should trust geometry,
+    // because stale exported STL normals cause visibly dark islands under lighting.
+    std::array<float, 12> tri = {
+        0.0f,
+        0.0f,
+        -1.0f, // incorrect stored normal
+        0.0f,
+        0.0f,
+        0.0f, // vertex 0
+        1.0f,
+        0.0f,
+        0.0f, // vertex 1
+        0.0f,
+        1.0f,
+        0.0f // vertex 2; winding normal is +Z
+    };
+
+    auto data = makeBinarySTL(1, {tri});
+
+    dw::STLLoader loader;
+    auto result = loader.loadFromBuffer(data);
+
+    ASSERT_TRUE(result.success()) << "Error: " << result.error;
+    ASSERT_NE(result.mesh, nullptr);
+
+    for (const auto& vertex : result.mesh->vertices()) {
+        EXPECT_NEAR(vertex.normal.x, 0.0f, 1e-5f);
+        EXPECT_NEAR(vertex.normal.y, 0.0f, 1e-5f);
+        EXPECT_NEAR(vertex.normal.z, 1.0f, 1e-5f);
+    }
+}
+
 TEST(STLLoader, LoadFromBuffer_EmptyBuffer) {
     dw::ByteBuffer empty;
     dw::STLLoader loader;
