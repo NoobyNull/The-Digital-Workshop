@@ -274,6 +274,7 @@ class DirectCarvePanel : public Panel {
     void saveGCodeToProject();
     void syncSetupToOptimizerAndProject();
     std::optional<i64> syncOperationOpenItem();
+    std::optional<i64> currentModelOpenItemId();
     std::optional<i64> syncToolOpenItem(i64 operationItemId,
                                         const std::string& operationSourceKey,
                                         const std::string& role,

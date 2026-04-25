@@ -416,6 +416,7 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
                       : ProjectOpenItemStatus::Planned;
     item.sourceTable = "direct_carve";
     item.sourceKey = "direct_carve:" + ProjectDirectory::sanitizeName(partName);
+    item.parentItemId = currentModelOpenItemId();
     item.displayName = "Direct Carve: " + partName;
     item.intentJson = intent.dump();
     item.snapshotJson = snapshot.dump();
@@ -432,6 +433,29 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
     }
 
     return operationItemId;
+}
+
+std::optional<i64> DirectCarvePanel::currentModelOpenItemId() {
+    if (!m_projectManager || !m_libraryManager || m_modelSourcePath.empty() ||
+        !file::exists(m_modelSourcePath)) {
+        return std::nullopt;
+    }
+
+    auto model = m_libraryManager->getModelByHash(hash::computeFile(m_modelSourcePath));
+    if (!model) {
+        return std::nullopt;
+    }
+
+    for (const auto& item : m_projectManager->currentOpenItems()) {
+        if (item.itemType == ProjectOpenItemType::Model &&
+            item.sourceTable == "models" &&
+            item.sourceId.has_value() &&
+            *item.sourceId == model->id) {
+            return item.id;
+        }
+    }
+
+    return std::nullopt;
 }
 
 std::optional<i64> DirectCarvePanel::syncToolOpenItem(i64 operationItemId,
