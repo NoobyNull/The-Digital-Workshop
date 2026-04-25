@@ -420,6 +420,45 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
     item.intentJson = intent.dump();
     item.snapshotJson = snapshot.dump();
 
+    auto operationItemId = m_projectManager->upsertCurrentOpenItem(std::move(item));
+    if (operationItemId) {
+        const auto operationSourceKey = "direct_carve:" + ProjectDirectory::sanitizeName(partName);
+        if (m_finishingToolSelected) {
+            (void)syncToolOpenItem(*operationItemId, operationSourceKey, "finish", m_finishTool);
+        }
+        if (m_clearToolSelected) {
+            (void)syncToolOpenItem(*operationItemId, operationSourceKey, "clear", m_clearTool);
+        }
+    }
+
+    return operationItemId;
+}
+
+std::optional<i64> DirectCarvePanel::syncToolOpenItem(i64 operationItemId,
+                                                      const std::string& operationSourceKey,
+                                                      const std::string& role,
+                                                      const VtdbToolGeometry& tool) {
+    if (!m_projectManager || operationItemId <= 0) {
+        return std::nullopt;
+    }
+
+    nlohmann::json intent = {
+        {"role", role},
+        {"operation_source_key", operationSourceKey},
+        {"required_for", role == "clear" ? "clearing_pass" : "finishing_pass"},
+    };
+
+    ProjectOpenItem item;
+    item.itemType = ProjectOpenItemType::Tool;
+    item.sourceTable = "direct_carve";
+    item.sourceKey = operationSourceKey + ":tool:" + role;
+    item.parentItemId = operationItemId;
+    item.status = ProjectOpenItemStatus::Ready;
+    item.displayName = (role == "clear" ? "Clearing Tool: " : "Finishing Tool: ") +
+                       resolveToolNameFormat(tool);
+    item.intentJson = intent.dump();
+    item.snapshotJson = toolSummaryJson(tool).dump();
+
     return m_projectManager->upsertCurrentOpenItem(std::move(item));
 }
 

@@ -231,12 +231,24 @@ TEST_F(ProjectOpenItemRepoTest, UpsertOpenItemBySourceKey_CreatesAndUpdatesStabl
     ASSERT_TRUE(secondId.has_value());
     EXPECT_EQ(*secondId, *firstId);
 
+    auto child = makeItem(projectId, "Finishing Tool");
+    child.itemType = dw::ProjectOpenItemType::Tool;
+    child.sourceKey = "direct_carve:relief:tool:finish";
+    child.parentItemId = *firstId;
+    auto childId = m_repo->upsertOpenItemBySourceKey(child);
+    ASSERT_TRUE(childId.has_value());
+
     auto matches = m_repo->findOpenItemsBySourceKey(projectId, "direct_carve:relief");
     ASSERT_EQ(matches.size(), 1u);
     EXPECT_EQ(matches[0].status, dw::ProjectOpenItemStatus::Ready);
     EXPECT_EQ(matches[0].displayName, "Direct Carve Finishing");
     EXPECT_EQ(matches[0].intentJson, R"({"operation_kind":"direct_carve","safe_z":8})");
     EXPECT_EQ(matches[0].snapshotJson, R"({"feed_rate":1500})");
+
+    auto toolMatches =
+        m_repo->findOpenItemsBySourceKey(projectId, "direct_carve:relief:tool:finish");
+    ASSERT_EQ(toolMatches.size(), 1u);
+    EXPECT_EQ(toolMatches[0].parentItemId, *firstId);
 }
 
 TEST_F(ProjectOpenItemRepoTest, UpsertOpenItemBySource_CreatesAndUpdatesLinkedGCodeParent) {
