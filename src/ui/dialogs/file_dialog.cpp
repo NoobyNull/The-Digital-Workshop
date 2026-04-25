@@ -464,11 +464,10 @@ void FileDialog::showNativeFolder(const std::string& /*title*/,
 }
 
 std::vector<FileFilter> FileDialog::modelFilters() {
-    return {{"3D Models & G-code", "*.stl;*.obj;*.3mf;*.gcode;*.nc;*.ngc;*.tap"},
+    return {{"3D Models", "*.stl;*.obj;*.3mf"},
             {"STL Files", "*.stl"},
             {"OBJ Files", "*.obj"},
             {"3MF Files", "*.3mf"},
-            {"G-code Files", "*.gcode;*.nc;*.ngc;*.tap"},
             {"All Files", "*.*"}};
 }
 

@@ -45,8 +45,15 @@ class ProjectDirectory {
     // Save manifest to project.json
     bool save();
 
+    // Metadata and manifest reset
+    void setMetadata(const std::string& name, const std::string& description);
+    void clearModels();
+    void clearGCode();
+
     // File registration
     bool addModelFile(const Path& sourcePath);
+    bool addModelFile(const Path& sourcePath, const std::string& fileHash);
+    bool addGCodeFile(const Path& sourcePath, const std::string& toolDescription = "");
     void addHeightmap(const std::string& filename, f32 resolutionMmPerPx);
     void addGCode(const std::string& filename, const std::string& toolDescription);
 

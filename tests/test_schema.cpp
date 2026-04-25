@@ -19,7 +19,7 @@ TEST(Schema, GetVersion_AfterInit) {
     ASSERT_TRUE(db.open(":memory:"));
     ASSERT_TRUE(dw::Schema::initialize(db));
 
-    EXPECT_EQ(dw::Schema::getVersion(db), 16);
+    EXPECT_EQ(dw::Schema::getVersion(db), 17);
 }
 
 TEST(Schema, GetVersion_BeforeInit) {
@@ -35,7 +35,7 @@ TEST(Schema, DoubleInit_Idempotent) {
 
     EXPECT_TRUE(dw::Schema::initialize(db));
     EXPECT_TRUE(dw::Schema::initialize(db));
-    EXPECT_EQ(dw::Schema::getVersion(db), 16);
+    EXPECT_EQ(dw::Schema::getVersion(db), 17);
 }
 
 TEST(Schema, TablesCreated) {
@@ -73,6 +73,10 @@ TEST(Schema, TablesCreated) {
     auto stmt7 =
         db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='gcode_templates'");
     EXPECT_TRUE(stmt7.step());
+
+    auto stmt8 = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='project_open_items'");
+    EXPECT_TRUE(stmt8.step());
 }
 
 TEST(Schema, IndexesCreated) {

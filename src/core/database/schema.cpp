@@ -120,6 +120,28 @@ bool createProjectModelsTable(Database& db) {
     )");
 }
 
+bool createProjectOpenItemsTable(Database& db) {
+    return db.execute(R"(
+        CREATE TABLE IF NOT EXISTS project_open_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            item_type TEXT NOT NULL,
+            source_table TEXT DEFAULT '',
+            source_id INTEGER DEFAULT NULL,
+            source_key TEXT DEFAULT '',
+            parent_item_id INTEGER DEFAULT NULL,
+            status TEXT NOT NULL DEFAULT 'planned',
+            display_name TEXT NOT NULL DEFAULT '',
+            intent_json TEXT NOT NULL DEFAULT '{}',
+            snapshot_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            modified_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_item_id) REFERENCES project_open_items(id) ON DELETE CASCADE
+        )
+    )");
+}
+
 bool createCostingRecordsTable(Database& db) {
     return db.execute(R"(
         CREATE TABLE IF NOT EXISTS costing_records (
@@ -367,6 +389,14 @@ void createIndexes(Database& db) {
                      "project_models(project_id)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_models_model ON "
                      "project_models(model_id)");
+    (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_project ON "
+                     "project_open_items(project_id)");
+    (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_parent ON "
+                     "project_open_items(parent_item_id)");
+    (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_source ON "
+                     "project_open_items(project_id, source_table, source_id)");
+    (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_source_key ON "
+                     "project_open_items(project_id, source_key)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_costing_records_project ON "
                      "costing_records(project_id)");
     (void)db.execute(
@@ -470,6 +500,7 @@ bool Schema::createTables(Database& db) {
     if (!createModelsTable(db)) return false;
     if (!createProjectsTable(db)) return false;
     if (!createProjectModelsTable(db)) return false;
+    if (!createProjectOpenItemsTable(db)) return false;
     if (!createCostingRecordsTable(db)) return false;
     if (!createProjectGcodeTable(db)) return false;
     if (!createCutPlansTable(db)) return false;
@@ -768,6 +799,19 @@ bool Schema::migrate(Database& db, int fromVersion) {
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_rate_categories_name_project ON "
             "rate_categories(name, project_id)");
         log::info("Schema", "v16: Added rate_categories table");
+    }
+
+    if (fromVersion < 17) {
+        if (!createProjectOpenItemsTable(db)) return false;
+        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_project ON "
+                         "project_open_items(project_id)");
+        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_parent ON "
+                         "project_open_items(parent_item_id)");
+        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_source ON "
+                         "project_open_items(project_id, source_table, source_id)");
+        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_source_key ON "
+                         "project_open_items(project_id, source_key)");
+        log::info("Schema", "v17: Added project_open_items table");
     }
 
     if (!setVersion(db, CURRENT_VERSION)) {

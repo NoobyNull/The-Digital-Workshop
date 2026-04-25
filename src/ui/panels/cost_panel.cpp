@@ -898,6 +898,24 @@ void CostingPanel::addCloEntry(const CostingEntry& entry) {
     syncRecordFromEngine();
 }
 
+void CostingPanel::upsertAutoEntry(const CostingEntry& entry, const std::string& key) {
+    std::vector<std::string> removeIds;
+    for (const auto& existing : m_engine.entries()) {
+        if (existing.notes == key) {
+            removeIds.push_back(existing.id);
+        }
+    }
+    for (const auto& id : removeIds) {
+        m_engine.removeEntry(id);
+    }
+
+    CostingEntry next = entry;
+    next.notes = key;
+    m_engine.addEntry(std::move(next));
+    syncEstimateFromEngine();
+    syncRecordFromEngine();
+}
+
 void CostingPanel::save() {
     saveToDisk();
 }

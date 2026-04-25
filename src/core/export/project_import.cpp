@@ -149,13 +149,13 @@ DwprojExportResult ProjectExportManager::importProject(const Path& archivePath,
 
             auto modelId = modelRepo.insert(rec);
             if (modelId) {
-                (void)projectRepo.addModel(*projectId, *modelId);
+                (void)projectRepo.addModel(*projectId, *modelId, static_cast<int>(i));
             }
         } else {
             // Model already exists -- just link to project
             auto existing = modelRepo.findByHash(mm.hash);
             if (existing) {
-                (void)projectRepo.addModel(*projectId, existing->id);
+                (void)projectRepo.addModel(*projectId, existing->id, static_cast<int>(i));
             }
         }
 
@@ -319,7 +319,7 @@ DwprojExportResult ProjectExportManager::importProject(const Path& archivePath,
             gcodeId = *id;
         }
 
-        gcodeRepo.addToProject(*projectId, gcodeId);
+        gcodeRepo.addToProject(*projectId, gcodeId, static_cast<int>(current));
         current++;
 
         if (progress) {

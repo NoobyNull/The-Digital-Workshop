@@ -6,6 +6,9 @@
 #include "project_directory.h"
 #include "../config/config.h"
 #include "../database/database.h"
+#include "../database/gcode_repository.h"
+#include "../database/model_repository.h"
+#include "../paths/path_resolver.h"
 #include "../utils/file_utils.h"
 #include "../utils/log.h"
 
@@ -89,6 +92,7 @@ std::shared_ptr<Project> ProjectManager::open(i64 projectId) {
     for (i64 id : modelIds) {
         project->addModel(id);
     }
+    m_projectRepo.ensureOpenItemsForProject(projectId);
     project->clearModified();
 
     log::infof("Project",
@@ -100,6 +104,11 @@ std::shared_ptr<Project> ProjectManager::open(i64 projectId) {
 }
 
 bool ProjectManager::save(Project& project) {
+    if (!ensureProjectDirectory(project)) {
+        log::error("Project", "Failed to prepare project directory");
+        return false;
+    }
+
     // Update project record
     if (!m_projectRepo.update(project.record())) {
         log::error("Project", "Failed to update record");
@@ -126,6 +135,9 @@ bool ProjectManager::save(Project& project) {
             m_projectRepo.updateModelOrder(project.id(), modelId, i);
         }
     }
+
+    m_projectRepo.ensureOpenItemsForProject(project.id());
+    syncProjectDirectory(project);
 
     project.clearModified();
     log::infof("Project", "Saved: %s", project.name().c_str());
@@ -160,6 +172,19 @@ std::optional<ProjectRecord> ProjectManager::getProjectInfo(i64 projectId) {
     return m_projectRepo.findById(projectId);
 }
 
+std::vector<ProjectOpenItem> ProjectManager::listOpenItems(i64 projectId) {
+    m_projectRepo.ensureOpenItemsForProject(projectId);
+    m_projectRepo.validateOpenItemsForProject(projectId);
+    return m_projectRepo.listOpenItemsForProject(projectId);
+}
+
+std::vector<ProjectOpenItem> ProjectManager::currentOpenItems() {
+    if (!m_currentProject) {
+        return {};
+    }
+    return listOpenItems(m_currentProject->id());
+}
+
 bool ProjectManager::addModelToProject(i64 modelId) {
     if (!m_currentProject) {
         log::warning("Project", "No project open");
@@ -178,6 +203,98 @@ bool ProjectManager::removeModelFromProject(i64 modelId) {
 
     m_currentProject->removeModel(modelId);
     return true;
+}
+
+Path ProjectManager::canonicalProjectDirectory(const Project& project) const {
+    Path filePath = project.filePath();
+    if (!filePath.empty() && filePath.extension().empty()) {
+        return filePath;
+    }
+
+    std::string baseName = project.name().empty() ? "project" : project.name();
+    return Config::instance().getProjectsDir() / ProjectDirectory::sanitizeName(baseName);
+}
+
+bool ProjectManager::ensureProjectDirectory(Project& project) {
+    Path root = canonicalProjectDirectory(project);
+    if (root.empty()) {
+        return false;
+    }
+
+    auto dir = std::make_shared<ProjectDirectory>();
+    if (file::isDirectory(root) && file::exists(root / "project.json")) {
+        if (!dir->open(root)) {
+            return false;
+        }
+        dir->setMetadata(project.name(), project.description());
+    } else {
+        if (!dir->create(root, project.name(), project.description())) {
+            return false;
+        }
+    }
+
+    project.setFilePath(root);
+    m_currentDir = dir;
+    return true;
+}
+
+Path ProjectManager::resolveModelPath(const ModelRecord& model) const {
+    Path resolved = PathResolver::resolve(model.filePath, PathCategory::Support);
+    if (file::isFile(resolved)) {
+        return resolved;
+    }
+    resolved = PathResolver::resolve(model.filePath, PathCategory::Models);
+    if (file::isFile(resolved)) {
+        return resolved;
+    }
+    return model.filePath;
+}
+
+Path ProjectManager::resolveGCodePath(const GCodeRecord& gcode) const {
+    return PathResolver::resolve(gcode.filePath, PathCategory::GCode);
+}
+
+bool ProjectManager::syncProjectDirectory(Project& project) {
+    if (!m_currentDir || m_currentDir->root() != project.filePath()) {
+        if (!ensureProjectDirectory(project)) {
+            return false;
+        }
+    }
+
+    m_currentDir->setMetadata(project.name(), project.description());
+    m_currentDir->clearModels();
+    m_currentDir->clearGCode();
+
+    ModelRepository modelRepo(m_db);
+    for (i64 modelId : project.modelIds()) {
+        auto model = modelRepo.findById(modelId);
+        if (!model) {
+            log::warningf("Project",
+                          "Project '%s' references missing model %lld",
+                          project.name().c_str(),
+                          static_cast<long long>(modelId));
+            continue;
+        }
+
+        Path sourcePath = resolveModelPath(*model);
+        if (!m_currentDir->addModelFile(sourcePath, model->hash)) {
+            log::warningf("Project",
+                          "Could not mirror model '%s' into project directory",
+                          model->name.c_str());
+        }
+    }
+
+    GCodeRepository gcodeRepo(m_db);
+    for (const auto& gcode : gcodeRepo.findByProject(project.id())) {
+        Path sourcePath = resolveGCodePath(gcode);
+        if (!m_currentDir->addGCodeFile(sourcePath)) {
+            log::warningf("Project",
+                          "Could not mirror G-code '%s' into project directory",
+                          gcode.name.c_str());
+        }
+    }
+
+    return m_currentDir->save();
 }
 
 std::shared_ptr<ProjectDirectory> ProjectManager::ensureProjectForModel(

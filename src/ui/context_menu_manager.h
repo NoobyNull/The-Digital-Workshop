@@ -3,6 +3,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace dw {
@@ -16,6 +17,19 @@ struct ContextMenuEntry {
     std::function<bool()> visible = []() { return true; };
     bool isSeparator = false;
     std::vector<ContextMenuEntry> submenu; // Empty if not a submenu parent
+
+    ContextMenuEntry() = default;
+
+    ContextMenuEntry(std::string entryLabel,
+                     std::function<void()> entryAction,
+                     std::string entryIcon = "",
+                     std::function<bool()> entryEnabled = []() { return true; },
+                     std::function<bool()> entryVisible = []() { return true; })
+        : label(std::move(entryLabel)),
+          action(std::move(entryAction)),
+          icon(std::move(entryIcon)),
+          enabled(std::move(entryEnabled)),
+          visible(std::move(entryVisible)) {}
 
     // Constructor for separator
     static ContextMenuEntry separator() {

@@ -32,6 +32,7 @@ class CostingPanel : public Panel {
 
     // External CLO auto-push: add a material entry from cut optimizer
     void addCloEntry(const CostingEntry& entry);
+    void upsertAutoEntry(const CostingEntry& entry, const std::string& key);
 
     // Persist current engine state to project costing directory
     void save();

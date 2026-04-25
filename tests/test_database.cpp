@@ -235,7 +235,7 @@ TEST(Database, SchemaMigration_v8_to_v9) {
     ASSERT_TRUE(dw::Schema::initialize(db));
 
     // Verify version is now current
-    EXPECT_EQ(dw::Schema::getVersion(db), 16);
+    EXPECT_EQ(dw::Schema::getVersion(db), 17);
 
     // Verify project_gcode table exists
     auto stmt1 = db.prepare(

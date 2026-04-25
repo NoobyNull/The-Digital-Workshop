@@ -101,7 +101,7 @@ class LibraryManager {
                                             const std::string& name,
                                             int sortOrder = 0);
     std::vector<OperationGroup> getOperationGroups(i64 modelId);
-    bool addGCodeToGroup(i64 groupId, i64 gcodeId, int sortOrder = 0);
+    bool addGCodeToGroup(i64 groupId, i64 gcodeId, int sortOrder = -1);
     bool removeGCodeFromGroup(i64 groupId, i64 gcodeId);
     std::vector<GCodeRecord> getGroupGCodeFiles(i64 groupId);
     bool deleteOperationGroup(i64 groupId);

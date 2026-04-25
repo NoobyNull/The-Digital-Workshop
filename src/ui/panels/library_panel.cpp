@@ -108,7 +108,7 @@ GLuint LibraryPanel::loadTGATexture(const Path& path) {
     }
 
     // Read BGRA pixel data
-    size_t dataSize = static_cast<size_t>(width) * height * 4;
+    size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4u;
     std::vector<uint8_t> bgra(dataSize);
     file.read(reinterpret_cast<char*>(bgra.data()), static_cast<std::streamsize>(dataSize));
     if (!file) {
@@ -314,7 +314,7 @@ void LibraryPanel::renderToolbar() {
             [](ImGuiInputTextCallbackData* data) -> int {
                 if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
                     auto* str = static_cast<std::string*>(data->UserData);
-                    str->resize(data->BufTextLen);
+                    str->resize(static_cast<std::string::size_type>(data->BufTextLen));
                     data->Buf = str->data();
                 }
                 return 0;
@@ -355,7 +355,7 @@ void LibraryPanel::renderToolbar() {
             Config::instance().setLibraryThumbSize(m_thumbnailSize);
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Thumbnail size (%.0fpx)", m_thumbnailSize);
+            ImGui::SetTooltip("Thumbnail size (%.0fpx)", static_cast<double>(m_thumbnailSize));
         }
     }
 }

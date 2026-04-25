@@ -123,6 +123,7 @@ void CncController::disconnect() {
     m_running = false;
     m_streaming = false;
     m_errorState = false;
+    postProgressUpdate();
 
     if (m_ioThread.joinable())
         m_ioThread.join();
@@ -177,6 +178,7 @@ void CncController::startStream(const std::vector<std::string>& lines) {
     m_toolChangePending = false;
     m_streamStartTime = std::chrono::steady_clock::now();
     m_streaming = true;
+    postProgressUpdate();
 }
 
 void CncController::acknowledgeError() {
@@ -199,6 +201,7 @@ void CncController::acknowledgeToolChange() {
 
 void CncController::stopStream() {
     m_streaming = false;
+    postProgressUpdate();
     // Send feed hold + soft reset to stop the machine
     feedHold();
 }
@@ -225,6 +228,7 @@ void CncController::softReset() {
         m_sentLengths.clear();
         m_bufferUsed = 0;
     }
+    postProgressUpdate();
     // drain() will be called by the IO thread after dispatching the reset
 }
 
@@ -290,10 +294,19 @@ StreamProgress CncController::streamProgress() const {
     p.totalLines = static_cast<int>(m_program.size());
     p.ackedLines = m_ackIndex;
     p.errorCount = m_errorCount;
+    p.streaming = m_streaming.load();
 
     auto now = std::chrono::steady_clock::now();
     p.elapsedSeconds = std::chrono::duration<f32>(now - m_streamStartTime).count();
     return p;
+}
+
+void CncController::postProgressUpdate() {
+    if (!m_mtq || !m_callbacks.onProgressUpdate)
+        return;
+
+    auto prog = streamProgress();
+    m_mtq->enqueue([cb = m_callbacks.onProgressUpdate, prog]() { cb(prog); });
 }
 
 // --- IO Thread ---
@@ -442,6 +455,7 @@ void CncController::processResponse(const std::string& line) {
         }
         // Stop streaming on alarm
         m_streaming = false;
+        postProgressUpdate();
         return;
     }
 
@@ -485,6 +499,7 @@ void CncController::processResponse(const std::string& line) {
                 m_held = false;
                 m_sentLengths.clear();
                 m_bufferUsed = 0;
+                auto prog = streamProgress();
 
                 // Enter error state -- requires acknowledgment before new operations
                 m_errorState = true;
@@ -494,6 +509,9 @@ void CncController::processResponse(const std::string& line) {
                     m_mtq->enqueue([cb = m_callbacks.onStreamingError, streamErr]() {
                         cb(streamErr);
                     });
+                }
+                if (m_mtq && m_callbacks.onProgressUpdate) {
+                    m_mtq->enqueue([cb = m_callbacks.onProgressUpdate, prog]() { cb(prog); });
                 }
 
                 // Also fire the line ack callback so UI can track the specific line
@@ -898,19 +916,19 @@ void CncController::simIoThreadFunc() {
                     simEmitLine("ok");
                     if (m_mtq && m_callbacks.onLineAcked)
                         m_mtq->enqueue([cb = m_callbacks.onLineAcked, ack]() { cb(ack); });
+                    if (m_ackIndex >= static_cast<int>(m_program.size())) {
+                        m_streaming = false;
+                        m_sim.state = MachineState::Idle;
+                    }
                     if (m_mtq && m_callbacks.onProgressUpdate) {
                         StreamProgress prog;
                         prog.totalLines = static_cast<int>(m_program.size());
                         prog.ackedLines = m_ackIndex;
                         prog.errorCount = m_errorCount;
+                        prog.streaming = m_streaming.load();
                         prog.elapsedSeconds = std::chrono::duration<f32>(
                             std::chrono::steady_clock::now() - m_streamStartTime).count();
                         m_mtq->enqueue([cb = m_callbacks.onProgressUpdate, prog]() { cb(prog); });
-                    }
-
-                    if (m_ackIndex >= static_cast<int>(m_program.size())) {
-                        m_streaming = false;
-                        m_sim.state = MachineState::Idle;
                     }
                 }
             }

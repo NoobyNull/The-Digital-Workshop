@@ -22,6 +22,37 @@
 
 namespace dw {
 
+namespace {
+constexpr f32 DEFAULT_MODEL_YAW = 180.0f;
+constexpr f32 DEFAULT_MODEL_PITCH = 89.0f;
+constexpr f32 MAX_RESTORED_PITCH = 80.0f;
+constexpr f32 FIT_DISTANCE_PADDING = 0.95f;
+constexpr f32 MIN_SAVED_DISTANCE_RATIO = 0.5f;
+constexpr f32 MAX_SAVED_DISTANCE_RATIO = 1.75f;
+
+bool finiteVec3(const Vec3& v) {
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+f32 expectedFitDistance(const AABB& bounds) {
+    Vec3 size = bounds.max - bounds.min;
+    f32 maxExtent = std::max({size.x, size.y, size.z});
+    return std::max(maxExtent * FIT_DISTANCE_PADDING, 5.0f);
+}
+
+bool usableSavedCamera(const CameraState& state, const AABB& bounds) {
+    if (!std::isfinite(state.distance) || state.distance <= 0.0f ||
+        !std::isfinite(state.pitch) || !std::isfinite(state.yaw) ||
+        !finiteVec3(state.target) || std::abs(state.pitch) > MAX_RESTORED_PITCH) {
+        return false;
+    }
+
+    f32 fitDistance = expectedFitDistance(bounds);
+    return state.distance >= fitDistance * MIN_SAVED_DISTANCE_RATIO &&
+           state.distance <= fitDistance * MAX_SAVED_DISTANCE_RATIO;
+}
+} // namespace
+
 ViewportPanel::ViewportPanel() : Panel("Viewport") {
     m_renderer.initialize();
     m_camera.reset();
@@ -87,8 +118,9 @@ void ViewportPanel::setMesh(MeshPtr mesh) {
         fitToModel();
 
         if (Config::instance().getAutoOrient()) {
-            m_camera.setYaw(yaw);
-            m_camera.setPitch(0.0f);
+            (void)yaw;
+            m_camera.setYaw(DEFAULT_MODEL_YAW);
+            m_camera.setPitch(DEFAULT_MODEL_PITCH);
         }
     }
 
@@ -112,7 +144,7 @@ void ViewportPanel::setPreOrientedMesh(MeshPtr mesh,
         const auto& bounds = m_mesh->bounds();
         m_camera.setTarget(bounds.center());
 
-        if (savedCamera) {
+        if (savedCamera && usableSavedCamera(*savedCamera, bounds)) {
             // Restore viewing angle but keep bounding box center as focal point
             m_camera.setYaw(savedCamera->yaw);
             m_camera.setPitch(savedCamera->pitch);
@@ -120,8 +152,9 @@ void ViewportPanel::setPreOrientedMesh(MeshPtr mesh,
         } else {
             fitToModel();
             if (m_mesh->wasAutoOriented()) {
-                m_camera.setYaw(orientYaw);
-                m_camera.setPitch(0.0f);
+                (void)orientYaw;
+                m_camera.setYaw(DEFAULT_MODEL_YAW);
+                m_camera.setPitch(DEFAULT_MODEL_PITCH);
             }
         }
     }
@@ -724,7 +757,7 @@ void ViewportPanel::renderViewport() {
                  ImVec2(1, 0));
 
     // Live DRO overlay
-    if (m_cncConnected && Config::instance().getCncShowDroOverlay()) {
+    if (m_senderWorkspaceActive && m_cncConnected && Config::instance().getCncShowDroOverlay()) {
         renderCncDro();
     }
 
@@ -1626,9 +1659,26 @@ void ViewportPanel::renderGCodeLines() {
 void ViewportPanel::renderCncDro() {
     ImVec2 rectMin = ImGui::GetItemRectMin();
     ImVec2 rectMax = ImGui::GetItemRectMax();
+    ImVec2 rectSize = {rectMax.x - rectMin.x, rectMax.y - rectMin.y};
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
     const auto& wp = m_machineStatus.workPos;
+    Vec3 renderPos = gcodeToRenderer(wp);
+    Vec4 clip = m_camera.viewProjectionMatrix() * Vec4(renderPos.x, renderPos.y, renderPos.z, 1.0f);
+    if (clip.w <= 0.0f) {
+        return;
+    }
+
+    Vec3 ndc{clip.x / clip.w, clip.y / clip.w, clip.z / clip.w};
+    if (ndc.z < -1.0f || ndc.z > 1.0f) {
+        return;
+    }
+
+    ImVec2 anchor{
+        rectMin.x + (ndc.x * 0.5f + 0.5f) * rectSize.x,
+        rectMin.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * rectSize.y
+    };
+
     bool metric = Config::instance().getDisplayUnitsMetric();
     const char* unit = metric ? "mm" : "in";
     f32 scale = metric ? 1.0f : (1.0f / 25.4f);
@@ -1639,15 +1689,21 @@ void ViewportPanel::renderCncDro() {
     std::snprintf(zBuf, sizeof(zBuf), "Z: %8.3f %s", static_cast<double>(wp.z * scale), unit);
 
     f32 lineH = ImGui::GetTextLineHeightWithSpacing();
-    f32 padding = ImGui::GetStyle().FramePadding.x;
+    f32 padding = ImGui::GetStyle().FramePadding.x * 1.75f;
     f32 textW = ImGui::CalcTextSize(xBuf).x;
     f32 boxW = textW + padding * 2.0f;
     f32 boxH = lineH * 3.0f + padding * 2.0f;
 
-    ImVec2 boxMin = {rectMin.x + padding, rectMax.y - boxH - padding};
+    ImVec2 boxMin = {anchor.x + padding * 1.5f, anchor.y - boxH - padding * 1.5f};
+    boxMin.x = std::clamp(boxMin.x, rectMin.x + padding, rectMax.x - boxW - padding);
+    boxMin.y = std::clamp(boxMin.y, rectMin.y + padding, rectMax.y - boxH - padding);
     ImVec2 boxMax = {boxMin.x + boxW, boxMin.y + boxH};
 
-    dl->AddRectFilled(boxMin, boxMax, IM_COL32(0, 0, 0, 160), 4.0f);
+    dl->AddCircleFilled(anchor, 4.0f, IM_COL32(255, 255, 255, 230));
+    dl->AddCircle(anchor, 6.0f, IM_COL32(0, 0, 0, 230), 16, 1.5f);
+    dl->AddLine(anchor, boxMin, IM_COL32(80, 90, 100, 220), 1.0f);
+    dl->AddRectFilled(boxMin, boxMax, IM_COL32(8, 10, 12, 245), 4.0f);
+    dl->AddRect(boxMin, boxMax, IM_COL32(80, 90, 100, 220), 4.0f, 0, 1.0f);
 
     f32 textX = boxMin.x + padding;
     f32 textY = boxMin.y + padding;

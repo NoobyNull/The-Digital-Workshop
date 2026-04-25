@@ -36,7 +36,7 @@ void ImportQueue::enqueue(const std::vector<Path>& paths, FileHandlingMode mode)
     }
 
     m_batchMode = mode;
-    enqueueInternal(paths);
+    enqueueBatch(paths, mode, m_queueForTagging, "Starting batch import");
 }
 
 void ImportQueue::enqueue(const std::vector<Path>& paths) {
@@ -46,15 +46,29 @@ void ImportQueue::enqueue(const std::vector<Path>& paths) {
 
     // Use global config as default batch mode when called without explicit mode
     m_batchMode = Config::instance().getFileHandlingMode();
-    enqueueInternal(paths);
+    enqueueBatch(paths, m_batchMode, m_queueForTagging, "Starting batch import");
 }
 
 void ImportQueue::enqueueInternal(const std::vector<Path>& paths) {
-    // Reset batch summary
+    enqueueBatch(paths, m_batchMode, m_queueForTagging, "Starting batch import");
+}
+
+void ImportQueue::enqueueBatch(const std::vector<Path>& paths,
+                               FileHandlingMode mode,
+                               bool queueForTagging,
+                               const char* logLabel) {
+    if (paths.empty())
+        return;
+
+    std::lock_guard<std::mutex> stateLock(m_batchStateMutex);
+    const bool extendingActiveBatch = m_progress.active.load();
+
     {
-        std::lock_guard<std::mutex> lock(m_summaryMutex);
-        m_batchSummary = ImportBatchSummary{};
-        m_batchSummary.totalFiles = static_cast<int>(paths.size());
+        std::lock_guard<std::mutex> summaryLock(m_summaryMutex);
+        if (!extendingActiveBatch) {
+            m_batchSummary = ImportBatchSummary{};
+        }
+        m_batchSummary.totalFiles += static_cast<int>(paths.size());
     }
 
     // Get thread count from config
@@ -66,17 +80,21 @@ void ImportQueue::enqueueInternal(const std::vector<Path>& paths) {
         m_threadPool = std::make_unique<ThreadPool>(threadCount);
     }
 
-    log::infof(
-        "Import", "Starting batch import: %zu files, %zu workers", paths.size(), threadCount);
+    if (extendingActiveBatch) {
+        log::infof(
+            "Import", "Adding %zu file(s) to active import batch", paths.size());
+        m_progress.totalFiles.fetch_add(static_cast<int>(paths.size()));
+        m_remainingTasks.fetch_add(static_cast<int>(paths.size()));
+    } else {
+        log::infof("Import", "%s: %zu files, %zu workers", logLabel, paths.size(), threadCount);
 
-    // Reset progress
-    m_progress.reset();
-    m_progress.totalFiles.store(static_cast<int>(paths.size()));
-    m_progress.active.store(true);
-    m_cancelRequested.store(false);
+        m_progress.reset();
+        m_progress.totalFiles.store(static_cast<int>(paths.size()));
+        m_progress.active.store(true);
+        m_cancelRequested.store(false);
 
-    // Set remaining task counter for batch completion detection
-    m_remainingTasks.store(static_cast<int>(paths.size()));
+        m_remainingTasks.store(static_cast<int>(paths.size()));
+    }
 
     // Enqueue each file as a task
     for (const auto& path : paths) {
@@ -84,6 +102,8 @@ void ImportQueue::enqueueInternal(const std::vector<Path>& paths) {
         task.sourcePath = path;
         task.extension = file::getExtension(path);
         task.importType = importTypeFromExtension(task.extension);
+        task.fileHandlingMode = mode;
+        task.queueForTagging = queueForTagging;
 
         // Enqueue to thread pool — shared_ptr bridges the move-only ImportTask
         // across std::function's copy-constructible requirement
@@ -184,17 +204,27 @@ void ImportQueue::failTask(ImportTask& task, const std::string& error) {
 }
 
 void ImportQueue::checkBatchComplete() {
-    if (m_remainingTasks.fetch_sub(1) == 1) {
-        m_progress.active.store(false);
+    ImportBatchSummary summary;
+    bool completed = false;
+    {
+        std::lock_guard<std::mutex> stateLock(m_batchStateMutex);
+        completed = (m_remainingTasks.fetch_sub(1) == 1);
+        if (completed) {
+            m_progress.active.store(false);
+            std::lock_guard<std::mutex> summaryLock(m_summaryMutex);
+            summary = m_batchSummary;
+        }
+    }
+
+    if (completed) {
         log::infof("Import",
                    "Batch complete: %d successful, %d failed, %d duplicates",
-                   m_batchSummary.successCount,
-                   m_batchSummary.failedCount,
-                   m_batchSummary.duplicateCount);
+                   summary.successCount,
+                   summary.failedCount,
+                   summary.duplicateCount);
 
         if (m_onBatchComplete) {
-            std::lock_guard<std::mutex> lock(m_summaryMutex);
-            m_onBatchComplete(m_batchSummary);
+            m_onBatchComplete(summary);
         }
     }
 }
@@ -317,7 +347,7 @@ bool ImportQueue::stageParse(ImportTask& task) {
 }
 
 bool ImportQueue::stageInsertGCode(ImportTask& task, TaskContext& ctx, u64 fileSize) {
-    auto mode = m_batchMode;
+    auto mode = task.fileHandlingMode;
 
     GCodeRecord record;
     record.hash = task.fileHash;
@@ -398,7 +428,7 @@ bool ImportQueue::stageInsertGCode(ImportTask& task, TaskContext& ctx, u64 fileS
 }
 
 bool ImportQueue::stageInsertMesh(ImportTask& task, TaskContext& ctx, u64 fileSize) {
-    auto mode = m_batchMode;
+    auto mode = task.fileHandlingMode;
 
     // Precompute autoOrient on the worker thread (pure CPU, no GL)
     if (Config::instance().getAutoOrient() && task.mesh && task.mesh->isValid() &&
@@ -442,7 +472,7 @@ bool ImportQueue::stageInsertMesh(ImportTask& task, TaskContext& ctx, u64 fileSi
     task.record = record;
     task.record.id = *modelId;
 
-    if (m_queueForTagging)
+    if (task.queueForTagging)
         ctx.modelRepo.updateTagStatus(*modelId, 1);
 
     log::infof("Import",
@@ -454,7 +484,7 @@ bool ImportQueue::stageInsertMesh(ImportTask& task, TaskContext& ctx, u64 fileSi
 }
 
 void ImportQueue::stageHandleFile(ImportTask& task, TaskContext& ctx) {
-    auto mode = m_batchMode;
+    auto mode = task.fileHandlingMode;
 
     if (m_storageManager && mode != FileHandlingMode::LeaveInPlace) {
         // CAS blob store path
@@ -614,11 +644,16 @@ void ImportQueue::enqueueForReimport(const std::vector<DuplicateRecord>& duplica
     if (duplicates.empty())
         return;
 
-    // Reset batch summary and progress for this re-import batch
+    log::infof("Import", "Re-importing %zu selected duplicate(s)", duplicates.size());
+
+    std::lock_guard<std::mutex> stateLock(m_batchStateMutex);
+    const bool extendingActiveBatch = m_progress.active.load();
     {
-        std::lock_guard<std::mutex> lock(m_summaryMutex);
-        m_batchSummary = ImportBatchSummary{};
-        m_batchSummary.totalFiles = static_cast<int>(duplicates.size());
+        std::lock_guard<std::mutex> summaryLock(m_summaryMutex);
+        if (!extendingActiveBatch) {
+            m_batchSummary = ImportBatchSummary{};
+        }
+        m_batchSummary.totalFiles += static_cast<int>(duplicates.size());
     }
 
     auto tier = Config::instance().getParallelismTier();
@@ -628,13 +663,16 @@ void ImportQueue::enqueueForReimport(const std::vector<DuplicateRecord>& duplica
         m_threadPool = std::make_unique<ThreadPool>(threadCount);
     }
 
-    log::infof("Import", "Re-importing %zu selected duplicate(s)", duplicates.size());
-
-    m_progress.reset();
-    m_progress.totalFiles.store(static_cast<int>(duplicates.size()));
-    m_progress.active.store(true);
-    m_cancelRequested.store(false);
-    m_remainingTasks.store(static_cast<int>(duplicates.size()));
+    if (extendingActiveBatch) {
+        m_progress.totalFiles.fetch_add(static_cast<int>(duplicates.size()));
+        m_remainingTasks.fetch_add(static_cast<int>(duplicates.size()));
+    } else {
+        m_progress.reset();
+        m_progress.totalFiles.store(static_cast<int>(duplicates.size()));
+        m_progress.active.store(true);
+        m_cancelRequested.store(false);
+        m_remainingTasks.store(static_cast<int>(duplicates.size()));
+    }
 
     for (const auto& dup : duplicates) {
         ImportTask task;
@@ -642,6 +680,8 @@ void ImportQueue::enqueueForReimport(const std::vector<DuplicateRecord>& duplica
         task.extension = dup.extension;
         task.importType = dup.importType;
         task.skipDuplicateCheck = true;
+        task.fileHandlingMode = m_batchMode;
+        task.queueForTagging = m_queueForTagging;
 
         auto taskPtr = std::make_shared<ImportTask>(std::move(task));
         m_threadPool->enqueue([this, taskPtr]() { processTask(std::move(*taskPtr)); });

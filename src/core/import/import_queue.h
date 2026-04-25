@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include "../config/config.h"
@@ -78,6 +79,10 @@ class ImportQueue {
 
     void failTask(ImportTask& task, const std::string& error);
     void checkBatchComplete();
+    void enqueueBatch(const std::vector<Path>& paths,
+                      FileHandlingMode mode,
+                      bool queueForTagging,
+                      const char* logLabel);
 
     bool stageReadFile(ImportTask& task);
     bool stageValidate(ImportTask& task);
@@ -103,6 +108,7 @@ class ImportQueue {
     std::vector<ImportTask> m_completed; // Ready for main-thread thumbnail
 
     // Batch tracking
+    mutable std::mutex m_batchStateMutex;
     mutable std::mutex m_summaryMutex;
     ImportBatchSummary m_batchSummary;
     std::atomic<int> m_remainingTasks{0};

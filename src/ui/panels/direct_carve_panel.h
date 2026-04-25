@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -20,7 +21,9 @@ namespace dw {
 
 class CncController;
 class FileDialog;
+class GCodeRepository;
 class GCodePanel;
+class LibraryManager;
 class MaterialManager;
 class ProjectManager;
 class ToolDatabase;
@@ -45,11 +48,28 @@ class DirectCarvePanel : public Panel {
     void setToolboxRepository(ToolboxRepository* repo);
     void setCarveJob(carve::CarveJob* job);
     void setFileDialog(FileDialog* dlg);
+    void setGCodeRepository(GCodeRepository* repo);
     void setGCodePanel(GCodePanel* gcp);
+    void setLibraryManager(LibraryManager* library);
     void setMaterialManager(MaterialManager* mgr);
     void setProjectManager(ProjectManager* pm);
     void setOpenToolBrowserCallback(std::function<void()> cb);
     void setCutOptimizerPanel(class CutOptimizerPanel* cop);
+
+    struct MaterialPartSync {
+        std::string key;
+        std::string name;
+        std::string materialName;
+        std::string dimensions;
+        i64 stockSizeDbId = 0;
+        f64 unitRate = 0.0;
+        f64 quantity = 1.0;
+        std::string unit = "blank";
+    };
+    using MaterialPartSyncCallback = std::function<void(const MaterialPartSync&)>;
+    void setOnMaterialPartSync(MaterialPartSyncCallback cb) {
+        m_onMaterialPartSync = std::move(cb);
+    }
 
     // FitParams change notification (for viewport alignment overlay)
     using FitParamsCallback = std::function<void(const carve::FitParams&,
@@ -120,7 +140,9 @@ class DirectCarvePanel : public Panel {
     ToolboxRepository* m_toolboxRepo = nullptr;
     carve::CarveJob* m_carveJob = nullptr;
     FileDialog* m_fileDialog = nullptr;
+    GCodeRepository* m_gcodeRepo = nullptr;
     GCodePanel* m_gcodePanel = nullptr;
+    LibraryManager* m_libraryManager = nullptr;
     MachineStatus m_machineStatus;
     bool m_cncConnected = false;
 
@@ -242,6 +264,7 @@ class DirectCarvePanel : public Panel {
     CutOptimizerPanel* m_cutOptimizer = nullptr;
     std::function<void()> m_openToolBrowser;
     FitParamsCallback m_onFitParamsChanged;
+    MaterialPartSyncCallback m_onMaterialPartSync;
     Path m_modelSourcePath;
     MachineProfileDialog m_profileDialog;
 
@@ -249,6 +272,9 @@ class DirectCarvePanel : public Panel {
     void saveHeightmapToProject();
     void saveImageToProject();
     void saveGCodeToProject();
+    void syncSetupToOptimizerAndProject();
+    std::optional<i64> selectedMaterialId() const;
+    std::string selectedMaterialName() const;
 
     // G-code export (fallback FileDialog)
     void showExportDialog();

@@ -174,3 +174,47 @@ TEST(MultiStock, TotalCostAggregated) {
     EXPECT_GT(result.totalCost, 0.0f);
     EXPECT_GT(result.totalSheetsUsed, 0);
 }
+
+TEST(MultiStock, PicksMoreCompletePlanBeforeCheapestIncompletePlan) {
+    std::vector<Part> parts;
+    Part p(2000.0f, 1000.0f, 1);
+    p.materialId = 1;
+    parts.push_back(p);
+
+    Sheet cheapTooSmall(500.0f, 500.0f, 1.0f);
+    cheapTooSmall.name = "Cheap too small";
+    Sheet expensiveFits(2440.0f, 1220.0f, 50.0f);
+    expensiveFits.name = "Expensive fits";
+
+    std::vector<MaterialGroup> materials = {
+        {1, "Plywood", {}, {cheapTooSmall, expensiveFits}},
+    };
+
+    MultiStockResult result = optimizeMultiStock(
+        parts, materials, Algorithm::Guillotine, true, 0.0f, 0.0f);
+
+    ASSERT_EQ(result.groups.size(), 1u);
+    EXPECT_TRUE(result.groups[0].plan.isComplete());
+    EXPECT_EQ(result.groups[0].usedSheet.name, "Expensive fits");
+}
+
+TEST(MultiStock, ReturnedPlacementsPointAtCallerParts) {
+    std::vector<Part> parts;
+    Part p(400.0f, 300.0f, 1);
+    p.materialId = 1;
+    p.name = "Stable source";
+    parts.push_back(p);
+
+    Sheet stock(2440.0f, 1220.0f, 45.0f);
+    std::vector<MaterialGroup> materials = {
+        {1, "Plywood", {}, {stock}},
+    };
+
+    MultiStockResult result = optimizeMultiStock(
+        parts, materials, Algorithm::Guillotine, true, 0.0f, 0.0f);
+
+    ASSERT_EQ(result.groups.size(), 1u);
+    ASSERT_EQ(result.groups[0].plan.sheets.size(), 1u);
+    ASSERT_EQ(result.groups[0].plan.sheets[0].placements.size(), 1u);
+    EXPECT_EQ(result.groups[0].plan.sheets[0].placements[0].part, &parts[0]);
+}

@@ -11,6 +11,8 @@
 #include "../../core/cnc/cnc_controller.h"
 #include "../../core/cnc/preflight_check.h"
 #include "../../core/gcode/gcode_modal_scanner.h"
+#include "../../core/mesh/hash.h"
+#include "../../core/paths/path_resolver.h"
 #include "../../core/project/project.h"
 #include "../../core/cnc/serial_port.h"
 #include "../../core/utils/file_utils.h"
@@ -258,13 +260,25 @@ bool GCodePanel::loadFile(const std::string& path) {
 
         m_currentGCodeId = -1;
         if (m_gcodeRepo) {
-            std::string filename = path;
-            size_t pos = filename.find_last_of("/\\");
-            if (pos != std::string::npos)
-                filename = filename.substr(pos + 1);
-            auto existing = m_gcodeRepo->findByName(filename);
-            if (!existing.empty())
-                m_currentGCodeId = existing.front().id;
+            const Path gcodePath(path);
+            if (auto existing = m_gcodeRepo->findByHash(hash::computeFile(gcodePath))) {
+                m_currentGCodeId = existing->id;
+            } else if (auto byPath = m_gcodeRepo->findByPath(
+                           PathResolver::makeStorable(gcodePath, PathCategory::GCode))) {
+                m_currentGCodeId = byPath->id;
+            } else {
+                const auto stem = file::getStem(gcodePath);
+                auto matches = m_gcodeRepo->findByName(stem);
+                auto exact = std::find_if(matches.begin(), matches.end(),
+                                          [&stem](const GCodeRecord& rec) {
+                                              return rec.name == stem;
+                                          });
+                if (exact != matches.end()) {
+                    m_currentGCodeId = exact->id;
+                } else if (!matches.empty()) {
+                    m_currentGCodeId = matches.front().id;
+                }
+            }
         }
 
         if (m_onProgramLoaded) m_onProgramLoaded(m_program);
@@ -332,8 +346,11 @@ void GCodePanel::renderToolbar() {
             } else {
                 if (ImGui::Button("Add to Project")) {
                     if (m_gcodeRepo) {
+                        int sortOrder = static_cast<int>(
+                            m_gcodeRepo->findByProject(
+                                m_projectManager->currentProject()->id()).size());
                         m_gcodeRepo->addToProject(
-                            m_projectManager->currentProject()->id(), m_currentGCodeId);
+                            m_projectManager->currentProject()->id(), m_currentGCodeId, sortOrder);
                         ToastManager::instance().show(ToastType::Success,
                             "Added", "G-code added to project");
                     }

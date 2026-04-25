@@ -19,12 +19,18 @@
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/tool_calculator.h"
 #include "core/config/config.h"
+#include "core/database/gcode_repository.h"
 #include "core/project/project.h"
 #include "core/project/project_directory.h"
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
 #include "core/gcode/machine_profile.h"
+#include "core/library/library_manager.h"
+#include "core/loaders/gcode_loader.h"
 #include "core/materials/material_manager.h"
+#include "core/mesh/hash.h"
+#include "core/paths/path_resolver.h"
+#include "core/utils/file_utils.h"
 #include "ui/dialogs/file_dialog.h"
 #include "ui/icons.h"
 #include "ui/panels/cut_optimizer_panel.h"
@@ -73,6 +79,41 @@ void statusBullet(bool ok, const char* label) {
     ImGui::PopStyleColor();
 }
 
+GCodeRecord makeGeneratedGCodeRecord(const Path& path,
+                                     const std::string& name,
+                                     const std::string& hash) {
+    GCodeRecord record;
+    record.hash = hash;
+    record.name = name;
+    record.filePath = PathResolver::makeStorable(path, PathCategory::GCode);
+    record.fileSize = file::fileSize(path);
+
+    GCodeLoader loader;
+    auto loaded = loader.load(path);
+    if (loaded) {
+        const auto& metadata = loader.lastMetadata();
+        record.boundsMin = metadata.boundsMin;
+        record.boundsMax = metadata.boundsMax;
+        record.totalDistance = metadata.totalDistance;
+        record.estimatedTime = metadata.estimatedTime;
+        record.feedRates = metadata.feedRates;
+        record.toolNumbers = metadata.toolNumbers;
+    }
+
+    return record;
+}
+
+std::string formatStockDimensions(const carve::StockDimensions& stock) {
+    char buf[96];
+    std::snprintf(buf,
+                  sizeof(buf),
+                  "%.0fx%.0fx%.0fmm",
+                  static_cast<double>(stock.width),
+                  static_cast<double>(stock.height),
+                  static_cast<double>(stock.thickness));
+    return buf;
+}
+
 } // anonymous namespace
 
 DirectCarvePanel::DirectCarvePanel() : Panel("Direct Carve") {}
@@ -87,7 +128,9 @@ void DirectCarvePanel::setToolDatabase(ToolDatabase* db) { m_toolDb = db; }
 void DirectCarvePanel::setToolboxRepository(ToolboxRepository* repo) { m_toolboxRepo = repo; }
 void DirectCarvePanel::setCarveJob(carve::CarveJob* job) { m_carveJob = job; }
 void DirectCarvePanel::setFileDialog(FileDialog* dlg) { m_fileDialog = dlg; }
+void DirectCarvePanel::setGCodeRepository(GCodeRepository* repo) { m_gcodeRepo = repo; }
 void DirectCarvePanel::setGCodePanel(GCodePanel* gcp) { m_gcodePanel = gcp; }
+void DirectCarvePanel::setLibraryManager(LibraryManager* library) { m_libraryManager = library; }
 void DirectCarvePanel::setMaterialManager(MaterialManager* mgr) { m_materialMgr = mgr; }
 void DirectCarvePanel::setProjectManager(ProjectManager* pm) { m_projectManager = pm; }
 void DirectCarvePanel::setOpenToolBrowserCallback(std::function<void()> cb) { m_openToolBrowser = std::move(cb); }
@@ -150,6 +193,87 @@ std::string DirectCarvePanel::formatTime(f32 seconds) {
     char buf[32];
     std::snprintf(buf, sizeof(buf), "%dm %ds", mins, secs);
     return buf;
+}
+
+std::optional<i64> DirectCarvePanel::selectedMaterialId() const {
+    if (m_selectedMaterialIdx < 0 ||
+        m_selectedMaterialIdx >= static_cast<int>(m_materialList.size())) {
+        return std::nullopt;
+    }
+    return m_materialList[static_cast<size_t>(m_selectedMaterialIdx)].id;
+}
+
+std::string DirectCarvePanel::selectedMaterialName() const {
+    if (m_selectedMaterialIdx < 0 ||
+        m_selectedMaterialIdx >= static_cast<int>(m_materialList.size())) {
+        return m_materialName;
+    }
+    return m_materialList[static_cast<size_t>(m_selectedMaterialIdx)].name;
+}
+
+void DirectCarvePanel::syncSetupToOptimizerAndProject() {
+    if (!m_modelLoaded) {
+        return;
+    }
+
+    const auto partName = m_modelName.empty() ? std::string("Carve blank") : m_modelName;
+    const auto materialId = selectedMaterialId();
+    const auto materialName = selectedMaterialName();
+
+    if (m_cutOptimizer) {
+        optimizer::Part part;
+        part.name = partName;
+        part.width = m_stock.width;
+        part.height = m_stock.height;
+        part.quantity = 1;
+        part.canRotate = true;
+        part.materialId = materialId.value_or(0);
+        m_cutOptimizer->upsertPart(part);
+    }
+
+    if (!m_onMaterialPartSync || !m_projectManager) {
+        return;
+    }
+
+    auto dir = m_projectManager->ensureProjectForModel(m_modelName, m_modelSourcePath);
+    if (!dir) {
+        return;
+    }
+
+    MaterialPartSync data;
+    data.key = "[auto:direct-carve:" + ProjectDirectory::sanitizeName(partName) + "]";
+    data.name = partName + " blank";
+    data.materialName = materialName.empty() ? "Direct Carve Material" : materialName;
+    data.dimensions = formatStockDimensions(m_stock);
+    data.quantity = 1.0;
+    data.unit = "blank";
+
+    if (m_cutOptimizer) {
+        auto stockSelection = m_cutOptimizer->currentStockSelection();
+        if (stockSelection) {
+            if (stockSelection->stockSize) {
+                const auto& stock = *stockSelection->stockSize;
+                data.stockSizeDbId = stock.id;
+                const f64 sheetArea = stock.widthMm * stock.heightMm;
+                const f64 blankArea = static_cast<f64>(m_stock.width) *
+                                      static_cast<f64>(m_stock.height);
+                if (sheetArea > 0.0 && stock.pricePerUnit > 0.0) {
+                    data.unitRate = stock.pricePerUnit * (blankArea / sheetArea);
+                }
+                if (data.materialName == "Direct Carve Material" && stockSelection->material) {
+                    data.materialName = stockSelection->material->name;
+                }
+            } else if (stockSelection->sheet.area() > 0.0f &&
+                       stockSelection->sheet.cost > 0.0f) {
+                const f64 blankArea = static_cast<f64>(m_stock.width) *
+                                      static_cast<f64>(m_stock.height);
+                data.unitRate = static_cast<f64>(stockSelection->sheet.cost) *
+                                (blankArea / static_cast<f64>(stockSelection->sheet.area()));
+            }
+        }
+    }
+
+    m_onMaterialPartSync(data);
 }
 
 const char* DirectCarvePanel::stepLabel(Step step) {
@@ -316,6 +440,9 @@ bool DirectCarvePanel::canAdvance() const {
 }
 
 void DirectCarvePanel::advanceStep() {
+    if (m_currentStep == Step::ModelFit || m_currentStep == Step::MaterialSetup) {
+        syncSetupToOptimizerAndProject();
+    }
     int idx = static_cast<int>(m_currentStep);
     if (idx < STEP_COUNT - 1) m_currentStep = static_cast<Step>(idx + 1);
 }
@@ -495,10 +622,31 @@ void DirectCarvePanel::renderModelFit() {
                     char label[128];
                     std::snprintf(label, sizeof(label), "%s  %.1f x %.1f mm",
                                   p.name.empty() ? "Part" : p.name.c_str(),
-                                  p.width, p.height);
+                                  static_cast<double>(p.width),
+                                  static_cast<double>(p.height));
                     if (ImGui::Selectable(label)) {
                         m_stock.width = p.width;
                         m_stock.height = p.height;
+                        if (p.materialId > 0) {
+                            if (!m_materialListLoaded && m_materialMgr) {
+                                m_materialListLoaded = true;
+                                m_materialList = m_materialMgr->getAllMaterials();
+                            }
+                            for (int mi = 0; mi < static_cast<int>(m_materialList.size()); ++mi) {
+                                const auto& mat = m_materialList[static_cast<size_t>(mi)];
+                                if (mat.id == p.materialId) {
+                                    m_selectedMaterialIdx = mi;
+                                    m_materialName = mat.name;
+                                    m_materialSelected = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (auto stock = m_cutOptimizer->currentStockSelection()) {
+                            if (stock->stockSize && stock->stockSize->thicknessMm > 0.0) {
+                                m_stock.thickness = static_cast<f32>(stock->stockSize->thicknessMm);
+                            }
+                        }
                         stockChanged = true;
                         ImGui::CloseCurrentPopup();
                     }
@@ -579,22 +727,16 @@ void DirectCarvePanel::renderModelFit() {
     // Cut list integration: push carve blank as a cut piece
     if (m_cutOptimizer && m_modelLoaded) {
         ImGui::Spacing();
-        if (ImGui::Button("Add to Cut List", ImVec2(bw, 0))) {
-            optimizer::Part part;
-            part.name = m_modelName.empty() ? "Carve blank" : m_modelName;
-            part.width = m_stock.width;
-            part.height = m_stock.height;
-            part.quantity = 1;
-            part.canRotate = true;
-            m_cutOptimizer->addPart(part);
+        if (ImGui::Button("Sync Setup", ImVec2(bw, 0))) {
+            syncSetupToOptimizerAndProject();
             char msg[64];
-            std::snprintf(msg, sizeof(msg), "Added %.0fx%.0f mm to cut list",
-                          m_stock.width, m_stock.height);
+            std::snprintf(msg, sizeof(msg), "Synced %.0fx%.0f mm setup",
+                          static_cast<double>(m_stock.width),
+                          static_cast<double>(m_stock.height));
             ToastManager::instance().show(ToastType::Success, msg);
         }
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Add carve blank dimensions to the\n"
-                              "cut list optimizer for stock planning.");
+            ImGui::SetTooltip("Updates the cut optimizer part and project material line.");
 
         // Show scrap: stock area vs carve footprint
         f32 stockArea = m_stock.width * m_stock.height;
@@ -603,7 +745,9 @@ void DirectCarvePanel::renderModelFit() {
             f32 usedPct = (carveArea / stockArea) * 100.0f;
             f32 scrapArea = stockArea - carveArea;
             ImGui::TextDisabled("Stock usage: %.0f%%  (%.0f mm%c scrap)",
-                                usedPct, scrapArea, '\xB2');
+                                static_cast<double>(usedPct),
+                                static_cast<double>(scrapArea),
+                                '\xB2');
         }
     }
 
@@ -1127,7 +1271,8 @@ void DirectCarvePanel::renderMaterialSetup() {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Point spacing along each scan line.\n"
                           "Lower = more detail, more G-code lines.\n"
-                          "Heightmap resolution: %.2f mm", hmRes);
+                          "Heightmap resolution: %.2f mm",
+                          static_cast<double>(hmRes));
 
     ImGui::Spacing();
     ImGui::SeparatorText("Scan Pattern");
@@ -1298,7 +1443,10 @@ void DirectCarvePanel::renderPreview() {
             const auto& hm = m_carveJob->heightmap();
             ImGui::TextColored(kGreen, "1. Heightmap: Ready");
             ImGui::SameLine();
-            ImGui::TextDisabled("(%dx%d, %.2f mm/px)", hm.cols(), hm.rows(), hm.resolution());
+            ImGui::TextDisabled("(%dx%d, %.2f mm/px)",
+                                hm.cols(),
+                                hm.rows(),
+                                static_cast<double>(hm.resolution()));
 
             // Heightmap preview image (fit to available width, preserve aspect)
             if (m_hmPreviewTex != 0 && m_hmPreviewW > 0 && m_hmPreviewH > 0) {
@@ -2172,15 +2320,76 @@ void DirectCarvePanel::saveGCodeToProject() {
     const auto& tp = m_carveJob->toolpath();
     std::string toolName = m_finishTool.name_format;
 
-    if (carve::exportGcode(destPath.string(), tp, m_toolpathConfig, m_modelName, toolName)) {
-        dir->addGCode(baseName + ".nc", toolName);
-        dir->save();
-        ToastManager::instance().show(ToastType::Success,
-            "G-code Saved", destPath.string());
-    } else {
+    if (!carve::exportGcode(destPath.string(), tp, m_toolpathConfig, m_modelName, toolName)) {
         ToastManager::instance().show(ToastType::Error,
             "Export Failed", "Could not write " + destPath.string());
+        return;
     }
+
+    dir->addGCode(baseName + ".nc", toolName);
+    dir->save();
+
+    std::optional<i64> gcodeId;
+    if (m_gcodeRepo) {
+        const auto fileHash = hash::computeFile(destPath);
+        auto record = makeGeneratedGCodeRecord(destPath, baseName, fileHash);
+
+        auto existing = m_gcodeRepo->findByPath(record.filePath);
+        if (!existing) {
+            existing = m_gcodeRepo->findByHash(fileHash);
+        }
+
+        if (existing) {
+            record.id = existing->id;
+            if (m_gcodeRepo->update(record)) {
+                gcodeId = record.id;
+            }
+        } else {
+            gcodeId = m_gcodeRepo->insert(record);
+        }
+
+        if (gcodeId && m_projectManager->currentProject()) {
+            m_gcodeRepo->addToProject(m_projectManager->currentProject()->id(), *gcodeId);
+        }
+    }
+
+    if (gcodeId && m_libraryManager) {
+        std::optional<i64> modelId;
+        if (!m_modelSourcePath.empty() && file::exists(m_modelSourcePath)) {
+            if (auto model = m_libraryManager->getModelByHash(hash::computeFile(m_modelSourcePath))) {
+                modelId = model->id;
+            }
+        }
+        if (!modelId) {
+            modelId = m_libraryManager->autoDetectModelMatch(m_modelName);
+        }
+
+        if (modelId) {
+            auto groups = m_libraryManager->getOperationGroups(*modelId);
+            auto groupIt = std::find_if(groups.begin(), groups.end(), [](const OperationGroup& group) {
+                return group.name == "Direct Carve";
+            });
+
+            std::optional<i64> groupId;
+            if (groupIt != groups.end()) {
+                groupId = groupIt->id;
+            } else {
+                groupId = m_libraryManager->createOperationGroup(
+                    *modelId, "Direct Carve", static_cast<int>(groups.size()));
+            }
+
+            if (groupId) {
+                m_libraryManager->addGCodeToGroup(*groupId, *gcodeId);
+            }
+        }
+    }
+
+    if (m_gcodePanel) {
+        m_gcodePanel->loadFile(destPath.string());
+    }
+
+    ToastManager::instance().show(ToastType::Success,
+        "G-code Saved", destPath.string());
 }
 
 void DirectCarvePanel::showExportDialog() {

@@ -86,6 +86,23 @@ std::optional<GCodeRecord> GCodeRepository::findByHash(std::string_view hash) {
     return std::nullopt;
 }
 
+std::optional<GCodeRecord> GCodeRepository::findByPath(const Path& filePath) {
+    auto stmt = m_db.prepare("SELECT * FROM gcode_files WHERE file_path = ?");
+    if (!stmt.isValid()) {
+        return std::nullopt;
+    }
+
+    if (!stmt.bindText(1, filePath.string())) {
+        return std::nullopt;
+    }
+
+    if (stmt.step()) {
+        return rowToGCode(stmt);
+    }
+
+    return std::nullopt;
+}
+
 std::vector<GCodeRecord> GCodeRepository::findAll() {
     std::vector<GCodeRecord> results;
 
@@ -124,6 +141,7 @@ std::vector<GCodeRecord> GCodeRepository::findByName(std::string_view searchTerm
 bool GCodeRepository::update(const GCodeRecord& record) {
     auto stmt = m_db.prepare(R"(
         UPDATE gcode_files SET
+            hash = ?,
             name = ?,
             file_path = ?,
             file_size = ?,
@@ -145,19 +163,20 @@ bool GCodeRepository::update(const GCodeRecord& record) {
         return false;
     }
 
-    if (!stmt.bindText(1, record.name) || !stmt.bindText(2, record.filePath.string()) ||
-        !stmt.bindInt(3, static_cast<i64>(record.fileSize)) ||
-        !stmt.bindDouble(4, static_cast<f64>(record.boundsMin.x)) ||
-        !stmt.bindDouble(5, static_cast<f64>(record.boundsMin.y)) ||
-        !stmt.bindDouble(6, static_cast<f64>(record.boundsMin.z)) ||
-        !stmt.bindDouble(7, static_cast<f64>(record.boundsMax.x)) ||
-        !stmt.bindDouble(8, static_cast<f64>(record.boundsMax.y)) ||
-        !stmt.bindDouble(9, static_cast<f64>(record.boundsMax.z)) ||
-        !stmt.bindDouble(10, static_cast<f64>(record.totalDistance)) ||
-        !stmt.bindDouble(11, static_cast<f64>(record.estimatedTime)) ||
-        !stmt.bindText(12, feedRatesToJson(record.feedRates)) ||
-        !stmt.bindText(13, toolNumbersToJson(record.toolNumbers)) ||
-        !stmt.bindText(14, record.thumbnailPath.string()) || !stmt.bindInt(15, record.id)) {
+    if (!stmt.bindText(1, record.hash) || !stmt.bindText(2, record.name) ||
+        !stmt.bindText(3, record.filePath.string()) ||
+        !stmt.bindInt(4, static_cast<i64>(record.fileSize)) ||
+        !stmt.bindDouble(5, static_cast<f64>(record.boundsMin.x)) ||
+        !stmt.bindDouble(6, static_cast<f64>(record.boundsMin.y)) ||
+        !stmt.bindDouble(7, static_cast<f64>(record.boundsMin.z)) ||
+        !stmt.bindDouble(8, static_cast<f64>(record.boundsMax.x)) ||
+        !stmt.bindDouble(9, static_cast<f64>(record.boundsMax.y)) ||
+        !stmt.bindDouble(10, static_cast<f64>(record.boundsMax.z)) ||
+        !stmt.bindDouble(11, static_cast<f64>(record.totalDistance)) ||
+        !stmt.bindDouble(12, static_cast<f64>(record.estimatedTime)) ||
+        !stmt.bindText(13, feedRatesToJson(record.feedRates)) ||
+        !stmt.bindText(14, toolNumbersToJson(record.toolNumbers)) ||
+        !stmt.bindText(15, record.thumbnailPath.string()) || !stmt.bindInt(16, record.id)) {
         return false;
     }
 
@@ -265,8 +284,20 @@ std::vector<OperationGroup> GCodeRepository::getGroups(i64 modelId) {
 }
 
 bool GCodeRepository::addToGroup(i64 groupId, i64 gcodeId, int sortOrder) {
+    if (sortOrder < 0) {
+        auto orderStmt =
+            m_db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM gcode_group_members "
+                         "WHERE group_id = ?");
+        if (orderStmt.isValid() && orderStmt.bindInt(1, groupId) && orderStmt.step()) {
+            sortOrder = static_cast<int>(orderStmt.getInt(0));
+        } else {
+            sortOrder = 0;
+        }
+    }
+
     auto stmt = m_db.prepare(
-        "INSERT INTO gcode_group_members (group_id, gcode_id, sort_order) VALUES (?, ?, ?)");
+        "INSERT OR IGNORE INTO gcode_group_members (group_id, gcode_id, sort_order) "
+        "VALUES (?, ?, ?)");
 
     if (!stmt.isValid()) {
         return false;
@@ -336,6 +367,17 @@ bool GCodeRepository::deleteGroup(i64 groupId) {
 // ===== Project association =====
 
 bool GCodeRepository::addToProject(i64 projectId, i64 gcodeId, int sortOrder) {
+    if (sortOrder < 0) {
+        auto orderStmt =
+            m_db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM project_gcode "
+                         "WHERE project_id = ?");
+        if (orderStmt.isValid() && orderStmt.bindInt(1, projectId) && orderStmt.step()) {
+            sortOrder = static_cast<int>(orderStmt.getInt(0));
+        } else {
+            sortOrder = 0;
+        }
+    }
+
     auto stmt = m_db.prepare(
         "INSERT OR IGNORE INTO project_gcode (project_id, gcode_id, sort_order) VALUES (?, ?, ?)");
 

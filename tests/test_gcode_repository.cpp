@@ -56,6 +56,53 @@ TEST_F(GCodeRepoTest, AddToProject) {
     EXPECT_EQ(results[0].name, "test.gcode");
 }
 
+TEST_F(GCodeRepoTest, FindByPath) {
+    auto gid = createGCode("test", "hash-path");
+    ASSERT_GT(gid, 0);
+
+    auto result = m_repo->findByPath("/tmp/test.gcode");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->id, gid);
+    EXPECT_EQ(result->hash, "hash-path");
+}
+
+TEST_F(GCodeRepoTest, UpdatePersistsHashChange) {
+    auto gid = createGCode("test", "old-hash");
+    ASSERT_GT(gid, 0);
+
+    auto rec = m_repo->findById(gid);
+    ASSERT_TRUE(rec.has_value());
+    rec->hash = "new-hash";
+
+    ASSERT_TRUE(m_repo->update(*rec));
+    EXPECT_FALSE(m_repo->findByHash("old-hash").has_value());
+    auto updated = m_repo->findByHash("new-hash");
+    ASSERT_TRUE(updated.has_value());
+    EXPECT_EQ(updated->id, gid);
+}
+
+TEST_F(GCodeRepoTest, AddToGroupAppendsSortOrder) {
+    auto gid1 = createGCode("roughing", "hash-group-1");
+    auto gid2 = createGCode("finishing", "hash-group-2");
+    ASSERT_GT(gid1, 0);
+    ASSERT_GT(gid2, 0);
+    ASSERT_TRUE(m_db.execute(
+        "INSERT INTO models (hash, name, file_path, file_format) "
+        "VALUES ('model-hash', 'model', '/tmp/model.stl', 'stl')"));
+    const dw::i64 modelId = m_db.lastInsertId();
+
+    auto groupId = m_repo->createGroup(modelId, "Direct Carve", 0);
+    ASSERT_TRUE(groupId.has_value());
+
+    EXPECT_TRUE(m_repo->addToGroup(*groupId, gid1));
+    EXPECT_TRUE(m_repo->addToGroup(*groupId, gid2));
+
+    auto members = m_repo->getGroupMembers(*groupId);
+    ASSERT_EQ(members.size(), 2u);
+    EXPECT_EQ(members[0].id, gid1);
+    EXPECT_EQ(members[1].id, gid2);
+}
+
 // --- RemoveFromProject ---
 
 TEST_F(GCodeRepoTest, RemoveFromProject) {

@@ -8,6 +8,14 @@ namespace dw {
 namespace {
 constexpr f32 PI = 3.14159265359f;
 constexpr f32 DEG_TO_RAD = PI / 180.0f;
+constexpr f32 DEFAULT_DISTANCE = 5.0f;
+constexpr f32 DEFAULT_PITCH = 89.0f;
+constexpr f32 DEFAULT_YAW = 180.0f;
+constexpr f32 FIT_DISTANCE_PADDING = 0.95f;
+
+f32 fitDistanceForExtent(f32 maxExtent) {
+    return std::max(maxExtent * FIT_DISTANCE_PADDING, DEFAULT_DISTANCE);
+}
 } // namespace
 
 Camera::Camera() {
@@ -66,17 +74,17 @@ void Camera::zoom(f32 delta) {
 
 void Camera::reset() {
     // Restore default orientation
-    m_pitch = 30.0f;
-    m_yaw = 45.0f;
+    m_pitch = DEFAULT_PITCH;
+    m_yaw = DEFAULT_YAW;
 
     // If we have stored bounds from a previous fitToBounds, re-fit
     // Otherwise reset to default view
     if (m_hasBounds) {
         m_target = m_lastBoundsCenter;
-        m_distance = m_lastBoundsExtent * 2.0f;
+        m_distance = fitDistanceForExtent(m_lastBoundsExtent);
     } else {
         m_target = Vec3{0.0f, 0.0f, 0.0f};
-        m_distance = 5.0f;
+        m_distance = DEFAULT_DISTANCE;
     }
     updateVectors();
 }
@@ -94,7 +102,7 @@ void Camera::fitToBounds(const Vec3& min, const Vec3& max) {
 
     // Pan to center and zoom to fit — preserve current orientation
     m_target = center;
-    m_distance = maxExtent * 2.0f;
+    m_distance = fitDistanceForExtent(maxExtent);
 
     updateVectors();
 }

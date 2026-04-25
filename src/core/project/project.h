@@ -13,6 +13,8 @@ namespace dw {
 // Forward declarations
 class Database;
 class ProjectDirectory;
+struct GCodeRecord;
+struct ModelRecord;
 
 // Project class - represents an open project
 class Project {
@@ -76,6 +78,8 @@ class ProjectManager {
     // Query projects
     std::vector<ProjectRecord> listProjects();
     std::optional<ProjectRecord> getProjectInfo(i64 projectId);
+    std::vector<ProjectOpenItem> listOpenItems(i64 projectId);
+    std::vector<ProjectOpenItem> currentOpenItems();
 
     // Current project
     std::shared_ptr<Project> currentProject() const { return m_currentProject; }
@@ -97,6 +101,12 @@ class ProjectManager {
     bool removeModelFromProject(i64 modelId);
 
   private:
+    Path canonicalProjectDirectory(const Project& project) const;
+    bool ensureProjectDirectory(Project& project);
+    bool syncProjectDirectory(Project& project);
+    Path resolveModelPath(const ModelRecord& model) const;
+    Path resolveGCodePath(const GCodeRecord& gcode) const;
+
     Database& m_db;
     ProjectRepository m_projectRepo;
     std::shared_ptr<Project> m_currentProject;

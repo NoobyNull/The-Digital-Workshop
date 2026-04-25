@@ -106,6 +106,7 @@ void UIManager::init(LibraryManager* libraryManager,
         m_materialsPanel->setContextMenuManager(m_contextMenuManager.get());
     if (m_viewportPanel) {
         m_viewportPanel->setContextMenuManager(m_contextMenuManager.get());
+        m_viewportPanel->setSenderWorkspaceActive(m_workspaceMode == WorkspaceMode::CNC);
         m_lightingDialog->setSettings(&m_viewportPanel->renderSettings());
     }
     if (m_gcodePanel)
@@ -168,45 +169,45 @@ void UIManager::buildPanelRegistry() {
     // syncClose: panels that pass p_open to ImGui::Begin and need X-button sync
     m_panelRegistry = {
         {"start_page",      &m_showStartPage,      "Start Page",        "Start Page",
-         m_startPage.get(), false},
+         m_startPage.get(), false, PanelRole::Workshop},
         {"viewport",        &m_showViewport,        "Viewport",          "Viewport",
-         m_viewportPanel.get(), false},
+         m_viewportPanel.get(), false, PanelRole::Shared},
         {"library",         &m_showLibrary,         "Library",           "Library",
-         m_libraryPanel.get(), false},
+         m_libraryPanel.get(), false, PanelRole::Workshop},
         {"properties",      &m_showProperties,      "Properties",        "Properties",
-         m_propertiesPanel.get(), false},
+         m_propertiesPanel.get(), false, PanelRole::Workshop},
         {"project",         &m_showProject,         "Project",           "Project",
-         m_projectPanel.get(), false},
+         m_projectPanel.get(), false, PanelRole::Shared},
         {"gcode",           &m_showGCode,           "G-code Viewer",     "G-code",
-         m_gcodePanel.get(), false},
+         m_gcodePanel.get(), false, PanelRole::Sender},
         {"cut_optimizer",   &m_showCutOptimizer,    "Cut Optimizer",     "Cut Optimizer",
-         m_cutOptimizerPanel.get(), false},
+         m_cutOptimizerPanel.get(), false, PanelRole::Workshop},
         {"project_costing", &m_showProjectCosting,  "Project Costing",   "Project Costing",
-         m_costPanel.get(), true},
+         m_costPanel.get(), true, PanelRole::Workshop},
         {"materials",       &m_showMaterials,       "Materials",         "Materials",
-         m_materialsPanel.get(), true},
+         m_materialsPanel.get(), true, PanelRole::Workshop},
         {"tool_browser",    &m_showToolBrowser,     "Tool Browser",      "Tool Browser",
-         m_toolBrowserPanel.get(), true},
+         m_toolBrowserPanel.get(), true, PanelRole::Sender},
         {"cnc_status",      &m_showCncStatus,       "Status",            "CNC Status",
-         m_cncStatusPanel.get(), true},
+         m_cncStatusPanel.get(), true, PanelRole::Sender},
         {"cnc_jog",         &m_showCncJog,          "Jog Control",       "Jog Control",
-         m_cncJogPanel.get(), true},
+         m_cncJogPanel.get(), true, PanelRole::Sender},
         {"cnc_console",     &m_showCncConsole,      "MDI Console",       "MDI Console",
-         m_cncConsolePanel.get(), true},
+         m_cncConsolePanel.get(), true, PanelRole::Sender},
         {"cnc_wcs",         &m_showCncWcs,          "Work Zero / WCS",   "WCS",
-         m_cncWcsPanel.get(), true},
+         m_cncWcsPanel.get(), true, PanelRole::Sender},
         {"cnc_tool",        &m_showCncTool,         "Tool & Material",   "Tool & Material",
-         m_cncToolPanel.get(), true},
+         m_cncToolPanel.get(), true, PanelRole::Sender},
         {"cnc_job",         &m_showCncJob,          "Job Progress",      "Job Progress",
-         m_cncJobPanel.get(), true},
+         m_cncJobPanel.get(), true, PanelRole::Sender},
         {"cnc_safety",      &m_showCncSafety,       "Safety Controls",   "Safety",
-         m_cncSafetyPanel.get(), true},
+         m_cncSafetyPanel.get(), true, PanelRole::Sender},
         {"cnc_settings",    &m_showCncSettings,     "Firmware Settings", "Firmware",
-         m_cncSettingsPanel.get(), true},
+         m_cncSettingsPanel.get(), true, PanelRole::Sender},
         {"cnc_macros",      &m_showCncMacros,       "Macros",            "Macros",
-         m_cncMacroPanel.get(), true},
+         m_cncMacroPanel.get(), true, PanelRole::Sender},
         {"direct_carve",    &m_showDirectCarve,     "Direct Carve",      "Direct Carve",
-         m_directCarvePanel.get(), true},
+         m_directCarvePanel.get(), true, PanelRole::Sender},
     };
 }
 
@@ -316,17 +317,55 @@ void UIManager::addGroupPanel() {
 
 void UIManager::showCncPanels(bool show) {
     for (auto& entry : m_panelRegistry) {
-        // Match CNC panels + gcode by key prefix
-        if (std::strncmp(entry.key, "cnc_", 4) == 0 ||
-            std::strcmp(entry.key, "gcode") == 0) {
+        if (entry.role == PanelRole::Sender)
             *entry.showFlag = show;
-        }
+    }
+}
+
+void UIManager::setCncStreaming(bool v) {
+    m_cncStreaming = v;
+    if (m_cncStreaming && m_workspaceMode != WorkspaceMode::CNC) {
+        setWorkspaceMode(WorkspaceMode::CNC);
     }
 }
 
 void UIManager::setWorkspaceMode(WorkspaceMode mode) {
+    if (m_cncStreaming && mode != WorkspaceMode::CNC) {
+        return;
+    }
+
     m_workspaceMode = mode;
+    syncWorkspaceModeToPanels();
     applyLayoutPreset(mode == WorkspaceMode::CNC ? 1 : 0);
+}
+
+void UIManager::enforceWorkspaceBoundary() {
+    const PanelRole hiddenRole =
+        m_workspaceMode == WorkspaceMode::CNC ? PanelRole::Workshop : PanelRole::Sender;
+    for (auto& entry : m_panelRegistry) {
+        if (entry.role == hiddenRole)
+            *entry.showFlag = false;
+    }
+
+    m_showViewport = true;
+    if (m_workspaceMode == WorkspaceMode::CNC && !senderSurfaceVisible()) {
+        m_showGCode = true;
+        m_showCncStatus = true;
+        m_showCncJob = true;
+        m_showCncSafety = true;
+    }
+}
+
+void UIManager::syncWorkspaceModeToPanels() {
+    if (m_viewportPanel) {
+        m_viewportPanel->setSenderWorkspaceActive(m_workspaceMode == WorkspaceMode::CNC);
+    }
+}
+
+bool UIManager::senderSurfaceVisible() const {
+    return m_showGCode || m_showCncStatus || m_showCncJob || m_showCncSafety ||
+           m_showCncJog || m_showCncConsole || m_showCncWcs || m_showCncTool ||
+           m_showCncSettings || m_showCncMacros || m_showDirectCarve || m_showToolBrowser;
 }
 
 int64_t UIManager::getSelectedModelId() const {

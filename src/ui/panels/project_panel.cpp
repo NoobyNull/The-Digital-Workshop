@@ -15,6 +15,57 @@
 
 namespace dw {
 
+namespace {
+
+const char* iconForOpenItemType(ProjectOpenItemType type) {
+    switch (type) {
+    case ProjectOpenItemType::Model: return Icons::Model;
+    case ProjectOpenItemType::Material: return Icons::Material;
+    case ProjectOpenItemType::Stock: return Icons::Material;
+    case ProjectOpenItemType::Tool: return Icons::Settings;
+    case ProjectOpenItemType::Operation: return Icons::Settings;
+    case ProjectOpenItemType::Gcode: return Icons::GCode;
+    case ProjectOpenItemType::CutPlan: return Icons::Optimizer;
+    case ProjectOpenItemType::Cost: return Icons::Cost;
+    case ProjectOpenItemType::Job: return Icons::Play;
+    case ProjectOpenItemType::Labor: return Icons::Cost;
+    case ProjectOpenItemType::Consumable: return Icons::Material;
+    }
+    return Icons::File;
+}
+
+const char* labelForOpenItemType(ProjectOpenItemType type) {
+    switch (type) {
+    case ProjectOpenItemType::Model: return "Model";
+    case ProjectOpenItemType::Material: return "Material";
+    case ProjectOpenItemType::Stock: return "Stock";
+    case ProjectOpenItemType::Tool: return "Tool";
+    case ProjectOpenItemType::Operation: return "Operation";
+    case ProjectOpenItemType::Gcode: return "G-code";
+    case ProjectOpenItemType::CutPlan: return "Cut plan";
+    case ProjectOpenItemType::Cost: return "Cost";
+    case ProjectOpenItemType::Job: return "Job";
+    case ProjectOpenItemType::Labor: return "Labor";
+    case ProjectOpenItemType::Consumable: return "Consumable";
+    }
+    return "Item";
+}
+
+const char* labelForOpenItemStatus(ProjectOpenItemStatus status) {
+    switch (status) {
+    case ProjectOpenItemStatus::Planned: return "planned";
+    case ProjectOpenItemStatus::Ready: return "ready";
+    case ProjectOpenItemStatus::Generated: return "generated";
+    case ProjectOpenItemStatus::Sent: return "sent";
+    case ProjectOpenItemStatus::Complete: return "complete";
+    case ProjectOpenItemStatus::Stale: return "stale";
+    case ProjectOpenItemStatus::Missing: return "missing";
+    }
+    return "planned";
+}
+
+} // namespace
+
 ProjectPanel::ProjectPanel(ProjectManager* projectManager,
                            ModelRepository* modelRepo,
                            GCodeRepository* gcodeRepo,
@@ -37,6 +88,7 @@ void ProjectPanel::render() {
         if (m_projectManager && m_projectManager->currentProject()) {
             renderProjectInfo();
             ImGui::Separator();
+            renderOpenItemsSection();
             renderModelsSection();
             renderGCodeSection();
             renderMaterialsSection();
@@ -49,6 +101,60 @@ void ProjectPanel::render() {
         }
     }
     ImGui::End();
+}
+
+void ProjectPanel::renderOpenItemsSection() {
+    auto project = m_projectManager->currentProject();
+    if (!project) return;
+
+    auto items = m_projectManager->currentOpenItems();
+    std::string header = std::string(Icons::List) + " Work Order (" +
+                         std::to_string(items.size()) + ")";
+
+    bool open = ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+    if (!open) return;
+
+    ImGui::Indent();
+
+    if (items.empty()) {
+        ImGui::TextDisabled("No linked work items");
+        ImGui::Unindent();
+        return;
+    }
+
+    for (const auto& item : items) {
+        ImGui::PushID(static_cast<int>(item.id));
+        if (item.parentItemId.has_value()) {
+            ImGui::Indent(ImGui::GetFontSize());
+        }
+
+        std::string label = std::string(iconForOpenItemType(item.itemType)) + " " +
+                            item.displayName + "  [" + labelForOpenItemStatus(item.status) + "]";
+        bool selected = item.sourceId.has_value() &&
+                        item.itemType == ProjectOpenItemType::Model &&
+                        *item.sourceId == m_selectedModelId;
+        if (ImGui::Selectable(label.c_str(), selected)) {
+            if (item.sourceId.has_value() && item.itemType == ProjectOpenItemType::Model) {
+                m_selectedModelId = *item.sourceId;
+                if (m_onModelSelected) m_onModelSelected(*item.sourceId);
+            } else if (item.sourceId.has_value() && item.itemType == ProjectOpenItemType::Gcode) {
+                if (m_onGCodeSelected) m_onGCodeSelected(*item.sourceId);
+            }
+        }
+
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s | %s",
+                              labelForOpenItemType(item.itemType),
+                              item.sourceTable.empty() ? "manual" : item.sourceTable.c_str());
+        }
+
+        if (item.parentItemId.has_value()) {
+            ImGui::Unindent(ImGui::GetFontSize());
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::Unindent();
 }
 
 void ProjectPanel::renderProjectInfo() {

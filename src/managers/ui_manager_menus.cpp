@@ -57,6 +57,38 @@ void UIManager::renderToolbar() {
         m_onSaveProject();
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Save Project (Ctrl+S)");
+
+    ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextUnformatted("|");
+    ImGui::PopStyleColor();
+    ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x * 2.0f);
+
+    const bool workshopActive = m_workspaceMode == WorkspaceMode::Model;
+    const bool senderActive = m_workspaceMode == WorkspaceMode::CNC;
+    const bool lockWorkshop = workshopActive || m_cncStreaming;
+
+    if (lockWorkshop)
+        ImGui::BeginDisabled();
+    if (ImGui::SmallButton("Workshop"))
+        setWorkspaceMode(WorkspaceMode::Model);
+    if (lockWorkshop)
+        ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip(m_cncStreaming
+            ? "Finish or stop the active G-code stream before leaving Sender."
+            : "Workshop / Projects (Ctrl+1)");
+    }
+
+    ImGui::SameLine(0, 0);
+    if (senderActive)
+        ImGui::BeginDisabled();
+    if (ImGui::SmallButton("Sender"))
+        setWorkspaceMode(WorkspaceMode::CNC);
+    if (senderActive)
+        ImGui::EndDisabled();
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("CNC Sender (Ctrl+2)");
 }
 
 void UIManager::renderCncMenuBarStatus() {
@@ -142,25 +174,32 @@ void UIManager::renderViewMenu() {
 
     bool isModel = (m_workspaceMode == WorkspaceMode::Model);
     bool isCnc = (m_workspaceMode == WorkspaceMode::CNC);
+    if (m_cncStreaming)
+        ImGui::BeginDisabled();
     if (ImGui::MenuItem("Workshop", "Ctrl+1", isModel))
         setWorkspaceMode(WorkspaceMode::Model);
+    if (m_cncStreaming) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Finish or stop the active G-code stream before leaving Sender.");
+    }
     if (ImGui::MenuItem("CNC Sender", "Ctrl+2", isCnc))
         setWorkspaceMode(WorkspaceMode::CNC);
     ImGui::Separator();
 
-    ImGui::MenuItem("Start Page", nullptr, &m_showStartPage);
-    ImGui::Separator();
     ImGui::MenuItem("Viewport", nullptr, &m_showViewport);
-    ImGui::MenuItem("Library", nullptr, &m_showLibrary);
-    ImGui::MenuItem("Properties", nullptr, &m_showProperties);
     ImGui::MenuItem("Project", nullptr, &m_showProject);
     ImGui::Separator();
-    ImGui::MenuItem("Cut Optimizer", nullptr, &m_showCutOptimizer);
-    ImGui::MenuItem("Project Costing", nullptr, &m_showProjectCosting);
-    ImGui::MenuItem("Materials", nullptr, &m_showMaterials);
-    ImGui::MenuItem("Tool Browser", nullptr, &m_showToolBrowser);
-    ImGui::Separator();
-    if (ImGui::BeginMenu("Sender")) {
+
+    if (m_workspaceMode == WorkspaceMode::Model) {
+        ImGui::MenuItem("Start Page", nullptr, &m_showStartPage);
+        ImGui::MenuItem("Library", nullptr, &m_showLibrary);
+        ImGui::MenuItem("Properties", nullptr, &m_showProperties);
+        ImGui::Separator();
+        ImGui::MenuItem("Cut Optimizer", nullptr, &m_showCutOptimizer);
+        ImGui::MenuItem("Project Costing", nullptr, &m_showProjectCosting);
+        ImGui::MenuItem("Materials", nullptr, &m_showMaterials);
+    } else if (ImGui::BeginMenu("Sender Panels")) {
         renderSenderSubmenu();
         ImGui::EndMenu();
     }
@@ -203,8 +242,18 @@ void UIManager::renderSenderSubmenu() {
     ImGui::Separator();
     if (ImGui::MenuItem("Show All"))
         showCncPanels(true);
+    if (m_cncStreaming)
+        ImGui::BeginDisabled();
     if (ImGui::MenuItem("Hide All"))
         showCncPanels(false);
+    if (m_cncStreaming) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Sender panels stay visible while a G-code stream is active.");
+    }
+
+    if (m_workspaceMode == WorkspaceMode::CNC)
+        enforceWorkspaceBoundary();
 }
 
 void UIManager::renderEditMenu() {
@@ -355,7 +404,7 @@ void UIManager::handleKeyboardShortcuts() {
     if (ImGui::IsKeyPressed(ImGuiKey_L) && m_lightingDialog)
         m_lightingDialog->open();
 
-    if (ImGui::IsKeyPressed(ImGuiKey_1))
+    if (ImGui::IsKeyPressed(ImGuiKey_1) && !m_cncStreaming)
         setWorkspaceMode(WorkspaceMode::Model);
     if (ImGui::IsKeyPressed(ImGuiKey_2))
         setWorkspaceMode(WorkspaceMode::CNC);

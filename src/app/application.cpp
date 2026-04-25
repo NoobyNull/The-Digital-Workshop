@@ -363,6 +363,7 @@ bool Application::init(bool diagnosticMode) {
             [this](int64_t modelId, Mesh& mesh) { return generateMaterialThumbnail(modelId, mesh); });
 
         m_fileIOManager->setGCodeCallback([this](const std::string& path) {
+            m_uiManager->setWorkspaceMode(WorkspaceMode::CNC);
             if (auto* gcp = m_uiManager->gcodePanel()) {
                 gcp->setOpen(true);
                 gcp->loadFile(path);
@@ -400,7 +401,6 @@ bool Application::init(bool diagnosticMode) {
 
         // Auto-start CNC simulator (always-connected mode)
         m_cncController->connectSimulator();
-        m_uiManager->showCncPanels(true);
     }
 
     timer.printReport();

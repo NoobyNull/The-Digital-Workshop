@@ -51,6 +51,7 @@ class GCodeRepository {
     std::optional<i64> insert(const GCodeRecord& record);
     std::optional<GCodeRecord> findById(i64 id);
     std::optional<GCodeRecord> findByHash(std::string_view hash);
+    std::optional<GCodeRecord> findByPath(const Path& filePath);
     std::vector<GCodeRecord> findAll();
     std::vector<GCodeRecord> findByName(std::string_view searchTerm);
     bool update(const GCodeRecord& record);
@@ -62,13 +63,13 @@ class GCodeRepository {
     // Hierarchy operations
     std::optional<i64> createGroup(i64 modelId, const std::string& name, int sortOrder);
     std::vector<OperationGroup> getGroups(i64 modelId);
-    bool addToGroup(i64 groupId, i64 gcodeId, int sortOrder);
+    bool addToGroup(i64 groupId, i64 gcodeId, int sortOrder = -1);
     bool removeFromGroup(i64 groupId, i64 gcodeId);
     std::vector<GCodeRecord> getGroupMembers(i64 groupId);
     bool deleteGroup(i64 groupId);
 
     // Project association
-    bool addToProject(i64 projectId, i64 gcodeId, int sortOrder = 0);
+    bool addToProject(i64 projectId, i64 gcodeId, int sortOrder = -1);
     bool removeFromProject(i64 projectId, i64 gcodeId);
     std::vector<GCodeRecord> findByProject(i64 projectId);
     std::vector<i64> getProjectsForGCode(i64 gcodeId);

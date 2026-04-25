@@ -14,6 +14,8 @@
 
 namespace dw {
 
+enum class FileHandlingMode : int;
+
 // Import type enum - determines processing path
 enum class ImportType { Mesh, GCode };
 
@@ -66,6 +68,8 @@ struct ImportTask {
     Path sourcePath;
     std::string extension;
     ImportType importType = ImportType::Mesh;
+    FileHandlingMode fileHandlingMode{};
+    bool queueForTagging = false;
 
     // Pipeline data (populated as stages complete)
     ByteBuffer fileData;

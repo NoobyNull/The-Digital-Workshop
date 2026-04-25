@@ -189,6 +189,45 @@ void CutOptimizerPanel::addPart(const optimizer::Part& part) {
     m_hasResults = false;  // Invalidate existing optimization
 }
 
+void CutOptimizerPanel::upsertPart(const optimizer::Part& part) {
+    auto it = std::find_if(m_parts.begin(), m_parts.end(), [&part](const optimizer::Part& existing) {
+        return part.id != 0 && existing.id == part.id;
+    });
+    if (it == m_parts.end()) {
+        it = std::find_if(m_parts.begin(), m_parts.end(), [&part](const optimizer::Part& existing) {
+            return existing.name == part.name;
+        });
+    }
+
+    if (it != m_parts.end()) {
+        *it = part;
+    } else {
+        m_parts.push_back(part);
+    }
+    m_hasResults = false;
+    m_hasMultiResults = false;
+}
+
+std::optional<CutOptimizerPanel::StockSelection> CutOptimizerPanel::currentStockSelection() const {
+    StockSelection selection;
+    selection.sheet = m_sheet;
+
+    if (m_selectedMaterialIdx >= 0 &&
+        m_selectedMaterialIdx < static_cast<int>(m_materials.size())) {
+        selection.material = m_materials[static_cast<size_t>(m_selectedMaterialIdx)];
+    }
+
+    if (m_selectedStockIdx >= 0 &&
+        m_selectedStockIdx < static_cast<int>(m_stockSizes.size())) {
+        selection.stockSize = m_stockSizes[static_cast<size_t>(m_selectedStockIdx)];
+    }
+
+    if (selection.sheet.width <= 0.0f || selection.sheet.height <= 0.0f) {
+        return std::nullopt;
+    }
+    return selection;
+}
+
 void CutOptimizerPanel::clear() {
     m_parts.clear();
     m_result = optimizer::CutPlan{};
@@ -359,7 +398,7 @@ void CutOptimizerPanel::renderCutListTable() {
             if (editing) {
                 static char editBuf[64];
                 if (ImGui::IsWindowAppearing())
-                    std::strncpy(editBuf, part.name.c_str(), sizeof(editBuf));
+                    std::snprintf(editBuf, sizeof(editBuf), "%s", part.name.c_str());
                 ImGui::SetNextItemWidth(-1);
                 if (ImGui::InputText("##lbl", editBuf, sizeof(editBuf),
                                      ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -1001,7 +1040,7 @@ void CutOptimizerPanel::renderImportPopup() {
             m_importSelection.assign(modelIds.size(), 1);
 
         ImGui::Text("Select models to import as cut parts:");
-        ImGui::Text("Projection: XZ plane (top-down bounding box)");
+        ImGui::Text("Projection: XY footprint");
         ImGui::Separator();
 
         const auto* vp = ImGui::GetMainViewport();
@@ -1020,8 +1059,8 @@ void CutOptimizerPanel::renderImportPopup() {
 
                 // Model name + XZ dimensions
                 Vec3 size = record->boundsMax - record->boundsMin;
-                float partW = size.x; // XZ projection
-                float partH = size.z;
+                float partW = size.x;
+                float partH = size.y;
                 ImGui::Text("%s  (%.0f x %.0f mm)",
                             record->name.c_str(),
                             static_cast<double>(partW),
@@ -1045,7 +1084,7 @@ void CutOptimizerPanel::renderImportPopup() {
                 part.id = record->id;
                 part.name = record->name;
                 part.width = size.x;
-                part.height = size.z;
+                part.height = size.y;
                 part.quantity = 1;
                 m_parts.push_back(part);
                 ++imported;

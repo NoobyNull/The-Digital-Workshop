@@ -172,15 +172,31 @@ bool ProjectDirectory::save() {
     return true;
 }
 
+void ProjectDirectory::setMetadata(const std::string& name, const std::string& description) {
+    m_name = name;
+    m_description = description;
+}
+
+void ProjectDirectory::clearModels() {
+    m_models.clear();
+}
+
+void ProjectDirectory::clearGCode() {
+    m_gcodeFiles.clear();
+}
+
 // --- addModelFile ---
 
 bool ProjectDirectory::addModelFile(const Path& sourcePath) {
+    return addModelFile(sourcePath, hash::computeFile(sourcePath));
+}
+
+bool ProjectDirectory::addModelFile(const Path& sourcePath, const std::string& fileHash) {
     if (!file::isFile(sourcePath)) {
         log::errorf(kLogModule, "Source model not found: %s", sourcePath.c_str());
         return false;
     }
 
-    std::string fileHash = hash::computeFile(sourcePath);
     std::string ext = file::getExtension(sourcePath);
     std::string stem = file::getStem(sourcePath);
     std::string destName = stem + "-" + fileHash.substr(0, 8) + "." + ext;
@@ -202,6 +218,38 @@ bool ProjectDirectory::addModelFile(const Path& sourcePath) {
     entry.filename = destName;
     entry.hash = fileHash;
     m_models.push_back(std::move(entry));
+    return true;
+}
+
+// --- addGCodeFile ---
+
+bool ProjectDirectory::addGCodeFile(const Path& sourcePath, const std::string& toolDescription) {
+    if (!file::isFile(sourcePath)) {
+        log::errorf(kLogModule, "Source G-code not found: %s", sourcePath.c_str());
+        return false;
+    }
+
+    std::string fileHash = hash::computeFile(sourcePath);
+    std::string ext = file::getExtension(sourcePath);
+    std::string stem = file::getStem(sourcePath);
+    std::string destName = stem + "-" + fileHash.substr(0, 8);
+    if (!ext.empty()) {
+        destName += "." + ext;
+    }
+    Path destPath = gcodeDir() / destName;
+
+    for (const auto& g : m_gcodeFiles) {
+        if (g.filename == destName) return true;
+    }
+
+    if (!file::exists(destPath)) {
+        if (!file::copy(sourcePath, destPath)) {
+            log::errorf(kLogModule, "Failed to copy G-code to project: %s", destPath.c_str());
+            return false;
+        }
+    }
+
+    m_gcodeFiles.push_back({destName, toolDescription});
     return true;
 }
 

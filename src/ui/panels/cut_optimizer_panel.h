@@ -52,9 +52,18 @@ class CutOptimizerPanel : public Panel {
         f64 totalCost = 0.0;
     };
 
+    struct StockSelection {
+        optimizer::Sheet sheet;
+        std::optional<StockSize> stockSize;
+        std::optional<MaterialRecord> material;
+    };
+
     // Cross-panel integration
     const std::vector<optimizer::Part>& parts() const { return m_parts; }
+    const optimizer::Sheet& sheet() const { return m_sheet; }
+    std::optional<StockSelection> currentStockSelection() const;
     void addPart(const optimizer::Part& part);
+    void upsertPart(const optimizer::Part& part);
 
     // Cost integration callback -- passes per-group material data
     using AddToCostCallback = std::function<void(const std::vector<CloGroupCostData>& groups)>;

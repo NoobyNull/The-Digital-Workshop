@@ -6,6 +6,7 @@
 #include "core/database/database.h"
 #include "core/database/model_repository.h"
 #include "core/database/schema.h"
+#include "core/import/file_handler.h"
 #include "core/import/import_queue.h"
 #include "core/import/import_task.h"
 #include "core/utils/file_utils.h"
@@ -192,4 +193,33 @@ TEST_F(ImportQueueTest, Progress_TracksCorrectly) {
 
     EXPECT_EQ(queue.progress().completedFiles.load(), 1);
     EXPECT_FALSE(queue.isActive());
+}
+
+TEST(FileHandlerTest, EnsureLibraryDirAcceptsExistingDirectory) {
+    auto tmpDir = std::filesystem::temp_directory_path() / "dw_test_file_handler_existing";
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(tmpDir);
+
+    EXPECT_TRUE(dw::FileHandler::ensureLibraryDir(tmpDir));
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST(FileHandlerTest, CopyToExistingLibraryDirectory) {
+    auto tmpDir = std::filesystem::temp_directory_path() / "dw_test_file_handler_copy";
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(tmpDir / "library");
+
+    auto source = tmpDir / "source.stl";
+    ASSERT_TRUE(dw::file::writeText(source, "solid test\nendsolid test\n"));
+
+    std::string error;
+    auto handledPath = dw::FileHandler::handleImportedFile(
+        source, dw::FileHandlingMode::CopyToLibrary, tmpDir / "library", error);
+
+    EXPECT_FALSE(handledPath.empty()) << error;
+    EXPECT_TRUE(dw::file::exists(source));
+    EXPECT_TRUE(dw::file::exists(handledPath));
+
+    std::filesystem::remove_all(tmpDir);
 }

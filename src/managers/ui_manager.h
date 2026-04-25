@@ -225,7 +225,7 @@ class UIManager {
     void setOnPanicStop(ActionCallback cb) { m_onPanicStop = std::move(cb); }
 
     // CNC streaming state (for panic smash detection)
-    void setCncStreaming(bool v) { m_cncStreaming = v; }
+    void setCncStreaming(bool v);
 
     // CNC state for menu bar display
     void setCncConnected(bool v) { m_cncConnected = v; }
@@ -296,6 +296,12 @@ class UIManager {
     int m_nextGroupId = 1;
 
     // Panel registry — maps panel keys to visibility, rendering, and config
+    enum class PanelRole {
+        Shared,
+        Workshop,
+        Sender,
+    };
+
     struct PanelEntry {
         const char* key;         // Preset key (e.g. "cnc_status")
         bool* showFlag;          // &m_showCncStatus
@@ -303,9 +309,15 @@ class UIManager {
         const char* windowTitle; // ImGui window title for focus detection
         Panel* panel;            // Base pointer for render() dispatch
         bool syncClose;          // Handle X-button close → visibility sync
+        PanelRole role;          // Workspace ownership
     };
     std::vector<PanelEntry> m_panelRegistry;
     void buildPanelRegistry();
+    void enforceWorkspaceBoundary();
+    void syncWorkspaceModeToPanels();
+    bool senderSurfaceVisible() const;
+    static bool isBuiltInWorkshopPreset(int presetIndex) { return presetIndex == 0; }
+    static bool isBuiltInSenderPreset(int presetIndex) { return presetIndex == 1; }
 
     // Dialog list for batch rendering
     std::vector<Dialog*> m_dialogList;

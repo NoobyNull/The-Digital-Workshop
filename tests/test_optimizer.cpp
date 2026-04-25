@@ -87,6 +87,8 @@ TEST(BinPacker, EmptySheetsReturnsEmptyPlan) {
     // Parts exist but no sheets, so they are unplaced
     EXPECT_EQ(plan.sheetsUsed, 0);
     EXPECT_TRUE(plan.sheets.empty());
+    EXPECT_FALSE(plan.isComplete());
+    EXPECT_EQ(plan.unplacedParts.size(), 1u);
 }
 
 TEST(BinPacker, PartQuantityExpanded) {
@@ -269,6 +271,40 @@ TEST(BinPacker, RotationAllowsFit) {
     EXPECT_TRUE(plan.isComplete());
 }
 
+TEST(BinPacker, UnlimitedStockCanUseMultipleSheets) {
+    BinPacker packer;
+    packer.setKerf(0.0f);
+    packer.setMargin(0.0f);
+    packer.setAllowRotation(false);
+
+    std::vector<Part> parts = {Part(100.0f, 100.0f, 2)};
+    Sheet sheet(100.0f, 100.0f, 10.0f);
+    sheet.quantity = 0; // unlimited
+
+    CutPlan plan = packer.optimize(parts, {sheet});
+
+    EXPECT_TRUE(plan.isComplete());
+    EXPECT_EQ(plan.sheetsUsed, 2);
+    EXPECT_NEAR(plan.totalCost, 20.0f, 0.01f);
+}
+
+TEST(BinPacker, FiniteStockQuantityLeavesOverflowUnplaced) {
+    BinPacker packer;
+    packer.setKerf(0.0f);
+    packer.setMargin(0.0f);
+    packer.setAllowRotation(false);
+
+    std::vector<Part> parts = {Part(100.0f, 100.0f, 2)};
+    Sheet sheet(100.0f, 100.0f, 10.0f);
+    sheet.quantity = 1;
+
+    CutPlan plan = packer.optimize(parts, {sheet});
+
+    EXPECT_FALSE(plan.isComplete());
+    EXPECT_EQ(plan.sheetsUsed, 1);
+    EXPECT_EQ(plan.unplacedParts.size(), 1u);
+}
+
 // --- GuillotineOptimizer tests ---
 
 TEST(Guillotine, SinglePartFitsOnSheet) {
@@ -383,4 +419,21 @@ TEST(Guillotine, NonZeroEfficiency) {
     EXPECT_TRUE(plan.isComplete());
     EXPECT_GT(plan.overallEfficiency(), 0.0f);
     EXPECT_LE(plan.overallEfficiency(), 1.0f);
+}
+
+TEST(Guillotine, UnlimitedStockCanUseMultipleSheets) {
+    GuillotineOptimizer guillotine;
+    guillotine.setKerf(0.0f);
+    guillotine.setMargin(0.0f);
+    guillotine.setAllowRotation(false);
+
+    std::vector<Part> parts = {Part(100.0f, 100.0f, 2)};
+    Sheet sheet(100.0f, 100.0f, 10.0f);
+    sheet.quantity = 0; // unlimited
+
+    CutPlan plan = guillotine.optimize(parts, {sheet});
+
+    EXPECT_TRUE(plan.isComplete());
+    EXPECT_EQ(plan.sheetsUsed, 2);
+    EXPECT_NEAR(plan.totalCost, 20.0f, 0.01f);
 }

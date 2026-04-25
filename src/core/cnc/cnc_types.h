@@ -76,6 +76,7 @@ struct StreamProgress {
     int ackedLines = 0;
     int errorCount = 0;
     f32 elapsedSeconds = 0.0f;
+    bool streaming = false;
 };
 
 // Detailed streaming error report (when error occurs during character-counting streaming)

@@ -91,6 +91,11 @@ void UIManager::restoreVisibilityFromConfig() {
     m_showDirectCarve = cfg.getShowDirectCarve();
 
     m_activePresetIndex = cfg.getActiveLayoutPresetIndex();
+    m_workspaceMode = isBuiltInSenderPreset(m_activePresetIndex)
+        ? WorkspaceMode::CNC
+        : WorkspaceMode::Model;
+    syncWorkspaceModeToPanels();
+    enforceWorkspaceBoundary();
 }
 
 void UIManager::saveVisibilityToConfig() {
@@ -142,7 +147,6 @@ void UIManager::applyLayoutPreset(int presetIndex) {
         return;
 
     const auto& preset = presets[static_cast<size_t>(presetIndex)];
-
     for (const auto& entry : m_panelRegistry) {
         auto it = preset.visibility.find(entry.key);
         if (it != preset.visibility.end())
@@ -154,8 +158,13 @@ void UIManager::applyLayoutPreset(int presetIndex) {
     m_suppressAutoContext = true;
 
     // Keep workspace mode in sync with built-in presets
-    if (presetIndex == 0) m_workspaceMode = WorkspaceMode::Model;
-    else if (presetIndex == 1) m_workspaceMode = WorkspaceMode::CNC;
+    if (isBuiltInWorkshopPreset(presetIndex) && !m_cncStreaming)
+        m_workspaceMode = WorkspaceMode::Model;
+    else if (isBuiltInSenderPreset(presetIndex))
+        m_workspaceMode = WorkspaceMode::CNC;
+
+    syncWorkspaceModeToPanels();
+    enforceWorkspaceBoundary();
 }
 
 LayoutPreset UIManager::captureCurrentLayout(const std::string& name) const {
@@ -209,8 +218,13 @@ void UIManager::checkAutoContextTrigger(const std::string& focusedPanelKey) {
     for (int i = 0; i < static_cast<int>(presets.size()); ++i) {
         if (i == m_activePresetIndex) continue;
         if (presets[static_cast<size_t>(i)].autoTriggerPanelKey == focusedPanelKey) {
-            applyLayoutPreset(i);
-            return;
+            const bool senderPreset = isBuiltInSenderPreset(i);
+            const bool workshopPreset = isBuiltInWorkshopPreset(i);
+            if ((senderPreset && m_workspaceMode == WorkspaceMode::CNC) ||
+                (workshopPreset && m_workspaceMode == WorkspaceMode::Model)) {
+                applyLayoutPreset(i);
+                return;
+            }
         }
     }
 }
@@ -237,8 +251,17 @@ void UIManager::renderPresetSelector() {
     if (ImGui::BeginCombo("##LayoutPreset", activeLabel, ImGuiComboFlags_NoArrowButton)) {
         for (int i = 0; i < static_cast<int>(presets.size()); ++i) {
             bool selected = (i == m_activePresetIndex);
+            const bool disabled = m_cncStreaming && !isBuiltInSenderPreset(i);
+            if (disabled)
+                ImGui::BeginDisabled();
             if (ImGui::Selectable(presets[static_cast<size_t>(i)].name.c_str(), selected))
                 applyLayoutPreset(i);
+            if (disabled) {
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip(
+                        "Finish or stop the active G-code stream before leaving Sender.");
+            }
             if (selected) ImGui::SetItemDefaultFocus();
         }
 

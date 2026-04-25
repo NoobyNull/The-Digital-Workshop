@@ -237,7 +237,7 @@ void MaterialsPanel::renderToolbar() {
             [](ImGuiInputTextCallbackData* data) -> int {
                 if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
                     auto* str = static_cast<std::string*>(data->UserData);
-                    str->resize(data->BufTextLen);
+                    str->resize(static_cast<std::string::size_type>(data->BufTextLen));
                     data->Buf = str->data();
                 }
                 return 0;
@@ -567,7 +567,7 @@ GLuint MaterialsPanel::loadTGATexture(const Path& path) {
         return 0;
     }
 
-    size_t dataSize = static_cast<size_t>(width) * height * 4;
+    size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4u;
     std::vector<uint8_t> bgra(dataSize);
     file.read(reinterpret_cast<char*>(bgra.data()), static_cast<std::streamsize>(dataSize));
     if (!file) {

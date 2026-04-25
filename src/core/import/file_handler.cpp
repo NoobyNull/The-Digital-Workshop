@@ -95,7 +95,8 @@ Path FileHandler::handleImportedFile(const Path& source,
 
 bool FileHandler::ensureLibraryDir(const Path& libraryRoot) {
     try {
-        return std::filesystem::create_directories(libraryRoot);
+        std::filesystem::create_directories(libraryRoot);
+        return std::filesystem::is_directory(libraryRoot);
     } catch (const std::filesystem::filesystem_error& e) {
         log::errorf("FileHandler", "Failed to create library directory: %s", e.what());
         return false;

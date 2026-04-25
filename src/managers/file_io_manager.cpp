@@ -31,6 +31,14 @@
 #include <thread>
 
 namespace dw {
+namespace {
+
+bool isMeshImportExtension(const std::string& ext) {
+    std::string lower = str::toLower(ext);
+    return lower == "stl" || lower == "obj" || lower == "3mf";
+}
+
+} // namespace
 
 FileIOManager::FileIOManager(Database* database,
                              LibraryManager* libraryManager,
@@ -59,7 +67,8 @@ void FileIOManager::importModel() {
                                             Path path{p};
                                             if (fs::is_directory(path)) {
                                                 collectSupportedFiles(path, importPaths);
-                                            } else {
+                                            } else if (isMeshImportExtension(
+                                                           file::getExtension(path))) {
                                                 importPaths.push_back(path);
                                             }
                                         }
@@ -113,7 +122,7 @@ void FileIOManager::collectSupportedFiles(const Path& directory, std::vector<Pat
 
             // Get extension and check if supported
             auto ext = file::getExtension(entry.path());
-            if (LoaderFactory::isSupported(ext)) {
+            if (isMeshImportExtension(ext) && LoaderFactory::isSupported(ext)) {
                 outPaths.push_back(entry.path());
             }
         }
@@ -371,28 +380,9 @@ void FileIOManager::saveProject() {
         return;
     }
 
-    // If project has no file path, show save dialog to pick one
-    if (project->filePath().empty()) {
-        if (m_fileDialog) {
-            std::string defaultName = project->name() + ".dwp";
-            m_fileDialog->showSave("Save Project",
-                                   FileDialog::projectFilters(),
-                                   defaultName,
-                                   [this, project](const std::string& path) {
-                                       if (path.empty())
-                                           return;
-                                       project->setFilePath(Path(path));
-                                       m_projectManager->save(*project);
-                                       Config::instance().addRecentProject(Path(path));
-                                       Config::instance().save();
-                                   });
-        }
-    } else {
-        m_projectManager->save(*project);
-        if (!project->filePath().empty()) {
-            Config::instance().addRecentProject(project->filePath());
-            Config::instance().save();
-        }
+    if (m_projectManager->save(*project) && !project->filePath().empty()) {
+        Config::instance().addRecentProject(project->filePath());
+        Config::instance().save();
     }
 }
 

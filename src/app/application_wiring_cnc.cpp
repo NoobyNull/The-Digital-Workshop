@@ -37,6 +37,7 @@
 #include "core/optimizer/cut_list_file.h"
 #include "core/project/costing_engine.h"
 #include "core/project/project.h"
+#include "core/project/project_directory.h"
 
 namespace dw {
 
@@ -117,12 +118,31 @@ void Application::wireCncPanels() {
             dcarvep->setMaterialManager(m_materialManager.get());
             dcarvep->setCarveJob(m_carveJob.get());
             dcarvep->setFileDialog(m_uiManager->fileDialog());
+            dcarvep->setGCodeRepository(m_gcodeRepo.get());
             dcarvep->setGCodePanel(gcp);
+            dcarvep->setLibraryManager(m_libraryManager.get());
             dcarvep->setProjectManager(m_projectManager.get());
             dcarvep->setOpenToolBrowserCallback([this]() {
                 m_uiManager->showToolBrowser() = true;
             });
             dcarvep->setCutOptimizerPanel(m_uiManager->cutOptimizerPanel());
+            dcarvep->setOnMaterialPartSync([this](const DirectCarvePanel::MaterialPartSync& data) {
+                auto* costPanel = m_uiManager->costPanel();
+                if (!costPanel || !m_projectManager || !m_projectManager->currentDirectory())
+                    return;
+
+                costPanel->setCostingDir(m_projectManager->currentDirectory()->costingDir());
+                auto entry = CostingEngine::createMaterialEntry(
+                    data.materialName.empty() ? data.name : data.materialName,
+                    data.stockSizeDbId,
+                    data.dimensions,
+                    data.unitRate,
+                    data.quantity,
+                    data.unit);
+                entry.name = data.name;
+                costPanel->upsertAutoEntry(entry, data.key);
+                costPanel->save();
+            });
             if (vpp) {
                 dcarvep->setOnFitParamsChanged(
                     [vpp](const carve::FitParams& params,
@@ -199,8 +219,7 @@ void Application::wireCncPanels() {
         cncCb.onProgressUpdate =
             [this, gcp, jobp, safetyp](const StreamProgress& progress) {
             gcp->onGrblProgress(progress);
-            bool streaming = (progress.totalLines > 0 &&
-                              progress.ackedLines < progress.totalLines);
+            bool streaming = progress.streaming;
             m_uiManager->setCncStreaming(streaming);
             if (jobp) {
                 jobp->onProgressUpdate(progress);

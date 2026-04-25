@@ -80,6 +80,7 @@ class CncController {
     void ioThreadFunc();
     void processResponse(const std::string& line);
     void sendNextLines();
+    void postProgressUpdate();
     void requestStatus();
     void dispatchPendingCommands();
     void handleDisconnect();

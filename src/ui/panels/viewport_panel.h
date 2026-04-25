@@ -66,6 +66,7 @@ class ViewportPanel : public Panel {
     // CNC status updates
     void onCncStatusUpdate(const MachineStatus& status) { m_machineStatus = status; }
     void setCncConnected(bool connected) { m_cncConnected = connected; }
+    void setSenderWorkspaceActive(bool active) { m_senderWorkspaceActive = active; }
 
     // G-code line rendering
     void setGCodeProgram(const gcode::Program& program);
@@ -135,6 +136,7 @@ class ViewportPanel : public Panel {
     // CNC live state
     MachineStatus m_machineStatus;
     bool m_cncConnected = false;
+    bool m_senderWorkspaceActive = false;
 
     // Context menu manager (not owned — managed by UIManager)
     ContextMenuManager* m_contextMenuManager = nullptr;

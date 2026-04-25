@@ -76,6 +76,7 @@ class ProjectPanel : public Panel {
   private:
     // Section renderers
     void renderProjectInfo();
+    void renderOpenItemsSection();
     void renderModelsSection();
     void renderGCodeSection();
     void renderMaterialsSection();

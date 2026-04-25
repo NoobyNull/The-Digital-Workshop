@@ -66,8 +66,8 @@ class Camera {
 
     Vec3 m_target{0.0f, 0.0f, 0.0f};
     f32 m_distance = 5.0f;
-    f32 m_pitch = 30.0f; // Degrees
-    f32 m_yaw = 45.0f;   // Degrees
+    f32 m_pitch = 89.0f;  // Degrees
+    f32 m_yaw = 180.0f;   // Degrees
 
     f32 m_fov = 45.0f; // Degrees
     f32 m_nearPlane = 0.1f;

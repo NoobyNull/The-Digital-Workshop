@@ -15,8 +15,8 @@ constexpr float EPS = 1e-4f;
 TEST(Camera, DefaultState) {
     dw::Camera cam;
     EXPECT_FLOAT_EQ(cam.distance(), 5.0f);
-    EXPECT_FLOAT_EQ(cam.pitch(), 30.0f);
-    EXPECT_FLOAT_EQ(cam.yaw(), 45.0f);
+    EXPECT_FLOAT_EQ(cam.pitch(), 89.0f);
+    EXPECT_FLOAT_EQ(cam.yaw(), 180.0f);
     EXPECT_FLOAT_EQ(cam.fov(), 45.0f);
 }
 
@@ -57,7 +57,7 @@ TEST(Camera, Orbit_ChangesYaw) {
 TEST(Camera, Orbit_ChangesPitch) {
     dw::Camera cam;
     float origPitch = cam.pitch();
-    cam.orbit(0.0f, 10.0f);
+    cam.orbit(0.0f, -10.0f);
     EXPECT_NE(cam.pitch(), origPitch);
 }
 
@@ -143,8 +143,8 @@ TEST(Camera, FitToBounds_CentersOnBounds) {
 TEST(Camera, FitToBounds_DistanceProportional) {
     dw::Camera cam;
     cam.fitToBounds(dw::Vec3(0, 0, 0), dw::Vec3(100, 100, 100));
-    // Distance should be maxExtent * 2 = 200
-    EXPECT_NEAR(cam.distance(), 200.0f, EPS);
+    // Distance should frame the max extent without leaving excessive empty space.
+    EXPECT_NEAR(cam.distance(), 95.0f, EPS);
 }
 
 // --- Reset ---
@@ -157,8 +157,8 @@ TEST(Camera, Reset_RestoresDefaults) {
 
     cam.reset();
     EXPECT_FLOAT_EQ(cam.distance(), 5.0f);
-    EXPECT_FLOAT_EQ(cam.pitch(), 30.0f);
-    EXPECT_FLOAT_EQ(cam.yaw(), 45.0f);
+    EXPECT_FLOAT_EQ(cam.pitch(), 89.0f);
+    EXPECT_FLOAT_EQ(cam.yaw(), 180.0f);
     EXPECT_FLOAT_EQ(cam.target().x, 0.0f);
 }
 

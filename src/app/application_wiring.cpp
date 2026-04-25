@@ -186,9 +186,12 @@ void Application::wireLibraryPanel() {
             if (!m_projectManager || !m_projectManager->currentProject() || !m_gcodeRepo)
                 return;
             i64 pid = m_projectManager->currentProject()->id();
-            for (int64_t gid : gcodeIds)
-                if (!m_gcodeRepo->isInProject(pid, gid))
-                    m_gcodeRepo->addToProject(pid, gid);
+            int sortOrder = static_cast<int>(m_gcodeRepo->findByProject(pid).size());
+            for (int64_t gid : gcodeIds) {
+                if (!m_gcodeRepo->isInProject(pid, gid)) {
+                    m_gcodeRepo->addToProject(pid, gid, sortOrder++);
+                }
+            }
         });
 
     m_uiManager->libraryPanel()->setOnModelSelected([this](int64_t modelId) {
