@@ -490,6 +490,21 @@ TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesCutPlanAndCostI
     dw::CostingRecord cost;
     cost.name = "Project Estimate";
     cost.projectId = projectId;
+    dw::CostItem carveMaterial;
+    carveMaterial.name = "Walnut blank";
+    carveMaterial.category = dw::CostCategory::Material;
+    carveMaterial.quantity = 1.0;
+    carveMaterial.rate = 90.0;
+    carveMaterial.total = 90.0;
+    carveMaterial.notes = "[auto:direct-carve:relief]";
+    dw::CostItem shopLabor;
+    shopLabor.name = "Setup";
+    shopLabor.category = dw::CostCategory::Labor;
+    shopLabor.quantity = 1.0;
+    shopLabor.rate = 35.0;
+    shopLabor.total = 35.0;
+    shopLabor.notes = "manual setup";
+    cost.items = {carveMaterial, shopLabor};
     cost.subtotal = 125.0;
     cost.total = 135.0;
     auto costId = costRepo.insert(cost);
@@ -509,6 +524,23 @@ TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesCutPlanAndCostI
     EXPECT_EQ(costItems[0].itemType, dw::ProjectOpenItemType::Cost);
     EXPECT_EQ(costItems[0].displayName, "Project Estimate");
     EXPECT_NE(costItems[0].snapshotJson.find(R"("total":135)"), std::string::npos);
+    EXPECT_NE(costItems[0].snapshotJson.find(R"("source_keys":["[auto:direct-carve:relief]"])"),
+              std::string::npos);
+
+    auto costOpenItemId = costItems[0].id;
+    cost.id = *costId;
+    cost.items[0].notes = "[auto:clo]";
+    cost.total = 150.0;
+    ASSERT_TRUE(costRepo.update(cost));
+
+    EXPECT_EQ(m_repo->ensureOpenItemsForProject(projectId), 0);
+
+    auto updatedCostItems = m_repo->findOpenItemsBySource(projectId, "costing_records", *costId);
+    ASSERT_EQ(updatedCostItems.size(), 1u);
+    EXPECT_EQ(updatedCostItems[0].id, costOpenItemId);
+    EXPECT_NE(updatedCostItems[0].snapshotJson.find(R"("total":150)"), std::string::npos);
+    EXPECT_NE(updatedCostItems[0].snapshotJson.find(R"("source_keys":["[auto:clo]"])"),
+              std::string::npos);
 }
 
 TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesJobItemsForProjectGCodeRuns) {

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <set>
 #include <sstream>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -98,6 +99,52 @@ bool doubleChanged(const nlohmann::json& snapshot, std::string_view key, double 
         return false;
     }
     return std::abs(snapshot.value(std::string(key), current) - current) > 0.0001;
+}
+
+std::vector<std::string> autoCostSourceKeysFromItemsJson(const std::string& itemsJson) {
+    std::set<std::string> keys;
+    auto parsed = nlohmann::json::parse(itemsJson, nullptr, false);
+    if (!parsed.is_array()) {
+        return {};
+    }
+
+    for (const auto& item : parsed) {
+        if (!item.is_object() || !item.contains("notes") || !item["notes"].is_string()) {
+            continue;
+        }
+        auto notes = item["notes"].get<std::string>();
+        if (notes.rfind("[auto:", 0) == 0) {
+            keys.insert(std::move(notes));
+        }
+    }
+
+    return {keys.begin(), keys.end()};
+}
+
+std::string jsonStringArray(const std::vector<std::string>& values) {
+    std::ostringstream out;
+    out << "[";
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i > 0) {
+            out << ",";
+        }
+        out << "\"" << jsonEscape(values[i]) << "\"";
+    }
+    out << "]";
+    return out.str();
+}
+
+bool sourceKeysChanged(const nlohmann::json& snapshot,
+                       const std::vector<std::string>& currentKeys) {
+    std::vector<std::string> snapshotKeys;
+    if (snapshot.contains("source_keys") && snapshot["source_keys"].is_array()) {
+        for (const auto& value : snapshot["source_keys"]) {
+            if (value.is_string()) {
+                snapshotKeys.push_back(value.get<std::string>());
+            }
+        }
+    }
+    return snapshotKeys != currentKeys;
 }
 
 } // namespace
@@ -1057,7 +1104,7 @@ int ProjectRepository::ensureOpenItemsForProject(i64 projectId) {
     }
 
     auto costStmt = m_db.prepare(R"(
-        SELECT id, name, subtotal, tax_amount, discount_amount, total
+        SELECT id, name, subtotal, tax_amount, discount_amount, total, items
         FROM costing_records
         WHERE project_id = ?
         ORDER BY created_at, id
@@ -1065,15 +1112,15 @@ int ProjectRepository::ensureOpenItemsForProject(i64 projectId) {
     if (costStmt.isValid() && costStmt.bindInt(1, projectId)) {
         while (costStmt.step()) {
             i64 costId = costStmt.getInt(0);
-            if (!findOpenItemsBySource(projectId, "costing_records", costId).empty()) {
-                continue;
-            }
+            auto existingItems = findOpenItemsBySource(projectId, "costing_records", costId);
+            auto sourceKeys = autoCostSourceKeysFromItemsJson(costStmt.getText(6));
 
             std::ostringstream snapshot;
             snapshot << "{\"subtotal\":" << costStmt.getDouble(2)
                      << ",\"tax_amount\":" << costStmt.getDouble(3)
                      << ",\"discount_amount\":" << costStmt.getDouble(4)
-                     << ",\"total\":" << costStmt.getDouble(5) << "}";
+                     << ",\"total\":" << costStmt.getDouble(5)
+                     << ",\"source_keys\":" << jsonStringArray(sourceKeys) << "}";
 
             ProjectOpenItem item;
             item.projectId = projectId;
@@ -1084,7 +1131,10 @@ int ProjectRepository::ensureOpenItemsForProject(i64 projectId) {
             item.displayName = costStmt.getText(1);
             item.intentJson = R"({"estimate_type":"project_estimate"})";
             item.snapshotJson = snapshot.str();
-            if (insertOpenItem(item).has_value()) {
+            if (!existingItems.empty()) {
+                item.id = existingItems.front().id;
+                (void)updateOpenItem(item);
+            } else if (insertOpenItem(item).has_value()) {
                 ++created;
             }
         }
@@ -1232,17 +1282,19 @@ int ProjectRepository::validateOpenItemsForProject(i64 projectId) {
             }
         } else if (item.sourceTable == "costing_records" && item.sourceId.has_value()) {
             auto stmt = m_db.prepare(R"(
-                SELECT subtotal, tax_amount, discount_amount, total
+                SELECT subtotal, tax_amount, discount_amount, total, items
                 FROM costing_records
                 WHERE id = ?
             )");
             if (!stmt.isValid() || !stmt.bindInt(1, *item.sourceId) || !stmt.step()) {
                 sourceExists = false;
             } else {
+                auto sourceKeys = autoCostSourceKeysFromItemsJson(stmt.getText(4));
                 sourceChanged = doubleChanged(snapshot, "subtotal", stmt.getDouble(0)) ||
                                 doubleChanged(snapshot, "tax_amount", stmt.getDouble(1)) ||
                                 doubleChanged(snapshot, "discount_amount", stmt.getDouble(2)) ||
-                                doubleChanged(snapshot, "total", stmt.getDouble(3));
+                                doubleChanged(snapshot, "total", stmt.getDouble(3)) ||
+                                sourceKeysChanged(snapshot, sourceKeys);
             }
         } else if (item.sourceTable == "cnc_jobs" && item.sourceId.has_value()) {
             auto stmt = m_db.prepare(R"(
