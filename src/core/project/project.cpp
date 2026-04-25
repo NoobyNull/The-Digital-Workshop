@@ -185,6 +185,27 @@ std::vector<ProjectOpenItem> ProjectManager::currentOpenItems() {
     return listOpenItems(m_currentProject->id());
 }
 
+std::optional<i64> ProjectManager::upsertOpenItem(ProjectOpenItem item) {
+    if (item.projectId <= 0) {
+        log::warning("Project", "Cannot upsert open item without a project id");
+        return std::nullopt;
+    }
+    if (!item.sourceTable.empty() && item.sourceId.has_value()) {
+        return m_projectRepo.upsertOpenItemBySource(item);
+    }
+    return m_projectRepo.upsertOpenItemBySourceKey(item);
+}
+
+std::optional<i64> ProjectManager::upsertCurrentOpenItem(ProjectOpenItem item) {
+    if (!m_currentProject) {
+        log::warning("Project", "Cannot upsert open item without an open project");
+        return std::nullopt;
+    }
+
+    item.projectId = m_currentProject->id();
+    return upsertOpenItem(std::move(item));
+}
+
 bool ProjectManager::addModelToProject(i64 modelId) {
     if (!m_currentProject) {
         log::warning("Project", "No project open");

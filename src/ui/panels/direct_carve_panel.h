@@ -273,6 +273,7 @@ class DirectCarvePanel : public Panel {
     void saveImageToProject();
     void saveGCodeToProject();
     void syncSetupToOptimizerAndProject();
+    std::optional<i64> syncOperationOpenItem();
     std::optional<i64> selectedMaterialId() const;
     std::string selectedMaterialName() const;
 

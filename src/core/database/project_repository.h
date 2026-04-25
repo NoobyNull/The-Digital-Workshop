@@ -107,6 +107,8 @@ class ProjectRepository {
     std::vector<ProjectOpenItem> findOpenItemsBySourceKey(i64 projectId,
                                                           std::string_view sourceKey);
     bool updateOpenItem(const ProjectOpenItem& item);
+    std::optional<i64> upsertOpenItemBySource(const ProjectOpenItem& item);
+    std::optional<i64> upsertOpenItemBySourceKey(const ProjectOpenItem& item);
     bool removeOpenItem(i64 id);
     int ensureOpenItemsForProject(i64 projectId);
     int validateOpenItemsForProject(i64 projectId);

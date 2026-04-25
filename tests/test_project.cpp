@@ -284,3 +284,37 @@ TEST(ProjectManager, ListOpenItemsValidatesChangedSourceSnapshots) {
     EXPECT_EQ(openItems[0].itemType, dw::ProjectOpenItemType::Gcode);
     EXPECT_EQ(openItems[0].status, dw::ProjectOpenItemStatus::Stale);
 }
+
+TEST(ProjectManager, UpsertCurrentOpenItemUsesCurrentProjectAndStableSourceKey) {
+    dw::Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    ASSERT_TRUE(dw::Schema::initialize(db));
+
+    dw::ProjectManager manager(db);
+    auto project = manager.create("Direct Carve Project");
+    ASSERT_TRUE(project);
+    manager.setCurrentProject(project);
+
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.status = dw::ProjectOpenItemStatus::Planned;
+    item.sourceKey = "direct_carve:relief";
+    item.displayName = "Direct Carve: relief";
+    item.intentJson = R"({"depth_mm":3.0})";
+
+    auto firstId = manager.upsertCurrentOpenItem(item);
+    ASSERT_TRUE(firstId.has_value());
+
+    item.status = dw::ProjectOpenItemStatus::Ready;
+    item.intentJson = R"({"depth_mm":4.5})";
+
+    auto secondId = manager.upsertCurrentOpenItem(item);
+    ASSERT_TRUE(secondId.has_value());
+    EXPECT_EQ(*firstId, *secondId);
+
+    auto openItems = manager.currentOpenItems();
+    ASSERT_EQ(openItems.size(), 1u);
+    EXPECT_EQ(openItems[0].projectId, project->id());
+    EXPECT_EQ(openItems[0].status, dw::ProjectOpenItemStatus::Ready);
+    EXPECT_EQ(openItems[0].intentJson, R"({"depth_mm":4.5})");
+}

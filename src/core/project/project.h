@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -80,6 +81,8 @@ class ProjectManager {
     std::optional<ProjectRecord> getProjectInfo(i64 projectId);
     std::vector<ProjectOpenItem> listOpenItems(i64 projectId);
     std::vector<ProjectOpenItem> currentOpenItems();
+    std::optional<i64> upsertOpenItem(ProjectOpenItem item);
+    std::optional<i64> upsertCurrentOpenItem(ProjectOpenItem item);
 
     // Current project
     std::shared_ptr<Project> currentProject() const { return m_currentProject; }

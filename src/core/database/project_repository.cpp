@@ -500,6 +500,44 @@ bool ProjectRepository::updateOpenItem(const ProjectOpenItem& item) {
     return result;
 }
 
+std::optional<i64> ProjectRepository::upsertOpenItemBySource(const ProjectOpenItem& item) {
+    if (item.projectId <= 0 || item.sourceTable.empty() || !item.sourceId.has_value()) {
+        return std::nullopt;
+    }
+
+    auto existingItems = findOpenItemsBySource(item.projectId, item.sourceTable, *item.sourceId);
+    if (existingItems.empty()) {
+        return insertOpenItem(item);
+    }
+
+    auto updated = item;
+    updated.id = existingItems.front().id;
+    if (!updateOpenItem(updated)) {
+        return std::nullopt;
+    }
+
+    return updated.id;
+}
+
+std::optional<i64> ProjectRepository::upsertOpenItemBySourceKey(const ProjectOpenItem& item) {
+    if (item.projectId <= 0 || item.sourceKey.empty()) {
+        return std::nullopt;
+    }
+
+    auto existingItems = findOpenItemsBySourceKey(item.projectId, item.sourceKey);
+    if (existingItems.empty()) {
+        return insertOpenItem(item);
+    }
+
+    auto updated = item;
+    updated.id = existingItems.front().id;
+    if (!updateOpenItem(updated)) {
+        return std::nullopt;
+    }
+
+    return updated.id;
+}
+
 bool ProjectRepository::removeOpenItem(i64 id) {
     auto existing = findOpenItemById(id);
     if (!existing.has_value()) {

@@ -11,6 +11,7 @@
 
 #include <glad/gl.h>
 #include <imgui.h>
+#include <nlohmann/json.hpp>
 
 #include "core/carve/analysis_overlay.h"
 #include "core/carve/carve_job.h"
@@ -77,6 +78,65 @@ void statusBullet(bool ok, const char* label) {
     ImGui::PushStyleColor(ImGuiCol_Text, ok ? kGreen : kRed);
     ImGui::BulletText("%s %s", ok ? "OK" : "FAIL", label);
     ImGui::PopStyleColor();
+}
+
+const char* scanAxisLabel(carve::ScanAxis axis) {
+    switch (axis) {
+    case carve::ScanAxis::XOnly:  return "x_only";
+    case carve::ScanAxis::YOnly:  return "y_only";
+    case carve::ScanAxis::XThenY: return "x_then_y";
+    case carve::ScanAxis::YThenX: return "y_then_x";
+    }
+    return "unknown";
+}
+
+const char* millDirectionLabel(carve::MillDirection direction) {
+    switch (direction) {
+    case carve::MillDirection::Climb:        return "climb";
+    case carve::MillDirection::Conventional: return "conventional";
+    case carve::MillDirection::Alternating:  return "alternating";
+    }
+    return "unknown";
+}
+
+const char* stepoverPresetLabel(carve::StepoverPreset preset) {
+    switch (preset) {
+    case carve::StepoverPreset::UltraFine: return "ultra_fine";
+    case carve::StepoverPreset::Fine:      return "fine";
+    case carve::StepoverPreset::Basic:     return "basic";
+    case carve::StepoverPreset::Rough:     return "rough";
+    case carve::StepoverPreset::Roughing:  return "roughing";
+    }
+    return "unknown";
+}
+
+const char* toolTypeLabel(VtdbToolType type) {
+    switch (type) {
+    case VtdbToolType::BallNose:        return "ball_nose";
+    case VtdbToolType::EndMill:         return "end_mill";
+    case VtdbToolType::Radiused:        return "radiused";
+    case VtdbToolType::VBit:            return "v_bit";
+    case VtdbToolType::TaperedBallNose: return "tapered_ball_nose";
+    case VtdbToolType::Drill:           return "drill";
+    case VtdbToolType::ThreadMill:      return "thread_mill";
+    case VtdbToolType::FormTool:        return "form_tool";
+    case VtdbToolType::DiamondDrag:     return "diamond_drag";
+    }
+    return "unknown";
+}
+
+nlohmann::json toolSummaryJson(const VtdbToolGeometry& tool) {
+    return {
+        {"id", tool.id},
+        {"name", resolveToolNameFormat(tool)},
+        {"type", toolTypeLabel(tool.tool_type)},
+        {"units", tool.units == VtdbUnits::Imperial ? "imperial" : "metric"},
+        {"diameter_mm", diameterMm(tool)},
+        {"included_angle_deg", tool.included_angle},
+        {"flat_diameter", tool.flat_diameter},
+        {"tip_radius", tool.tip_radius},
+        {"flutes", tool.num_flutes},
+    };
 }
 
 GCodeRecord makeGeneratedGCodeRecord(const Path& path,
@@ -231,12 +291,15 @@ void DirectCarvePanel::syncSetupToOptimizerAndProject() {
         m_cutOptimizer->upsertPart(part);
     }
 
-    if (!m_onMaterialPartSync || !m_projectManager) {
-        return;
+    std::shared_ptr<ProjectDirectory> dir;
+    if (m_projectManager) {
+        dir = m_projectManager->ensureProjectForModel(m_modelName, m_modelSourcePath);
+        if (dir) {
+            (void)syncOperationOpenItem();
+        }
     }
 
-    auto dir = m_projectManager->ensureProjectForModel(m_modelName, m_modelSourcePath);
-    if (!dir) {
+    if (!m_onMaterialPartSync || !dir) {
         return;
     }
 
@@ -274,6 +337,90 @@ void DirectCarvePanel::syncSetupToOptimizerAndProject() {
     }
 
     m_onMaterialPartSync(data);
+}
+
+std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
+    if (!m_projectManager || !m_modelLoaded) {
+        return std::nullopt;
+    }
+
+    const auto partName = m_modelName.empty() ? std::string("Carve blank") : m_modelName;
+    const auto materialId = selectedMaterialId();
+    const auto materialName = selectedMaterialName();
+    const auto& profile = Config::instance().getActiveMachineProfile();
+
+    nlohmann::json intent = {
+        {"operation_kind", "direct_carve"},
+        {"description", "Generated from the Direct Carve setup wizard."},
+        {"model_name", partName},
+        {"model_source_path", m_modelSourcePath.string()},
+        {"material_id", materialId.has_value() ? nlohmann::json(*materialId) : nlohmann::json(nullptr)},
+        {"material_name", materialName},
+        {"stock", {
+            {"width_mm", m_stock.width},
+            {"height_mm", m_stock.height},
+            {"thickness_mm", m_stock.thickness},
+        }},
+        {"fit", {
+            {"scale", m_fitParams.scale},
+            {"offset_x_mm", m_fitParams.offsetX},
+            {"offset_y_mm", m_fitParams.offsetY},
+            {"depth_mm", m_fitParams.depthMm},
+        }},
+        {"toolpath", {
+            {"scan_axis", scanAxisLabel(m_toolpathConfig.axis)},
+            {"mill_direction", millDirectionLabel(m_toolpathConfig.direction)},
+            {"stepover_preset", stepoverPresetLabel(m_toolpathConfig.stepoverPreset)},
+            {"custom_stepover_pct", m_toolpathConfig.customStepoverPct},
+            {"safe_z_mm", m_toolpathConfig.safeZMm},
+            {"feed_rate_mm_min", m_toolpathConfig.feedRateMmMin},
+            {"plunge_rate_mm_min", m_toolpathConfig.plungeRateMmMin},
+            {"lead_in_mm", m_toolpathConfig.leadInMm},
+            {"scan_resolution_mm", m_toolpathConfig.scanResolutionMm},
+        }},
+    };
+
+    nlohmann::json snapshot = {
+        {"machine", {
+            {"name", profile.name},
+            {"max_travel_x_mm", profile.maxTravelX},
+            {"max_travel_y_mm", profile.maxTravelY},
+            {"max_travel_z_mm", profile.maxTravelZ},
+            {"rapid_rate_mm_min", profile.rapidRate},
+            {"default_feed_rate_mm_min", profile.defaultFeedRate},
+            {"spindle_max_rpm", profile.spindleMaxRPM},
+            {"spindle_power_w", profile.spindlePower},
+        }},
+        {"setup", {
+            {"model_loaded", m_modelLoaded},
+            {"material_selected", m_materialSelected},
+            {"finishing_tool_selected", m_finishingToolSelected},
+            {"clearing_tool_selected", m_clearToolSelected},
+            {"toolpath_generated", m_toolpathGenerated},
+            {"settings_version", m_settingsVersion},
+            {"generated_at_version", m_generatedAtVersion},
+        }},
+    };
+
+    if (m_finishingToolSelected) {
+        snapshot["finishing_tool"] = toolSummaryJson(m_finishTool);
+    }
+    if (m_clearToolSelected) {
+        snapshot["clearing_tool"] = toolSummaryJson(m_clearTool);
+    }
+
+    ProjectOpenItem item;
+    item.itemType = ProjectOpenItemType::Operation;
+    item.status = (m_materialSelected && m_finishingToolSelected)
+                      ? ProjectOpenItemStatus::Ready
+                      : ProjectOpenItemStatus::Planned;
+    item.sourceTable = "direct_carve";
+    item.sourceKey = "direct_carve:" + ProjectDirectory::sanitizeName(partName);
+    item.displayName = "Direct Carve: " + partName;
+    item.intentJson = intent.dump();
+    item.snapshotJson = snapshot.dump();
+
+    return m_projectManager->upsertCurrentOpenItem(std::move(item));
 }
 
 const char* DirectCarvePanel::stepLabel(Step step) {
@@ -2330,6 +2477,7 @@ void DirectCarvePanel::saveGCodeToProject() {
     dir->save();
 
     std::optional<i64> gcodeId;
+    std::optional<GCodeRecord> savedRecord;
     if (m_gcodeRepo) {
         const auto fileHash = hash::computeFile(destPath);
         auto record = makeGeneratedGCodeRecord(destPath, baseName, fileHash);
@@ -2343,14 +2491,45 @@ void DirectCarvePanel::saveGCodeToProject() {
             record.id = existing->id;
             if (m_gcodeRepo->update(record)) {
                 gcodeId = record.id;
+                savedRecord = record;
             }
         } else {
             gcodeId = m_gcodeRepo->insert(record);
+            if (gcodeId) {
+                record.id = *gcodeId;
+                savedRecord = record;
+            }
         }
 
         if (gcodeId && m_projectManager->currentProject()) {
             m_gcodeRepo->addToProject(m_projectManager->currentProject()->id(), *gcodeId);
         }
+    }
+
+    if (gcodeId && savedRecord && m_projectManager && m_projectManager->currentProject()) {
+        auto operationItemId = syncOperationOpenItem();
+        nlohmann::json snapshot = {
+            {"hash", savedRecord->hash},
+            {"file_path", savedRecord->filePath.string()},
+            {"file_size", savedRecord->fileSize},
+            {"estimated_time", savedRecord->estimatedTime},
+            {"total_distance", savedRecord->totalDistance},
+            {"feed_rates", savedRecord->feedRates},
+            {"tool_numbers", savedRecord->toolNumbers},
+        };
+
+        ProjectOpenItem item;
+        item.projectId = m_projectManager->currentProject()->id();
+        item.itemType = ProjectOpenItemType::Gcode;
+        item.sourceTable = "gcode_files";
+        item.sourceId = *gcodeId;
+        item.sourceKey = "gcode_files:" + std::to_string(*gcodeId);
+        item.parentItemId = operationItemId;
+        item.status = ProjectOpenItemStatus::Ready;
+        item.displayName = savedRecord->name;
+        item.intentJson = R"({"role":"generated_direct_carve_program"})";
+        item.snapshotJson = snapshot.dump();
+        (void)m_projectManager->upsertOpenItem(std::move(item));
     }
 
     if (gcodeId && m_libraryManager) {

@@ -207,6 +207,67 @@ TEST_F(ProjectOpenItemRepoTest, UpdateOpenItem_CanChangeStatusAndPayloads) {
     EXPECT_EQ(updated.snapshotJson, R"({"hash":"changed"})");
 }
 
+TEST_F(ProjectOpenItemRepoTest, UpsertOpenItemBySourceKey_CreatesAndUpdatesStableOperation) {
+    auto projectId = insertProject("Direct Carve Setup");
+
+    dw::ProjectOpenItem item;
+    item.projectId = projectId;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.sourceKey = "direct_carve:relief";
+    item.status = dw::ProjectOpenItemStatus::Planned;
+    item.displayName = "Direct Carve";
+    item.intentJson = R"({"operation_kind":"direct_carve","safe_z":6})";
+    item.snapshotJson = R"({"feed_rate":1200})";
+
+    auto firstId = m_repo->upsertOpenItemBySourceKey(item);
+    ASSERT_TRUE(firstId.has_value());
+
+    item.status = dw::ProjectOpenItemStatus::Ready;
+    item.displayName = "Direct Carve Finishing";
+    item.intentJson = R"({"operation_kind":"direct_carve","safe_z":8})";
+    item.snapshotJson = R"({"feed_rate":1500})";
+
+    auto secondId = m_repo->upsertOpenItemBySourceKey(item);
+    ASSERT_TRUE(secondId.has_value());
+    EXPECT_EQ(*secondId, *firstId);
+
+    auto matches = m_repo->findOpenItemsBySourceKey(projectId, "direct_carve:relief");
+    ASSERT_EQ(matches.size(), 1u);
+    EXPECT_EQ(matches[0].status, dw::ProjectOpenItemStatus::Ready);
+    EXPECT_EQ(matches[0].displayName, "Direct Carve Finishing");
+    EXPECT_EQ(matches[0].intentJson, R"({"operation_kind":"direct_carve","safe_z":8})");
+    EXPECT_EQ(matches[0].snapshotJson, R"({"feed_rate":1500})");
+}
+
+TEST_F(ProjectOpenItemRepoTest, UpsertOpenItemBySource_CreatesAndUpdatesLinkedGCodeParent) {
+    auto projectId = insertProject("Generated GCode");
+    auto parentId = m_repo->insertOpenItem(makeItem(projectId, "Direct Carve")).value();
+    auto gcodeId = insertGCode("Relief Finish", "gcode-hash");
+
+    dw::ProjectOpenItem item;
+    item.projectId = projectId;
+    item.itemType = dw::ProjectOpenItemType::Gcode;
+    item.sourceTable = "gcode_files";
+    item.sourceId = gcodeId;
+    item.status = dw::ProjectOpenItemStatus::Ready;
+    item.displayName = "Relief Finish";
+    item.intentJson = R"({"role":"generated_program"})";
+
+    auto firstId = m_repo->upsertOpenItemBySource(item);
+    ASSERT_TRUE(firstId.has_value());
+
+    item.parentItemId = parentId;
+    item.snapshotJson = R"({"estimated_time":12.5})";
+    auto secondId = m_repo->upsertOpenItemBySource(item);
+    ASSERT_TRUE(secondId.has_value());
+    EXPECT_EQ(*firstId, *secondId);
+
+    auto matches = m_repo->findOpenItemsBySource(projectId, "gcode_files", gcodeId);
+    ASSERT_EQ(matches.size(), 1u);
+    EXPECT_EQ(matches[0].parentItemId, parentId);
+    EXPECT_EQ(matches[0].snapshotJson, R"({"estimated_time":12.5})");
+}
+
 TEST_F(ProjectOpenItemRepoTest, RemoveOpenItem_RemovesChildrenByCascade) {
     auto projectId = insertProject("Delete");
     auto parentId = m_repo->insertOpenItem(makeItem(projectId, "Parent")).value();
