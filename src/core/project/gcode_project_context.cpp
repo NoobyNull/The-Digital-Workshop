@@ -1,6 +1,10 @@
 #include "gcode_project_context.h"
 
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
+
+#include <nlohmann/json.hpp>
 
 namespace dw {
 
@@ -52,6 +56,23 @@ bool isRequiredToolForGCode(const ProjectOpenItem& tool,
     return tool.sourceKey.rfind(prefix, 0) == 0;
 }
 
+nlohmann::json parseJsonObject(const std::string& value) {
+    auto parsed = nlohmann::json::parse(value, nullptr, false);
+    return parsed.is_object() ? parsed : nlohmann::json::object();
+}
+
+std::string formatMm(double value) {
+    std::ostringstream out;
+    out << std::setprecision(6) << value;
+    return out.str();
+}
+
+std::string formatRuntimeMinutes(double seconds) {
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(1) << (seconds / 60.0);
+    return out.str();
+}
+
 } // namespace
 
 std::vector<std::string>
@@ -87,6 +108,36 @@ buildGCodeProjectContextLines(std::string_view projectName,
     }
     if (operation && operation->itemType == ProjectOpenItemType::Operation) {
         lines.push_back("Operation: " + operation->displayName);
+
+        auto intent = parseJsonObject(operation->intentJson);
+        auto snapshot = parseJsonObject(operation->snapshotJson);
+        auto materialName = intent.value("material_name", std::string());
+        if (!materialName.empty()) {
+            lines.push_back("Material: " + materialName);
+        }
+        if (intent.contains("stock") && intent["stock"].is_object()) {
+            const auto& stock = intent["stock"];
+            if (stock.contains("width_mm") && stock.contains("height_mm") &&
+                stock.contains("thickness_mm")) {
+                lines.push_back("Stock: " +
+                                formatMm(stock.value("width_mm", 0.0)) + " x " +
+                                formatMm(stock.value("height_mm", 0.0)) + " x " +
+                                formatMm(stock.value("thickness_mm", 0.0)) + " mm");
+            }
+        }
+        if (snapshot.contains("machine") && snapshot["machine"].is_object()) {
+            auto machineName = snapshot["machine"].value("name", std::string());
+            if (!machineName.empty()) {
+                lines.push_back("Machine profile: " + machineName);
+            }
+        }
+    }
+
+    auto gcodeSnapshot = parseJsonObject(gcode->snapshotJson);
+    if (gcodeSnapshot.contains("estimated_time") && gcodeSnapshot["estimated_time"].is_number()) {
+        lines.push_back("Expected runtime: " +
+                        formatRuntimeMinutes(gcodeSnapshot.value("estimated_time", 0.0)) +
+                        " min");
     }
 
     for (const auto& item : openItems) {
