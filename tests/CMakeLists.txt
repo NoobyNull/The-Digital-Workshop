@@ -71,6 +71,7 @@ set(DW_TEST_SOURCES
     test_heightmap.cpp
     test_model_fitter.cpp
     test_carve_job.cpp
+    test_direct_carve_operation_state.cpp
     test_surface_analysis.cpp
     test_island_detector.cpp
     test_analysis_overlay.cpp
@@ -173,6 +174,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/model_fitter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/carve_job.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_operation_state.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/surface_analysis.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/island_detector.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/analysis_overlay.cpp

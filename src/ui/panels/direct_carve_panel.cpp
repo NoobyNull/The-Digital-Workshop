@@ -227,6 +227,10 @@ void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
     // Auto-fit model to stock
     m_fitter.setStock(m_stock);
     m_fitParams.scale = m_fitter.autoScale();
+    if (m_pendingOperationSetup) {
+        applyOperationSetup(*m_pendingOperationSetup);
+        m_pendingOperationSetup.reset();
+    }
 
     // Update window title with model name (###ID keeps ImGui window identity stable)
     if (!m_modelName.empty()) {
@@ -245,6 +249,85 @@ void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
     m_hmRegenConfirm = false;
     m_hmMissingPath.clear();
     if (m_hmPreviewTex != 0) { glDeleteTextures(1, &m_hmPreviewTex); m_hmPreviewTex = 0; }
+}
+
+bool DirectCarvePanel::loadOperationOpenItem(const ProjectOpenItem& item) {
+    auto setup = carve::parseDirectCarveOperationSetup(item);
+    if (!setup) {
+        return false;
+    }
+
+    m_pendingOperationSetup = *setup;
+    if (m_modelLoaded) {
+        applyOperationSetup(*setup);
+        m_pendingOperationSetup.reset();
+    } else {
+        m_modelName = setup->modelName;
+        m_modelSourcePath = setup->modelSourcePath;
+        m_stock = setup->stock;
+        m_fitParams = setup->fit;
+        m_toolpathConfig = setup->toolpath;
+    }
+
+    if (!setup->modelName.empty()) {
+        m_title = setup->modelName + "###Direct Carve";
+    }
+    m_open = true;
+    return true;
+}
+
+void DirectCarvePanel::applyOperationSetup(const carve::DirectCarveOperationSetup& setup) {
+    if (!setup.modelName.empty()) {
+        m_modelName = setup.modelName;
+        m_title = setup.modelName + "###Direct Carve";
+    }
+    if (!setup.modelSourcePath.empty()) {
+        m_modelSourcePath = setup.modelSourcePath;
+    }
+
+    m_stock = setup.stock;
+    m_fitParams = setup.fit;
+    m_toolpathConfig = setup.toolpath;
+    m_fitter.setStock(m_stock);
+
+    if (setup.materialId.has_value() || !setup.materialName.empty()) {
+        if (!m_materialListLoaded && m_materialMgr) {
+            m_materialListLoaded = true;
+            m_materialList = m_materialMgr->getAllMaterials();
+        }
+
+        m_selectedMaterialIdx = -1;
+        for (int i = 0; i < static_cast<int>(m_materialList.size()); ++i) {
+            const auto& material = m_materialList[static_cast<size_t>(i)];
+            if ((setup.materialId.has_value() && material.id == *setup.materialId) ||
+                (!setup.materialName.empty() && material.name == setup.materialName)) {
+                m_selectedMaterialIdx = i;
+                m_materialName = material.name;
+                break;
+            }
+        }
+        if (m_selectedMaterialIdx < 0) {
+            m_materialName = setup.materialName;
+        }
+        m_materialSelected = true;
+    }
+
+    if (setup.finishingTool) {
+        m_finishTool = *setup.finishingTool;
+        m_finishingToolSelected = true;
+    }
+    if (setup.clearingTool) {
+        m_clearTool = *setup.clearingTool;
+        m_clearToolSelected = true;
+    }
+
+    m_toolpathGenerated = false;
+    ++m_settingsVersion;
+    m_currentStep = m_finishingToolSelected ? Step::MaterialSetup : Step::ToolSelect;
+
+    if (m_onFitParamsChanged && m_modelLoaded) {
+        m_onFitParamsChanged(m_fitParams, m_modelBoundsMin, m_modelBoundsMax, m_stock);
+    }
 }
 
 std::string DirectCarvePanel::formatTime(f32 seconds) {

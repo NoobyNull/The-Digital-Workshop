@@ -8,6 +8,7 @@
 #include "panel.h"
 
 #include "core/carve/model_fitter.h"
+#include "core/carve/direct_carve_operation_state.h"
 #include "core/carve/tool_recommender.h"
 #include "core/carve/toolpath_types.h"
 #include "core/cnc/cnc_tool.h"
@@ -87,6 +88,7 @@ class DirectCarvePanel : public Panel {
                        const std::string& modelName = "",
                        const Path& modelSourcePath = "",
                        u32 thumbnailTexture = 0);
+    bool loadOperationOpenItem(const ProjectOpenItem& item);
 
   private:
     enum class Step {
@@ -119,6 +121,7 @@ class DirectCarvePanel : public Panel {
     // Tool selection helpers
     void renderToolLibraryPicker();
     void renderManualToolEntry();
+    void applyOperationSetup(const carve::DirectCarveOperationSetup& setup);
 
     // Navigation
     void renderStepIndicator();
@@ -161,6 +164,7 @@ class DirectCarvePanel : public Panel {
     carve::ToolpathConfig m_toolpathConfig;
     carve::StockDimensions m_stock;
     carve::ModelFitter m_fitter;
+    std::optional<carve::DirectCarveOperationSetup> m_pendingOperationSetup;
 
     // Tool selection state
     VtdbToolGeometry m_finishTool;

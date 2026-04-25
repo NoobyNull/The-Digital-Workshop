@@ -134,6 +134,7 @@ set(DW_SOURCES
     core/carve/model_fitter.cpp
     core/carve/alignment_validator.cpp
     core/carve/carve_job.cpp
+    core/carve/direct_carve_operation_state.cpp
     core/carve/surface_analysis.cpp
     core/carve/island_detector.cpp
     core/carve/analysis_overlay.cpp

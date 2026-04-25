@@ -139,6 +139,8 @@ void ProjectPanel::renderOpenItemsSection() {
                 if (m_onModelSelected) m_onModelSelected(*item.sourceId);
             } else if (item.sourceId.has_value() && item.itemType == ProjectOpenItemType::Gcode) {
                 if (m_onGCodeSelected) m_onGCodeSelected(*item.sourceId);
+            } else if (item.itemType == ProjectOpenItemType::Operation) {
+                if (m_onOperationSelected) m_onOperationSelected(item);
             }
         }
 

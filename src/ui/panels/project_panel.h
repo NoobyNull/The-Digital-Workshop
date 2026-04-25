@@ -39,6 +39,7 @@ class ProjectPanel : public Panel {
     using MaterialSelectedCallback = std::function<void(int64_t materialId)>;
     using CostSelectedCallback = std::function<void(int64_t estimateId)>;
     using CutPlanSelectedCallback = std::function<void(int64_t planId)>;
+    using OperationSelectedCallback = std::function<void(const ProjectOpenItem& item)>;
 
     void setOnGCodeSelected(GCodeSelectedCallback cb) { m_onGCodeSelected = std::move(cb); }
     void setOnMaterialSelected(MaterialSelectedCallback cb) {
@@ -47,6 +48,9 @@ class ProjectPanel : public Panel {
     void setOnCostSelected(CostSelectedCallback cb) { m_onCostSelected = std::move(cb); }
     void setOnCutPlanSelected(CutPlanSelectedCallback cb) {
         m_onCutPlanSelected = std::move(cb);
+    }
+    void setOnOperationSelected(OperationSelectedCallback cb) {
+        m_onOperationSelected = std::move(cb);
     }
 
     // Callback when Open Project button is clicked in the panel
@@ -101,6 +105,7 @@ class ProjectPanel : public Panel {
     MaterialSelectedCallback m_onMaterialSelected;
     CostSelectedCallback m_onCostSelected;
     CutPlanSelectedCallback m_onCutPlanSelected;
+    OperationSelectedCallback m_onOperationSelected;
     OpenProjectCallback m_openProjectCallback;
     SaveProjectCallback m_saveProjectCallback;
     ExportProjectCallback m_exportProjectCallback;

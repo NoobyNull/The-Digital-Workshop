@@ -43,6 +43,7 @@
 #include "ui/panels/library_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/cut_optimizer_panel.h"
+#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/project_panel.h"
 #include "ui/panels/properties_panel.h"
@@ -239,6 +240,23 @@ void Application::wireProjectPanel() {
             m_uiManager->gcodePanel()->loadFile(
                 PathResolver::resolve(rec->filePath, PathCategory::GCode).string());
         }
+    });
+    pp->setOnOperationSelected([this](const ProjectOpenItem& item) {
+        auto* directCarve = m_uiManager->directCarvePanel();
+        if (!directCarve || !m_projectManager) return;
+
+        for (const auto& candidate : m_projectManager->currentOpenItems()) {
+            if (item.parentItemId.has_value() &&
+                candidate.id == *item.parentItemId &&
+                candidate.itemType == ProjectOpenItemType::Model &&
+                candidate.sourceId.has_value()) {
+                onModelSelected(*candidate.sourceId);
+                break;
+            }
+        }
+
+        directCarve->setOpen(true);
+        (void)directCarve->loadOperationOpenItem(item);
     });
     pp->setOnMaterialSelected([this](i64 id) {
         if (auto* p = m_uiManager->materialsPanel()) { p->setOpen(true); p->selectMaterial(id); }
