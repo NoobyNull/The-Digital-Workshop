@@ -110,6 +110,184 @@ TEST(ToolpathGen, FlatSurfaceXScan)
     }
 }
 
+TEST(ToolpathGen, FixedDepthRasterUsesTopZeroNegativeDepth)
+{
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Climb;
+    cfg.safeZMm = 3.0f;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 5.0f;
+    cfg.stepdownMm = 2.0f;
+
+    ToolpathGenerator gen;
+    Toolpath path = gen.generateFixedDepthRaster(
+        Vec3{10.0f, 20.0f, 0.0f},
+        Vec3{20.0f, 28.0f, 0.0f},
+        cfg,
+        4.0f,
+        5.0f);
+
+    ASSERT_FALSE(path.points.empty());
+
+    bool sawFirstPass = false;
+    bool sawSecondPass = false;
+    bool sawFinalPass = false;
+    for (const auto& pt : path.points) {
+        if (pt.rapid) {
+            EXPECT_NEAR(pt.position.z, cfg.safeZMm, 0.001f);
+            continue;
+        }
+
+        EXPECT_LE(pt.position.z, 0.0f);
+        EXPECT_GE(pt.position.z, -5.0f);
+        if (std::abs(pt.position.z + 2.0f) < 0.001f) sawFirstPass = true;
+        if (std::abs(pt.position.z + 4.0f) < 0.001f) sawSecondPass = true;
+        if (std::abs(pt.position.z + 5.0f) < 0.001f) sawFinalPass = true;
+    }
+
+    EXPECT_TRUE(sawFirstPass);
+    EXPECT_TRUE(sawSecondPass);
+    EXPECT_TRUE(sawFinalPass);
+}
+
+TEST(ToolpathGen, FixedDepthRasterAlternatesLeftAndRight)
+{
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Alternating;
+    cfg.safeZMm = 3.0f;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 10.0f;
+    cfg.stepdownMm = 10.0f;
+
+    ToolpathGenerator gen;
+    Toolpath path = gen.generateFixedDepthRaster(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{10.0f, 4.0f, 0.0f},
+        cfg,
+        4.0f,
+        2.0f);
+
+    std::vector<f32> lineStartX;
+    f32 lastY = -9999.0f;
+    for (const auto& pt : path.points) {
+        if (!pt.rapid && std::abs(pt.position.y - lastY) > 0.01f) {
+            lineStartX.push_back(pt.position.x);
+            lastY = pt.position.y;
+        }
+    }
+
+    ASSERT_GE(lineStartX.size(), 2u);
+    EXPECT_NEAR(lineStartX[0], 0.0f, 0.001f);
+    EXPECT_NEAR(lineStartX[1], 10.0f, 0.001f);
+}
+
+TEST(ToolpathGen, FixedDepthRasterSupportsBothAxes)
+{
+    ToolpathConfig cfg;
+    cfg.direction = MillDirection::Climb;
+    cfg.safeZMm = 3.0f;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 5.0f;
+    cfg.stepdownMm = 10.0f;
+
+    ToolpathGenerator gen;
+    cfg.axis = ScanAxis::XOnly;
+    Toolpath xOnly = gen.generateFixedDepthRaster(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{10.0f, 10.0f, 0.0f},
+        cfg,
+        5.0f,
+        2.0f);
+
+    cfg.axis = ScanAxis::XThenY;
+    Toolpath xThenY = gen.generateFixedDepthRaster(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{10.0f, 10.0f, 0.0f},
+        cfg,
+        5.0f,
+        2.0f);
+
+    ASSERT_FALSE(xOnly.points.empty());
+    ASSERT_FALSE(xThenY.points.empty());
+    EXPECT_EQ(xThenY.scanLineCount, xOnly.scanLineCount * 2);
+    EXPECT_GT(xThenY.points.size(), xOnly.points.size());
+}
+
+TEST(ToolpathGen, FixedDepthClearingKeepsCutterOutsideModelClearance)
+{
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Alternating;
+    cfg.safeZMm = 3.0f;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 1.0f;
+    cfg.stepdownMm = 10.0f;
+
+    ToolpathGenerator gen;
+    Toolpath path = gen.generateFixedDepthClearingAroundModel(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{30.0f, 20.0f, 0.0f},
+        Vec3{10.0f, 5.0f, 0.0f},
+        Vec3{20.0f, 15.0f, 0.0f},
+        cfg,
+        4.0f,
+        2.0f);
+
+    ASSERT_FALSE(path.points.empty());
+
+    const f32 noCutMinX = 8.0f;   // model min - tool radius
+    const f32 noCutMaxX = 22.0f;  // model max + tool radius
+    const f32 noCutMinY = 3.0f;
+    const f32 noCutMaxY = 17.0f;
+
+    bool sawLeftSide = false;
+    bool sawRightSide = false;
+    bool sawAboveOrBelow = false;
+    for (const auto& pt : path.points) {
+        if (pt.rapid) continue;
+
+        const bool insideNoCut =
+            pt.position.x > noCutMinX && pt.position.x < noCutMaxX &&
+            pt.position.y > noCutMinY && pt.position.y < noCutMaxY;
+        EXPECT_FALSE(insideNoCut)
+            << "Clearing cut entered model clearance at X"
+            << pt.position.x << " Y" << pt.position.y;
+
+        sawLeftSide = sawLeftSide || pt.position.x < noCutMinX;
+        sawRightSide = sawRightSide || pt.position.x > noCutMaxX;
+        sawAboveOrBelow = sawAboveOrBelow ||
+            pt.position.y < noCutMinY || pt.position.y > noCutMaxY;
+    }
+
+    EXPECT_TRUE(sawLeftSide);
+    EXPECT_TRUE(sawRightSide);
+    EXPECT_TRUE(sawAboveOrBelow);
+}
+
+TEST(ToolpathGen, FixedDepthClearingReturnsEmptyWhenModelClearanceConsumesStock)
+{
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Climb;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 1.0f;
+    cfg.stepdownMm = 10.0f;
+
+    ToolpathGenerator gen;
+    Toolpath path = gen.generateFixedDepthClearingAroundModel(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{10.0f, 10.0f, 0.0f},
+        Vec3{1.0f, 1.0f, 0.0f},
+        Vec3{9.0f, 9.0f, 0.0f},
+        cfg,
+        4.0f,
+        2.0f);
+
+    EXPECT_TRUE(path.points.empty());
+}
+
 // ---------------------------------------------------------------------------
 // StepoverSpacing
 // ---------------------------------------------------------------------------

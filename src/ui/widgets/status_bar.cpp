@@ -9,6 +9,7 @@
 
 #include "core/import/import_task.h"
 #include "core/threading/loading_state.h"
+#include "ui/tool_library_access.h"
 
 namespace dw {
 
@@ -39,6 +40,16 @@ void StatusBar::render(const LoadingState* loadingState) {
             ImGui::Text("Loading %s%s", loadingState->getName().c_str(), dotsStr.c_str());
         } else if (!importActive) {
             ImGui::TextDisabled("Ready");
+            if (m_onOpenToolLibrary &&
+                toolLibraryStatusButtonVisible(loadingActive, importActive)) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton(kToolLibraryStatusButtonLabel)) {
+                    m_onOpenToolLibrary();
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", kToolLibraryStatusTooltip);
+                }
+            }
             renderContextTip();
         }
 

@@ -34,11 +34,17 @@ class StatusBar {
     // Set idle context tips shown when no loading/import work is active.
     void setContextTips(std::vector<std::string> tips) { m_contextTips = std::move(tips); }
 
+    // Set callback for the always-available Tool Library shortcut.
+    void setOnOpenToolLibrary(std::function<void()> callback) {
+        m_onOpenToolLibrary = std::move(callback);
+    }
+
   private:
     void renderContextTip() const;
 
     const ImportProgress* m_progress = nullptr;
     std::function<void()> m_onCancel;
+    std::function<void()> m_onOpenToolLibrary;
     std::vector<std::string> m_contextTips;
 };
 

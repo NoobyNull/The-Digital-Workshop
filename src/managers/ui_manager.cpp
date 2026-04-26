@@ -5,6 +5,7 @@
 
 #include "managers/ui_manager.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include <imgui.h>
@@ -21,6 +22,7 @@
 #include "ui/dialogs/import_options_dialog.h"
 #include "ui/dialogs/import_summary_dialog.h"
 #include "ui/dialogs/lighting_dialog.h"
+#include "ui/dialogs/machine_profile_dialog.h"
 #include "ui/dialogs/maintenance_dialog.h"
 #include "ui/dialogs/message_dialog.h"
 #include "ui/dialogs/progress_dialog.h"
@@ -47,6 +49,7 @@
 #include "ui/panels/properties_panel.h"
 #include "ui/panels/start_page.h"
 #include "ui/panels/tool_browser_panel.h"
+#include "ui/tool_library_access.h"
 #include "ui/panels/viewport_panel.h"
 #include "ui/widgets/status_bar.h"
 #include "ui/widgets/status_tips.h"
@@ -92,6 +95,13 @@ void UIManager::init(LibraryManager* libraryManager,
     m_directCarvePanel = std::make_unique<DirectCarvePanel>();
     m_fileDialog = std::make_unique<FileDialog>();
     m_lightingDialog = std::make_unique<LightingDialog>();
+    m_machineProfileDialog = std::make_unique<MachineProfileDialog>();
+    m_machineProfileDialog->setOnProfileChanged([this]() {
+        for (const auto& cb : m_onMachineProfileChanged) {
+            if (cb)
+                cb();
+        }
+    });
     m_importSummaryDialog = std::make_unique<ImportSummaryDialog>();
     m_importOptionsDialog = std::make_unique<ImportOptionsDialog>();
     m_progressDialog = std::make_unique<ProgressDialog>();
@@ -100,6 +110,7 @@ void UIManager::init(LibraryManager* libraryManager,
     m_taggerShutdownDialog = std::make_unique<TaggerShutdownDialog>();
     m_settingsImportDialog = std::make_unique<SettingsImportDialog>();
     m_statusBar = std::make_unique<StatusBar>();
+    m_statusBar->setOnOpenToolLibrary([this]() { openToolLibrary(); });
     m_contextMenuManager = std::make_unique<ContextMenuManager>();
 
     if (m_libraryPanel)
@@ -129,6 +140,7 @@ void UIManager::shutdown() {
     // Destroy dialogs
     m_fileDialog.reset();
     m_lightingDialog.reset();
+    m_machineProfileDialog.reset();
     m_importSummaryDialog.reset();
     m_importOptionsDialog.reset();
     m_progressDialog.reset();
@@ -171,45 +183,45 @@ void UIManager::buildPanelRegistry() {
     // syncClose: panels that pass p_open to ImGui::Begin and need X-button sync
     m_panelRegistry = {
         {"start_page",      &m_showStartPage,      "Start Page",        "Start Page",
-         m_startPage.get(), false, PanelRole::Workshop},
+         m_startPage.get(), false, WindowRole::Workshop},
         {"viewport",        &m_showViewport,        "Viewport",          "Viewport",
-         m_viewportPanel.get(), false, PanelRole::Shared},
+         m_viewportPanel.get(), false, WindowRole::Shared},
         {"library",         &m_showLibrary,         "Library",           "Library",
-         m_libraryPanel.get(), false, PanelRole::Workshop},
+         m_libraryPanel.get(), false, WindowRole::Workshop},
         {"properties",      &m_showProperties,      "Properties",        "Properties",
-         m_propertiesPanel.get(), false, PanelRole::Workshop},
+         m_propertiesPanel.get(), false, WindowRole::Workshop},
         {"project",         &m_showProject,         "Project",           "Project",
-         m_projectPanel.get(), false, PanelRole::Shared},
+         m_projectPanel.get(), false, WindowRole::Shared},
         {"gcode",           &m_showGCode,           "G-code Viewer",     "G-code",
-         m_gcodePanel.get(), false, PanelRole::Sender},
+         m_gcodePanel.get(), false, WindowRole::Sender},
         {"cut_optimizer",   &m_showCutOptimizer,    "Cut Optimizer",     "Cut Optimizer",
-         m_cutOptimizerPanel.get(), false, PanelRole::Workshop},
+         m_cutOptimizerPanel.get(), false, WindowRole::Workshop},
         {"project_costing", &m_showProjectCosting,  "Project Costing",   "Project Costing",
-         m_costPanel.get(), true, PanelRole::Workshop},
+         m_costPanel.get(), true, WindowRole::Workshop},
         {"materials",       &m_showMaterials,       "Materials",         "Materials",
-         m_materialsPanel.get(), true, PanelRole::Workshop},
-        {"tool_browser",    &m_showToolBrowser,     "Tool Browser",      "Tool Browser",
-         m_toolBrowserPanel.get(), true, PanelRole::Sender},
+         m_materialsPanel.get(), true, WindowRole::Workshop},
+        {"tool_browser",    &m_showToolBrowser,     kToolLibraryMenuLabel, kToolLibraryWindowTitle,
+         m_toolBrowserPanel.get(), true, WindowRole::Shared},
         {"cnc_status",      &m_showCncStatus,       "Status",            "CNC Status",
-         m_cncStatusPanel.get(), true, PanelRole::Sender},
+         m_cncStatusPanel.get(), true, WindowRole::Sender},
         {"cnc_jog",         &m_showCncJog,          "Jog Control",       "Jog Control",
-         m_cncJogPanel.get(), true, PanelRole::Sender},
+         m_cncJogPanel.get(), true, WindowRole::Sender},
         {"cnc_console",     &m_showCncConsole,      "MDI Console",       "MDI Console",
-         m_cncConsolePanel.get(), true, PanelRole::Sender},
+         m_cncConsolePanel.get(), true, WindowRole::Sender},
         {"cnc_wcs",         &m_showCncWcs,          "Work Zero / WCS",   "WCS",
-         m_cncWcsPanel.get(), true, PanelRole::Sender},
+         m_cncWcsPanel.get(), true, WindowRole::Sender},
         {"cnc_tool",        &m_showCncTool,         "Tool & Material",   "Tool & Material",
-         m_cncToolPanel.get(), true, PanelRole::Sender},
+         m_cncToolPanel.get(), true, WindowRole::Sender},
         {"cnc_job",         &m_showCncJob,          "Job Progress",      "Job Progress",
-         m_cncJobPanel.get(), true, PanelRole::Sender},
+         m_cncJobPanel.get(), true, WindowRole::Sender},
         {"cnc_safety",      &m_showCncSafety,       "Safety Controls",   "Safety",
-         m_cncSafetyPanel.get(), true, PanelRole::Sender},
-        {"cnc_settings",    &m_showCncSettings,     "Firmware Settings", "Firmware",
-         m_cncSettingsPanel.get(), true, PanelRole::Sender},
+         m_cncSafetyPanel.get(), true, WindowRole::Sender},
+        {"cnc_settings",    &m_showCncSettings,     "Machine Settings",  "Machine Settings",
+         m_cncSettingsPanel.get(), true, WindowRole::Sender},
         {"cnc_macros",      &m_showCncMacros,       "Macros",            "Macros",
-         m_cncMacroPanel.get(), true, PanelRole::Sender},
+         m_cncMacroPanel.get(), true, WindowRole::Sender},
         {"direct_carve",    &m_showDirectCarve,     "Direct Carve",      "Direct Carve",
-         m_directCarvePanel.get(), true, PanelRole::Sender},
+         m_directCarvePanel.get(), true, WindowRole::Sender},
     };
 }
 
@@ -224,7 +236,13 @@ void UIManager::renderPanels() {
         if (!*entry.showFlag || !entry.panel)
             continue;
 
+        const bool focusToolLibrary =
+            m_focusToolLibraryNextFrame && std::strcmp(entry.key, "tool_browser") == 0;
+        if (focusToolLibrary)
+            ImGui::SetNextWindowFocus();
         entry.panel->render();
+        if (focusToolLibrary)
+            m_focusToolLibraryNextFrame = false;
 
         // Sync X-button close back to visibility flag
         if (entry.syncClose && !entry.panel->isOpen()) {
@@ -269,6 +287,10 @@ void UIManager::renderPanels() {
     // LightingDialog doesn't inherit from Dialog — render separately
     if (m_lightingDialog)
         m_lightingDialog->render();
+
+    // MachineProfileDialog is a global service window shared by all panels.
+    if (m_machineProfileDialog)
+        m_machineProfileDialog->render();
 }
 
 void UIManager::renderBackgroundUI(float deltaTime, const LoadingState* loadingState) {
@@ -283,9 +305,6 @@ void UIManager::renderBackgroundUI(float deltaTime, const LoadingState* loadingS
     MessageDialog::renderGlobal();
     SavePromptDialog::renderGlobal();
     ToastManager::instance().render(deltaTime);
-
-    if (m_importSummaryDialog)
-        m_importSummaryDialog->render();
 
     if (m_settingsImportDialog)
         m_settingsImportDialog->render();
@@ -343,7 +362,7 @@ void UIManager::addGroupPanel() {
 
 void UIManager::showCncPanels(bool show) {
     for (auto& entry : m_panelRegistry) {
-        if (entry.role == PanelRole::Sender)
+        if (entry.role == WindowRole::Sender)
             *entry.showFlag = show;
     }
 }
@@ -366,8 +385,8 @@ void UIManager::setWorkspaceMode(WorkspaceMode mode) {
 }
 
 void UIManager::enforceWorkspaceBoundary() {
-    const PanelRole hiddenRole =
-        m_workspaceMode == WorkspaceMode::CNC ? PanelRole::Workshop : PanelRole::Sender;
+    const WindowRole hiddenRole =
+        m_workspaceMode == WorkspaceMode::CNC ? WindowRole::Workshop : WindowRole::Sender;
     for (auto& entry : m_panelRegistry) {
         if (entry.role == hiddenRole)
             *entry.showFlag = false;
@@ -391,7 +410,116 @@ void UIManager::syncWorkspaceModeToPanels() {
 bool UIManager::senderSurfaceVisible() const {
     return m_showGCode || m_showCncStatus || m_showCncJob || m_showCncSafety ||
            m_showCncJog || m_showCncConsole || m_showCncWcs || m_showCncTool ||
-           m_showCncSettings || m_showCncMacros || m_showDirectCarve || m_showToolBrowser;
+           m_showCncSettings || m_showCncMacros || m_showDirectCarve;
+}
+
+bool UIManager::isWindowVisible(const std::string& key) const {
+    const auto* catalog = findWindowCatalogEntry(key);
+    const std::string canonical = catalog ? catalog->key : key;
+
+    if (canonical == "machine_profiles")
+        return m_machineProfileDialog && m_machineProfileDialog->isOpen();
+    if (canonical == "lighting_settings")
+        return m_lightingDialog && m_lightingDialog->isOpen();
+
+    const std::string layoutKey =
+        catalog && !catalog->layoutKey.empty() ? catalog->layoutKey : key;
+    for (const auto& entry : m_panelRegistry) {
+        if (entry.key == layoutKey || (catalog && catalog->matchesKey(entry.key)))
+            return *entry.showFlag;
+    }
+    return false;
+}
+
+void UIManager::openWindow(const std::string& key) {
+    const auto* catalog = findWindowCatalogEntry(key);
+    const std::string canonical = catalog ? catalog->key : key;
+
+    if (canonical == "machine_profiles") {
+        openMachineProfiles();
+        return;
+    }
+    if (canonical == "lighting_settings") {
+        if (m_lightingDialog)
+            m_lightingDialog->open();
+        return;
+    }
+
+    const std::string layoutKey =
+        catalog && !catalog->layoutKey.empty() ? catalog->layoutKey : key;
+    auto it = std::find_if(m_panelRegistry.begin(), m_panelRegistry.end(),
+                           [&](const auto& entry) {
+                               return entry.key == layoutKey ||
+                                      (catalog && catalog->matchesKey(entry.key));
+                           });
+    if (it == m_panelRegistry.end())
+        return;
+    if (!it->panel)
+        return;
+
+    if (it->role == WindowRole::Sender && m_workspaceMode != WorkspaceMode::CNC) {
+        setWorkspaceMode(WorkspaceMode::CNC);
+    } else if (it->role == WindowRole::Workshop && m_workspaceMode != WorkspaceMode::Model) {
+        if (m_cncStreaming)
+            return;
+        setWorkspaceMode(WorkspaceMode::Model);
+    }
+
+    *it->showFlag = true;
+    if (it->panel)
+        it->panel->setOpen(true);
+    ImGui::SetWindowFocus(it->windowTitle);
+}
+
+void UIManager::toggleWindow(const std::string& key) {
+    const auto* catalog = findWindowCatalogEntry(key);
+    const std::string canonical = catalog ? catalog->key : key;
+
+    if (canonical == "machine_profiles") {
+        if (m_machineProfileDialog && m_machineProfileDialog->isOpen())
+            m_machineProfileDialog->close();
+        else
+            openMachineProfiles();
+        return;
+    }
+    if (canonical == "lighting_settings") {
+        if (m_lightingDialog) {
+            if (m_lightingDialog->isOpen())
+                m_lightingDialog->close();
+            else
+                m_lightingDialog->open();
+        }
+        return;
+    }
+
+    const std::string layoutKey =
+        catalog && !catalog->layoutKey.empty() ? catalog->layoutKey : key;
+    for (auto& entry : m_panelRegistry) {
+        if (entry.key != layoutKey && !(catalog && catalog->matchesKey(entry.key)))
+            continue;
+
+        if (*entry.showFlag) {
+            *entry.showFlag = false;
+        } else {
+            openWindow(key);
+        }
+        return;
+    }
+}
+
+void UIManager::openToolLibrary() {
+    openWindow("tool_library");
+    m_focusToolLibraryNextFrame = true;
+}
+
+void UIManager::openMachineProfiles() {
+    if (m_machineProfileDialog)
+        m_machineProfileDialog->open();
+    ImGui::SetWindowFocus("Machine Profiles");
+}
+
+void UIManager::addMachineProfileChangedCallback(ActionCallback cb) {
+    m_onMachineProfileChanged.push_back(std::move(cb));
 }
 
 int64_t UIManager::getSelectedModelId() const {

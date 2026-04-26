@@ -50,10 +50,15 @@ void CarveStreamer::start(const MultiPassToolpath& toolpath,
     m_aborted.store(false, std::memory_order_release);
     m_paused.store(false, std::memory_order_release);
 
-    // Compute total lines: preamble(1) + clearing + finishing + postamble(3: retract + M5 + M30)
+    // Compute total lines: preamble(1) + clearing + optional tool-change
+    // boundary + finishing + postamble(3: retract + M5 + M30).
     int clearingCount = static_cast<int>(toolpath.clearing.points.size());
     int finishingCount = static_cast<int>(toolpath.finishing.points.size());
-    m_totalLines = 1 + clearingCount + finishingCount + 3;
+    const int toolChangeCount =
+        (toolpath.requiresToolChange && clearingCount > 0 && finishingCount > 0)
+            ? 6
+            : 0;
+    m_totalLines = 1 + clearingCount + toolChangeCount + finishingCount + 3;
 
     // Determine starting phase
     if (clearingCount > 0) {
@@ -112,9 +117,50 @@ std::string CarveStreamer::nextLine()
             rememberMove(pt.position, false);
             return line;
         }
-        // Clearing complete, switch to finishing
-        m_phase = Phase::Finishing;
+        // Clearing complete, switch to tool-change boundary if needed.
+        if (m_toolpath.requiresToolChange &&
+            !m_toolpath.finishing.points.empty()) {
+            m_phase = Phase::ToolChange;
+        } else {
+            m_phase = Phase::Finishing;
+        }
         m_pointIndex = 0;
+    }
+
+    if (m_phase == Phase::ToolChange) {
+        const std::string finishTool = m_toolpath.finishingToolName.empty()
+            ? "finish tool"
+            : m_toolpath.finishingToolName;
+        const std::string roughTool = m_toolpath.clearingToolName.empty()
+            ? "roughing tool"
+            : m_toolpath.clearingToolName;
+
+        std::string line;
+        if (m_pointIndex == 0) {
+            line = "G0 Z" + fmt(cnc::toSendLength(m_config.safeZMm, m_sendUnits));
+        } else if (m_pointIndex == 1) {
+            line = "M5";
+        } else if (m_pointIndex == 2) {
+            line = "(Tool change: " + roughTool + " -> " + finishTool + ")";
+        } else if (m_pointIndex == 3) {
+            line = "(Install finish tool: " + finishTool + ")";
+        } else if (m_pointIndex == 4) {
+            line = "(Re-zero Z with finish tool before continuing)";
+        } else {
+            line = "M0";
+            m_phase = Phase::Finishing;
+            m_lastFeedRate = -1.0f;
+            m_hasLastPosition = false;
+            m_lastPosition = Vec3{0.0f};
+            m_lastRapid = true;
+        }
+
+        m_pointIndex++;
+        m_lineNumber++;
+        if (m_phase == Phase::Finishing) {
+            m_pointIndex = 0;
+        }
+        return line;
     }
 
     // Finishing pass

@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 
 #include <imgui.h>
 
 #include "core/config/config.h"
+#include "core/cnc/tool_profile.h"
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
 #include "core/utils/uuid.h"
@@ -15,7 +17,9 @@
 #include "core/utils/log.h"
 #include "ui/dialogs/file_dialog.h"
 #include "ui/icons.h"
+#include "ui/tool_library_access.h"
 #include "ui/ui_colors.h"
+#include "ui/widgets/tool_profile_preview.h"
 
 namespace dw {
 
@@ -62,7 +66,11 @@ static const VtdbToolType kToolTypes[] = {
     VtdbToolType::DiamondDrag,
 };
 
-ToolBrowserPanel::ToolBrowserPanel() : Panel("Tool Browser") {}
+ToolBrowserPanel::ToolBrowserPanel() : Panel(kToolLibraryWindowTitle) {}
+
+void ToolBrowserPanel::onMachineProfileChanged() {
+    m_hasCalcResult = false;
+}
 
 void ToolBrowserPanel::render() {
     if (!m_open) return;
@@ -407,11 +415,16 @@ void ToolBrowserPanel::renderTree() {
     TreeContextAction ctxAction;
     bool filtering = m_filterBuf[0] != '\0'
                      && !m_filterMatchIds.empty();
+    const std::string loadedBeforeRender = m_loadedGeometryId;
     renderTreeNode(m_treeEntries, m_geometries, m_toolboxIds,
                    m_filterMatchIds, filtering,
                    m_toolboxRepo, "",
                    m_selectedTreeEntryId, m_selectedGeometryId,
                    ctxAction);
+
+    if (toolBrowserSelectionNeedsReload(loadedBeforeRender, m_selectedGeometryId)) {
+        selectTool(m_selectedGeometryId);
+    }
 
     // Handle context menu actions
     switch (ctxAction.action) {
@@ -528,6 +541,7 @@ void ToolBrowserPanel::renderTree() {
 void ToolBrowserPanel::renderToolDetail() {
     if (m_selectedGeometryId.empty()) {
         ImGui::TextDisabled("Select a tool to view details");
+        renderMachineEditor();
         return;
     }
 
@@ -545,6 +559,9 @@ void ToolBrowserPanel::renderToolDetail() {
         }
         ImGui::Spacing();
     }
+
+    renderToolProfilePreview(m_editGeometry, ImVec2(0, ImGui::GetFontSize() * 13.0f));
+    ImGui::Spacing();
 
     // Geometry section
     ImGui::SeparatorText("Geometry");
@@ -569,9 +586,17 @@ void ToolBrowserPanel::renderToolDetail() {
     }
 
     const char* unitSuffix = (m_editGeometry.units == VtdbUnits::Metric) ? "mm" : "in";
+    auto fromMm = [&](double valueMm) {
+        return m_editGeometry.units == VtdbUnits::Imperial ? valueMm / 25.4 : valueMm;
+    };
+    const auto profile = describeToolProfile(m_editGeometry);
+    const auto resolvedProfile = resolveToolProfileGeometry(m_editGeometry);
 
     // Core dimensions
-    float diameter = static_cast<float>(m_editGeometry.diameter);
+    float diameter = static_cast<float>(
+        m_editGeometry.diameter > 0.0 || !resolvedProfile.diameterParsed
+            ? m_editGeometry.diameter
+            : fromMm(resolvedProfile.diameterMm));
     if (ImGui::InputFloat("Diameter", &diameter, 0.01f, 0.1f, "%.4f")) {
         m_editGeometry.diameter = diameter;
     }
@@ -583,28 +608,74 @@ void ToolBrowserPanel::renderToolDetail() {
         m_editGeometry.num_flutes = std::max(1, flutes);
     }
 
-    float fluteLen = static_cast<float>(m_editGeometry.flute_length);
+    float fluteLen = static_cast<float>(
+        m_editGeometry.flute_length > 0.0 || !resolvedProfile.cutHeightParsed
+            ? m_editGeometry.flute_length
+            : fromMm(resolvedProfile.cutHeightMm));
     if (ImGui::InputFloat("Flute Length", &fluteLen, 0.01f, 0.1f, "%.4f")) {
         m_editGeometry.flute_length = fluteLen;
     }
     ImGui::SameLine();
     ImGui::TextDisabled("%s", unitSuffix);
 
-    // V-bit specific fields
-    if (m_editGeometry.tool_type == VtdbToolType::VBit) {
+    auto renderAngleField = [&](const char* label) {
         float angle = static_cast<float>(m_editGeometry.included_angle);
-        if (ImGui::InputFloat("Included Angle", &angle, 1.0f, 5.0f, "%.1f")) {
-            m_editGeometry.included_angle = angle;
+        if (ImGui::InputFloat(label, &angle, 1.0f, 5.0f, "%.1f")) {
+            m_editGeometry.included_angle = std::max(0.0f, angle);
         }
         ImGui::SameLine();
         ImGui::TextDisabled("deg");
-
-        float flatDia = static_cast<float>(m_editGeometry.flat_diameter);
-        if (ImGui::InputFloat("Flat Diameter", &flatDia, 0.001f, 0.01f, "%.4f")) {
-            m_editGeometry.flat_diameter = flatDia;
+    };
+    auto renderTaperSideAngleField = [&]() {
+        float angle = static_cast<float>(resolvedProfile.sideAngleDeg);
+        if (ImGui::InputFloat("Side Angle", &angle, 0.1f, 1.0f, "%.2f")) {
+            m_editGeometry.included_angle = std::max(0.0f, angle);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("deg");
+    };
+    auto renderTipRadiusField = [&]() {
+        float tipRadius = static_cast<float>(
+            m_editGeometry.tip_radius > 0.0 || !resolvedProfile.tipRadiusParsed
+                ? m_editGeometry.tip_radius
+                : fromMm(resolvedProfile.tipRadiusMm));
+        if (ImGui::InputFloat("Tip Radius", &tipRadius, 0.001f, 0.01f, "%.4f")) {
+            m_editGeometry.tip_radius = std::max(0.0f, tipRadius);
         }
         ImGui::SameLine();
         ImGui::TextDisabled("%s", unitSuffix);
+    };
+    auto renderFlatDiameterField = [&]() {
+        float flatDia = static_cast<float>(
+            m_editGeometry.flat_diameter > 0.0 || !resolvedProfile.flatDiameterParsed
+                ? m_editGeometry.flat_diameter
+                : fromMm(resolvedProfile.flatDiameterMm));
+        if (ImGui::InputFloat("Flat Diameter", &flatDia, 0.001f, 0.01f, "%.4f")) {
+            m_editGeometry.flat_diameter = std::max(0.0f, flatDia);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", unitSuffix);
+    };
+
+    switch (profile.shape) {
+    case ToolProfileShape::VGroove:
+        renderAngleField("Included Angle");
+        renderFlatDiameterField();
+        break;
+    case ToolProfileShape::TaperedBallNose:
+        renderTaperSideAngleField();
+        renderTipRadiusField();
+        break;
+    case ToolProfileShape::BallNose:
+    case ToolProfileShape::Radiused:
+        renderTipRadiusField();
+        break;
+    case ToolProfileShape::DrillPoint:
+    case ToolProfileShape::DiamondDrag:
+        renderAngleField("Point Angle");
+        break;
+    default:
+        break;
     }
 
     // Notes
@@ -631,26 +702,6 @@ void ToolBrowserPanel::renderToolDetail() {
             bool sel = (mat.id == m_selectedMaterialId);
             if (ImGui::Selectable(mat.name.c_str(), sel)) {
                 m_selectedMaterialId = mat.id;
-                selectTool(m_selectedGeometryId);
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    // Machine selector
-    if (ImGui::BeginCombo("Machine##cd", m_selectedMachineId.empty()
-                                             ? "(Default Machine)"
-                                             : m_selectedMachineId.c_str())) {
-        if (ImGui::Selectable("(Default Machine)", m_selectedMachineId.empty())) {
-            m_selectedMachineId.clear();
-            selectTool(m_selectedGeometryId);
-        }
-        for (const auto& mach : m_machines) {
-            bool sel = (mach.id == m_selectedMachineId);
-            std::string machLabel = mach.name;
-            if (!mach.make.empty()) machLabel += " (" + mach.make + ")";
-            if (ImGui::Selectable(machLabel.c_str(), sel)) {
-                m_selectedMachineId = mach.id;
                 selectTool(m_selectedGeometryId);
             }
         }
@@ -688,9 +739,10 @@ void ToolBrowserPanel::renderToolDetail() {
             m_editCuttingData.tool_number = std::max(0, toolNum);
         }
     } else {
-        ImGui::TextDisabled("No cutting data for this material/machine combination");
+        ImGui::TextDisabled("No cutting data for this material");
         if (ImGui::Button("Add Cutting Data")) {
             VtdbCuttingData cd;
+            cd.id = uuid::generate();
             cd.feed_rate = 100.0;
             cd.plunge_rate = 50.0;
             cd.spindle_speed = 18000;
@@ -698,11 +750,10 @@ void ToolBrowserPanel::renderToolDetail() {
             cd.stepover = 0.4;
             m_toolDatabase->insertCuttingData(cd);
 
-            // Create entity linking geometry + material + machine -> cutting data
+            // Create entity linking geometry + material -> cutting data.
             VtdbToolEntity entity;
             entity.tool_geometry_id = m_selectedGeometryId;
             entity.material_id = m_selectedMaterialId;
-            entity.machine_id = m_selectedMachineId;
             entity.tool_cutting_data_id = cd.id;
             m_toolDatabase->insertEntity(entity);
 
@@ -879,7 +930,6 @@ void ToolBrowserPanel::loadData() {
 
     m_treeEntries = m_toolDatabase->getAllTreeEntries();
     m_materials = m_toolDatabase->findAllMaterials();
-    m_machines = m_toolDatabase->findAllMachines();
     m_geometries = m_toolDatabase->findAllGeometries();
 
     // Load toolbox state
@@ -900,18 +950,57 @@ void ToolBrowserPanel::loadData() {
     }
 }
 
+static std::optional<VtdbCuttingData> findCuttingDataForMaterial(ToolDatabase& db,
+                                                                 const std::string& geometryId,
+                                                                 const std::string& materialId) {
+    const auto entities = db.findEntitiesForGeometry(geometryId);
+    const VtdbToolEntity* exactUnscoped = nullptr;
+    const VtdbToolEntity* exactAnyMachine = nullptr;
+    const VtdbToolEntity* genericUnscoped = nullptr;
+    const VtdbToolEntity* genericAnyMachine = nullptr;
+
+    for (const auto& entity : entities) {
+        const bool materialMatches = (entity.material_id == materialId);
+        const bool genericMaterial = entity.material_id.empty();
+        const bool unscopedMachine = entity.machine_id.empty();
+
+        if (materialMatches && unscopedMachine) {
+            exactUnscoped = &entity;
+            break;
+        }
+        if (materialMatches && !exactAnyMachine)
+            exactAnyMachine = &entity;
+        if (genericMaterial && unscopedMachine && !genericUnscoped)
+            genericUnscoped = &entity;
+        if (genericMaterial && !genericAnyMachine)
+            genericAnyMachine = &entity;
+    }
+
+    const VtdbToolEntity* match = exactUnscoped;
+    if (!match) match = exactAnyMachine;
+    if (!match) match = genericUnscoped;
+    if (!match) match = genericAnyMachine;
+    if (!match) return std::nullopt;
+
+    return db.findCuttingDataById(match->tool_cutting_data_id);
+}
+
 void ToolBrowserPanel::selectTool(const std::string& geometryId) {
     m_selectedGeometryId = geometryId;
 
     auto geom = m_toolDatabase->findGeometryById(geometryId);
     if (geom) {
         m_editGeometry = *geom;
+        m_loadedGeometryId = geometryId;
+    } else {
+        m_loadedGeometryId.clear();
     }
 
-    // Try to load cutting data for this geometry + material + machine
-    auto view = m_toolDatabase->getToolView(geometryId, m_selectedMaterialId, m_selectedMachineId);
-    if (view) {
-        m_editCuttingData = view->cutting_data;
+    // Try to load cutting data for this geometry + material. VTDB machine rows are
+    // retained for import/export compatibility but are no longer a UI scope.
+    auto cuttingData = findCuttingDataForMaterial(*m_toolDatabase, geometryId, m_selectedMaterialId);
+    if (cuttingData) {
+        m_editCuttingData = *cuttingData;
         m_hasCuttingData = true;
     } else {
         m_editCuttingData = {};
@@ -927,6 +1016,16 @@ static const char* driveTypeName(DriveType dt) {
     case DriveType::RackPinion: return "Rack & Pinion";
     }
     return "Unknown";
+}
+
+static DriveType driveTypeFromProfile(const gcode::MachineProfile& profile) {
+    switch (profile.driveSystem) {
+    case gcode::DriveSystem::Belt: return DriveType::Belt;
+    case gcode::DriveSystem::BallScrew: return DriveType::BallScrew;
+    case gcode::DriveSystem::Acme:
+    case gcode::DriveSystem::LeadScrew: return DriveType::LeadScrew;
+    }
+    return DriveType::LeadScrew;
 }
 
 static const char* hardnessBandName(HardnessBand band) {
@@ -966,50 +1065,30 @@ void ToolBrowserPanel::renderCalculator() {
 
     ImGui::InputFloat("Janka Hardness (lbf)", &m_calcJanka, 10.0f, 100.0f, "%.0f");
 
-    // Machine display — .vtdb machine if selected, otherwise active Config profile
-    std::string machLabel;
-    VtdbMachine selectedMach;
-    bool hasMachine = false;
-    if (!m_selectedMachineId.empty()) {
-        for (const auto& mach : m_machines) {
-            if (mach.id == m_selectedMachineId) {
-                selectedMach = mach;
-                machLabel = mach.name;
-                hasMachine = true;
-                break;
-            }
-        }
-    }
-    // Fall back to active Config machine profile
-    if (!hasMachine) {
-        const auto& mp = Config::instance().getActiveMachineProfile();
-        machLabel = mp.name;
-        selectedMach.name = mp.name;
-        selectedMach.spindle_power_watts = static_cast<f64>(mp.spindlePower);
-        selectedMach.max_rpm = static_cast<int>(mp.spindleMaxRPM);
-        switch (mp.driveSystem) {
-        case gcode::DriveSystem::Belt:      selectedMach.drive_type = DriveType::Belt; break;
-        case gcode::DriveSystem::BallScrew: selectedMach.drive_type = DriveType::BallScrew; break;
-        default:                            selectedMach.drive_type = DriveType::LeadScrew; break;
-        }
-        hasMachine = true;
-    }
-    ImGui::Text("Machine: %s", machLabel.c_str());
-    if (hasMachine) {
+    const auto& profile = Config::instance().getActiveMachineProfile();
+    const bool machineConfigured = toolBrowserMachineProfileConfigured(profile);
+    ImGui::Text("Machine: %s", toolBrowserMachineProfileLabel(profile).c_str());
+    if (machineConfigured) {
         ImGui::SameLine();
-        ImGui::TextDisabled("(%s, %d RPM, %.0fW)",
-                            driveTypeName(selectedMach.drive_type),
-                            selectedMach.max_rpm,
-                            selectedMach.spindle_power_watts);
+        ImGui::TextDisabled("(%s, %.0f RPM, %.0fW)",
+                            driveTypeName(driveTypeFromProfile(profile)),
+                            static_cast<double>(profile.spindleMaxRPM),
+                            static_cast<double>(profile.spindlePower));
+    } else {
+        ImGui::TextColored(colors::kOrange, "Configure an active machine profile before calculating.");
     }
 
     // Calculate button
     char calcBtnLabel[64];
     std::snprintf(calcBtnLabel, sizeof(calcBtnLabel), "%s Calculate", Icons::Settings);
     float calcBtnW = ImGui::CalcTextSize(calcBtnLabel).x + ImGui::GetStyle().FramePadding.x * 4;
+    if (!machineConfigured)
+        ImGui::BeginDisabled();
     if (ImGui::Button(calcBtnLabel, ImVec2(calcBtnW, 0))) {
         runCalculation();
     }
+    if (!machineConfigured)
+        ImGui::EndDisabled();
 
     // Show results
     if (m_hasCalcResult) {
@@ -1057,6 +1136,7 @@ void ToolBrowserPanel::renderCalculator() {
             // If no cutting data existed, create one
             if (!m_hasCuttingData) {
                 VtdbCuttingData cd;
+                cd.id = uuid::generate();
                 cd.spindle_speed = m_calcResult.rpm;
                 cd.feed_rate = m_calcResult.feed_rate;
                 cd.plunge_rate = m_calcResult.plunge_rate;
@@ -1067,7 +1147,6 @@ void ToolBrowserPanel::renderCalculator() {
                 VtdbToolEntity entity;
                 entity.tool_geometry_id = m_selectedGeometryId;
                 entity.material_id = m_selectedMaterialId;
-                entity.machine_id = m_selectedMachineId;
                 entity.tool_cutting_data_id = cd.id;
                 m_toolDatabase->insertEntity(entity);
 
@@ -1081,50 +1160,37 @@ void ToolBrowserPanel::renderMachineEditor() {
     ImGui::Spacing();
     ImGui::SeparatorText("Machine Setup");
 
-    if (m_selectedMachineId.empty()) {
-        ImGui::TextDisabled("Select a machine above to configure");
-        return;
+    const auto& profile = Config::instance().getActiveMachineProfile();
+    const bool configured = toolBrowserMachineProfileConfigured(profile);
+
+    if (configured) {
+        ImGui::Text("Active Profile: %s", profile.name.c_str());
+        ImGui::TextDisabled("%s, %.0f RPM, %.0fW",
+                            driveTypeName(driveTypeFromProfile(profile)),
+                            static_cast<double>(profile.spindleMaxRPM),
+                            static_cast<double>(profile.spindlePower));
+        ImGui::TextDisabled("Rigidity: %.0f%%",
+                            ToolCalculator::rigidityFactor(driveTypeFromProfile(profile)) * 100.0);
+    } else {
+        ImGui::TextColored(colors::kOrange, "Machine not configured");
+        ImGui::TextDisabled("Set an active machine profile with travel, RPM, power, and drive system.");
     }
 
-    // Find the selected machine
-    VtdbMachine* mach = nullptr;
-    for (auto& m : m_machines) {
-        if (m.id == m_selectedMachineId) {
-            mach = &m;
-            break;
-        }
-    }
-    if (!mach) return;
-
-    bool changed = false;
-
-    float power = static_cast<float>(mach->spindle_power_watts);
-    if (ImGui::InputFloat("Spindle Power (W)", &power, 10.0f, 100.0f, "%.0f")) {
-        mach->spindle_power_watts = power;
-        changed = true;
-    }
-
-    int rpm = mach->max_rpm;
-    if (ImGui::InputInt("Max RPM", &rpm, 500, 1000)) {
-        mach->max_rpm = std::max(1000, rpm);
-        changed = true;
-    }
-
-    int driveIdx = static_cast<int>(mach->drive_type);
-    const char* driveLabels[] = {"Belt", "Lead Screw", "Ball Screw", "Rack & Pinion"};
-    if (ImGui::Combo("Drive Type", &driveIdx, driveLabels, 4)) {
-        mach->drive_type = static_cast<DriveType>(driveIdx);
-        changed = true;
-    }
-
-    ImGui::TextDisabled("Rigidity: %.0f%%", ToolCalculator::rigidityFactor(mach->drive_type) * 100.0);
-
-    if (changed) {
-        m_toolDatabase->updateMachine(*mach);
+    const char* buttonLabel = configured ? "Edit Machine" : "Configure Machine";
+    if (ImGui::Button(buttonLabel)) {
+        if (m_openMachineProfiles)
+            m_openMachineProfiles();
     }
 }
 
 void ToolBrowserPanel::runCalculation() {
+    const auto& profile = Config::instance().getActiveMachineProfile();
+    if (!toolBrowserMachineProfileConfigured(profile)) {
+        m_hasCalcResult = false;
+        log::warning("ToolBrowser", "Cannot calculate feeds and speeds without a configured machine profile");
+        return;
+    }
+
     CalcInput input;
     input.diameter = m_editGeometry.diameter;
     input.num_flutes = m_editGeometry.num_flutes;
@@ -1132,30 +1198,9 @@ void ToolBrowserPanel::runCalculation() {
     input.units = m_editGeometry.units;
     input.janka_hardness = m_calcJanka;
     input.material_name = m_calcMaterialName;
-
-    // Get machine params from .vtdb machine if selected
-    bool foundMachine = false;
-    for (const auto& mach : m_machines) {
-        if (mach.id == m_selectedMachineId) {
-            input.spindle_power_watts = mach.spindle_power_watts;
-            input.max_rpm = mach.max_rpm;
-            input.drive_type = mach.drive_type;
-            foundMachine = true;
-            break;
-        }
-    }
-
-    // Fall back to active Config machine profile
-    if (!foundMachine) {
-        const auto& mp = Config::instance().getActiveMachineProfile();
-        input.spindle_power_watts = static_cast<f64>(mp.spindlePower);
-        input.max_rpm = static_cast<int>(mp.spindleMaxRPM);
-        switch (mp.driveSystem) {
-        case gcode::DriveSystem::Belt:      input.drive_type = DriveType::Belt; break;
-        case gcode::DriveSystem::BallScrew: input.drive_type = DriveType::BallScrew; break;
-        default:                            input.drive_type = DriveType::LeadScrew; break;
-        }
-    }
+    input.spindle_power_watts = static_cast<f64>(profile.spindlePower);
+    input.max_rpm = static_cast<int>(profile.spindleMaxRPM);
+    input.drive_type = driveTypeFromProfile(profile);
 
     m_calcResult = ToolCalculator::calculate(input);
     m_hasCalcResult = true;
@@ -1236,6 +1281,7 @@ void ToolBrowserPanel::deleteSelected() {
 
     m_selectedTreeEntryId.clear();
     m_selectedGeometryId.clear();
+    m_loadedGeometryId.clear();
     m_hasCuttingData = false;
     refresh();
 }

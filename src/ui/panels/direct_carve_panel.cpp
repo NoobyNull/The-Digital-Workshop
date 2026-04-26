@@ -7,20 +7,16 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <filesystem>
 #include <iomanip>
 #include <sstream>
 
-#include <glad/gl.h>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 
-#include "core/carve/analysis_overlay.h"
 #include "core/carve/carve_job.h"
 #include "core/carve/gcode_export.h"
-#include "core/carve/heightmap_preview.h"
 #include "core/carve/material_blank_defaults.h"
-#include "core/carve/tool_recommender.h"
+#include "core/carve/roughing_tool_selector.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/tool_calculator.h"
 #include "core/config/config.h"
@@ -41,6 +37,7 @@
 #include "ui/panels/cut_optimizer_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/theme.h"
+#include "ui/tool_library_access.h"
 #include "ui/ui_colors.h"
 #include "ui/widgets/toast.h"
 
@@ -75,7 +72,7 @@ void CenteredProgressBar(float fraction, const ImVec2& size, const char* overlay
 
 // Toolpath overlay colors
 constexpr ImU32 kFinishColor = IM_COL32(80, 120, 255, 200);   // blue
-constexpr ImU32 kClearColor = IM_COL32(255, 80, 80, 200);     // red
+constexpr ImU32 kClearColor = IM_COL32(235, 155, 65, 190);    // orange
 constexpr ImU32 kRapidColor = IM_COL32(80, 220, 80, 150);     // green
 
 void statusBullet(bool ok, const char* label) {
@@ -129,6 +126,14 @@ const char* scanAxisLabel(carve::ScanAxis axis) {
     case carve::ScanAxis::YOnly:  return "y_only";
     case carve::ScanAxis::XThenY: return "x_then_y";
     case carve::ScanAxis::YThenX: return "y_then_x";
+    }
+    return "unknown";
+}
+
+const char* cutExtentsLabel(carve::CutExtents extents) {
+    switch (extents) {
+    case carve::CutExtents::Model:    return "model";
+    case carve::CutExtents::Material: return "material";
     }
     return "unknown";
 }
@@ -221,10 +226,7 @@ std::string formatStockDimensions(const carve::StockDimensions& stock) {
 
 DirectCarvePanel::DirectCarvePanel() : Panel("Direct Carve") {}
 
-DirectCarvePanel::~DirectCarvePanel() {
-    if (m_hmPreviewTex != 0)
-        glDeleteTextures(1, &m_hmPreviewTex);
-}
+DirectCarvePanel::~DirectCarvePanel() = default;
 
 void DirectCarvePanel::setCncController(CncController* cnc) { m_cnc = cnc; }
 void DirectCarvePanel::setToolDatabase(ToolDatabase* db) { m_toolDb = db; }
@@ -237,6 +239,9 @@ void DirectCarvePanel::setLibraryManager(LibraryManager* library) { m_libraryMan
 void DirectCarvePanel::setMaterialManager(MaterialManager* mgr) { m_materialMgr = mgr; }
 void DirectCarvePanel::setProjectManager(ProjectManager* pm) { m_projectManager = pm; }
 void DirectCarvePanel::setOpenToolBrowserCallback(std::function<void()> cb) { m_openToolBrowser = std::move(cb); }
+void DirectCarvePanel::setOpenMachineProfilesCallback(std::function<void()> cb) {
+    m_openMachineProfiles = std::move(cb);
+}
 void DirectCarvePanel::setCutOptimizerPanel(CutOptimizerPanel* cop) { m_cutOptimizer = cop; }
 
 void DirectCarvePanel::onConnectionChanged(bool connected) { m_cncConnected = connected; }
@@ -299,16 +304,6 @@ void DirectCarvePanel::onRawLine(const std::string& line, bool isSent)
     sendNextZeroingStep();
 }
 
-void DirectCarvePanel::clearHeightmapPreviewTexture()
-{
-    if (m_hmPreviewTex != 0) {
-        glDeleteTextures(1, &m_hmPreviewTex);
-        m_hmPreviewTex = 0;
-    }
-    m_hmPreviewW = 0;
-    m_hmPreviewH = 0;
-}
-
 void DirectCarvePanel::clearFinalConfirmation()
 {
     m_commitConfirmed = false;
@@ -319,34 +314,16 @@ void DirectCarvePanel::clearFinalConfirmation()
 void DirectCarvePanel::markToolpathSettingsChanged()
 {
     ++m_settingsVersion;
+    m_autoRoughingTool.reset();
+    m_autoRoughingWarning.clear();
     clearFinalConfirmation();
 }
 
 void DirectCarvePanel::markGeometryChanged()
 {
-    ++m_geometryVersion;
     markToolpathSettingsChanged();
-    m_heightmapSaved = false;
-    m_hmInitAttempted = false;
     m_toolpathGenerated = false;
     m_generatedAtVersion = -1;
-    m_heightmapRequestedAtGeometryVersion = -1;
-    m_heightmapGeneratedAtGeometryVersion = -1;
-    clearHeightmapPreviewTexture();
-}
-
-void DirectCarvePanel::startHeightmapForCurrentGeometry()
-{
-    if (!m_carveJob) return;
-
-    m_fitter.setStock(m_stock);
-    carve::HeightmapConfig hmCfg;
-    m_heightmapRequestedAtGeometryVersion = m_geometryVersion;
-    m_heightmapGeneratedAtGeometryVersion = -1;
-    m_heightmapSaved = false;
-    clearHeightmapPreviewTexture();
-    m_carveJob->startHeightmap(m_vertices, m_indices, m_fitter,
-                                m_fitParams, hmCfg);
 }
 
 void DirectCarvePanel::syncToolpathRapidRateFromProfile()
@@ -371,8 +348,8 @@ void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
                                       const std::string& modelName,
                                       const Path& modelSourcePath,
                                       u32 thumbnailTexture) {
-    m_vertices = vertices;
-    m_indices = indices;
+    (void)vertices;
+    (void)indices;
     m_modelLoaded = true;
     m_modelBoundsMin = boundsMin;
     m_modelBoundsMax = boundsMax;
@@ -404,12 +381,6 @@ void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
         m_onFitParamsChanged(m_fitParams, m_modelBoundsMin, m_modelBoundsMax, m_stock);
     }
 
-    // Reset heightmap cache state for new model
-    m_hmInitAttempted = false;
-    m_hmFileMissing = false;
-    m_heightmapSaved = false;
-    m_hmRegenConfirm = false;
-    m_hmMissingPath.clear();
     markGeometryChanged();
     m_maxStepVisited = std::max(m_maxStepVisited, static_cast<int>(m_currentStep));
 }
@@ -480,14 +451,12 @@ void DirectCarvePanel::applyOperationSetup(const carve::DirectCarveOperationSetu
         m_finishingToolSelected = true;
         m_toolSetupConfirmed = false;
     }
-    if (setup.clearingTool) {
-        m_clearTool = *setup.clearingTool;
-        m_clearToolSelected = true;
-        m_toolSetupConfirmed = false;
-    }
-
     m_toolpathGenerated = false;
     markGeometryChanged();
+    if (setup.clearingTool) {
+        m_autoRoughingTool = *setup.clearingTool;
+        m_autoRoughingWarning.clear();
+    }
     m_currentStep = m_finishingToolSelected ? Step::MaterialSetup : Step::ToolSelect;
     m_maxStepVisited = std::max(m_maxStepVisited, static_cast<int>(m_currentStep));
 
@@ -624,6 +593,7 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
         }},
         {"toolpath", {
             {"scan_axis", scanAxisLabel(m_toolpathConfig.axis)},
+            {"cut_extents", cutExtentsLabel(m_toolpathConfig.cutExtents)},
             {"mill_direction", millDirectionLabel(m_toolpathConfig.direction)},
             {"stepover_preset", stepoverPresetLabel(m_toolpathConfig.stepoverPreset)},
             {"custom_stepover_pct", m_toolpathConfig.customStepoverPct},
@@ -631,6 +601,7 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
             {"feed_rate_mm_min", m_toolpathConfig.feedRateMmMin},
             {"plunge_rate_mm_min", m_toolpathConfig.plungeRateMmMin},
             {"rapid_rate_mm_min", m_toolpathConfig.rapidRateMmMin},
+            {"stepdown_mm", m_toolpathConfig.stepdownMm},
             {"lead_in_mm", m_toolpathConfig.leadInMm},
             {"scan_resolution_mm", m_toolpathConfig.scanResolutionMm},
         }},
@@ -651,7 +622,6 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
             {"model_loaded", m_modelLoaded},
             {"material_selected", m_materialSelected},
             {"finishing_tool_selected", m_finishingToolSelected},
-            {"clearing_tool_selected", m_clearToolSelected},
             {"toolpath_generated", m_toolpathGenerated},
             {"settings_version", m_settingsVersion},
             {"generated_at_version", m_generatedAtVersion},
@@ -661,8 +631,8 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
     if (m_finishingToolSelected) {
         snapshot["finishing_tool"] = toolSummaryJson(m_finishTool);
     }
-    if (m_clearToolSelected) {
-        snapshot["clearing_tool"] = toolSummaryJson(m_clearTool);
+    if (m_autoRoughingTool) {
+        snapshot["clearing_tool"] = toolSummaryJson(*m_autoRoughingTool);
     }
 
     ProjectOpenItem item;
@@ -684,8 +654,9 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
         if (m_finishingToolSelected) {
             (void)syncToolOpenItem(*operationItemId, operationSourceKey, "finish", m_finishTool);
         }
-        if (m_clearToolSelected) {
-            (void)syncToolOpenItem(*operationItemId, operationSourceKey, "clear", m_clearTool);
+        if (m_autoRoughingTool) {
+            (void)syncToolOpenItem(*operationItemId, operationSourceKey, "clear",
+                                   *m_autoRoughingTool);
         }
     }
 
@@ -767,11 +738,12 @@ DirectCarvePanel::currentAutoZeroBitMode() const
         return m_autoZeroBitMode;
     }
 
-    if (!m_finishingToolSelected) {
+    if (!m_finishingToolSelected && !m_autoRoughingTool) {
         return m_autoZeroBitMode;
     }
 
-    switch (m_finishTool.tool_type) {
+    const auto& zeroTool = m_autoRoughingTool ? *m_autoRoughingTool : m_finishTool;
+    switch (zeroTool.tool_type) {
     case VtdbToolType::BallNose:
     case VtdbToolType::TaperedBallNose:
     case VtdbToolType::VBit:
@@ -889,12 +861,6 @@ carve::DirectCarveWorkflowState DirectCarvePanel::workflowState() const
     state.toolSetupConfirmed = m_toolSetupConfirmed;
     state.materialSelected = m_materialSelected;
 
-    const bool heightmapReady =
-        m_carveJob && m_carveJob->state() == carve::CarveJobState::Ready;
-    state.heightmapReady = heightmapReady;
-    state.heightmapFresh = heightmapReady &&
-        m_heightmapGeneratedAtGeometryVersion == m_geometryVersion;
-
     state.toolpathGenerated = m_toolpathGenerated;
     state.toolpathFresh = m_toolpathGenerated &&
         m_generatedAtVersion == m_settingsVersion;
@@ -956,9 +922,21 @@ void DirectCarvePanel::render() {
     renderNavButtons();
     ImGui::End();
 
-    // Render floating dialogs owned by this panel
-    if (m_profileDialog.isOpen())
-        m_profileDialog.render();
+}
+
+void DirectCarvePanel::navigateToStep(Step target) {
+    const int targetIdx = static_cast<int>(target);
+    const int curIdx = static_cast<int>(m_currentStep);
+    if (!carve::canNavigateDirectCarveStep(targetIdx, m_maxStepVisited, STEP_COUNT))
+        return;
+
+    if (targetIdx > curIdx &&
+        (m_currentStep == Step::ModelFit || m_currentStep == Step::MaterialSetup)) {
+        syncSetupToOptimizerAndProject();
+    }
+
+    m_currentStep = target;
+    m_maxStepVisited = std::max(m_maxStepVisited, targetIdx);
 }
 
 void DirectCarvePanel::renderStepIndicator() {
@@ -980,11 +958,13 @@ void DirectCarvePanel::renderStepIndicator() {
         float cx = cursor.x + stepSpacing * (static_cast<float>(i) + 0.5f);
         float cy = cursor.y + circleR;
         const bool visited = i <= m_maxStepVisited;
+        const bool reachable =
+            carve::canNavigateDirectCarveStep(i, m_maxStepVisited, STEP_COUNT);
         const bool satisfied = isStepSatisfied(step);
         ImVec4 color = kDimmed;
         if (satisfied) {
             color = kGreen;
-        } else if (i == curIdx || visited) {
+        } else if (i == curIdx || visited || reachable) {
             color = kYellow;
         }
         ImU32 col = ImGui::ColorConvertFloat4ToU32(color);
@@ -996,25 +976,26 @@ void DirectCarvePanel::renderStepIndicator() {
         char btnId[32];
         std::snprintf(btnId, sizeof(btnId), "##step%d", i);
         if (ImGui::InvisibleButton(btnId, ImVec2(hitMax.x - hitMin.x, hitMax.y - hitMin.y))) {
-            // Allow returning to any visited step without marking it complete.
-            if (visited)
-                m_currentStep = static_cast<Step>(i);
+            navigateToStep(static_cast<Step>(i));
         }
         bool hovered = ImGui::IsItemHovered();
-        if (hovered && visited)
+        if (hovered && reachable)
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        if (hovered && visited && !satisfied) {
-            ImGui::SetTooltip("Gate incomplete");
+        if (hovered && reachable && !satisfied) {
+            ImGui::SetTooltip(visited ? "Gate incomplete" :
+                                        "Advance to this step");
+        } else if (hovered && !reachable) {
+            ImGui::SetTooltip("Complete or skip the previous step first");
         }
 
         // Circle
-        if (visited)
+        if (visited || (reachable && i == m_maxStepVisited + 1))
             dl->AddCircleFilled(ImVec2(cx, cy), circleR, col);
         else
             dl->AddCircle(ImVec2(cx, cy), circleR, col, 0, 1.5f);
 
         // Hover highlight ring
-        if (hovered && visited)
+        if (hovered && reachable)
             dl->AddCircle(ImVec2(cx, cy), circleR + 2.0f, col, 0, 1.5f);
 
         // Label centered below circle
@@ -1093,14 +1074,9 @@ bool DirectCarvePanel::canAdvance() {
 }
 
 void DirectCarvePanel::advanceStep() {
-    if (m_currentStep == Step::ModelFit || m_currentStep == Step::MaterialSetup) {
-        syncSetupToOptimizerAndProject();
-    }
     int idx = static_cast<int>(m_currentStep);
     if (idx < STEP_COUNT - 1) {
-        m_currentStep = static_cast<Step>(idx + 1);
-        m_maxStepVisited = std::max(m_maxStepVisited,
-                                    static_cast<int>(m_currentStep));
+        navigateToStep(static_cast<Step>(idx + 1));
     }
 }
 
@@ -1210,7 +1186,7 @@ void DirectCarvePanel::renderMachineCheck() {
     }
 }
 
-// --- renderModelFit (18-02): Stock dims, scale/depth/position, live fit, heightmap gen ---
+// --- renderModelFit: stock dimensions, scale/depth/position, live fit ---
 
 void DirectCarvePanel::renderModelFit() {
     if (!m_modelLoaded) {
@@ -1281,7 +1257,8 @@ void DirectCarvePanel::renderModelFit() {
     }
     ImGui::SameLine();
     if (ImGui::Button("Edit Machine")) {
-        m_profileDialog.open();
+        if (m_openMachineProfiles)
+            m_openMachineProfiles();
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Edit machine travel limits. This does not change the material blank.");
@@ -1452,8 +1429,7 @@ void DirectCarvePanel::renderToolSelect() {
     ImGui::TextUnformatted("Tool Selection");
     ImGui::Spacing();
     ImGui::TextWrapped("Select a finishing tool for the carve operation. "
-                       "A ball-nose end mill is recommended for smooth 3D relief surfaces. "
-                       "Smaller diameters capture finer detail but take longer.");
+                       "Smaller diameters produce tighter raster spacing but take longer.");
     ImGui::Spacing();
 
     // Load tools from database on first visit
@@ -1521,10 +1497,10 @@ void DirectCarvePanel::renderToolSelect() {
                                 - ImGui::GetStyle().FramePadding.x * 2);
                 if (ImGui::SmallButton("Edit Toolbox")) {
                     if (m_openToolBrowser) m_openToolBrowser();
-                    ImGui::SetWindowFocus("Tool Browser");
+                    ImGui::SetWindowFocus(kToolLibraryWindowTitle);
                 }
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Open Tool Browser to manage My Toolbox");
+                    ImGui::SetTooltip("%s", kToolLibraryStatusTooltip);
 
                 ImGui::Spacing();
                 renderToolLibraryPicker();
@@ -1542,7 +1518,7 @@ void DirectCarvePanel::renderToolSelect() {
         if (!m_toolDb) {
             ImGui::TextColored(kYellow, "No tool database connected.");
         } else {
-            ImGui::TextDisabled("Tool library is empty. Import tools via the Tool Browser panel.");
+            ImGui::TextDisabled("Tool library is empty. Import tools via Tool Library.");
         }
         ImGui::Spacing();
         m_useManualTool = true;
@@ -1567,129 +1543,12 @@ void DirectCarvePanel::renderToolSelect() {
                            m_finishTool.num_flutes,
                            m_finishTool.num_flutes != 1 ? "s" : "");
 
-        // Run recommender when heightmap analysis is available
-        if (m_carveJob && m_carveJob->state() == carve::CarveJobState::Ready
-            && m_toolDb && !m_recommendationRun) {
-            // Analyze heightmap for islands using selected finishing tool angle
-            f32 toolAngle = static_cast<f32>(m_finishTool.included_angle);
-            if (toolAngle <= 0.0f) toolAngle = 90.0f;
-            m_carveJob->analyzeHeightmap(toolAngle);
-
-            // Populate recommender with toolbox tools
-            carve::ToolRecommender recommender;
-            VtdbCuttingData emptyData{};
-            for (const auto& g : m_libraryTools) {
-                auto entities = m_toolDb->findEntitiesForGeometry(g.id);
-                if (!entities.empty()) {
-                    auto cd = m_toolDb->findCuttingDataById(entities[0].tool_cutting_data_id);
-                    recommender.addCandidate(g, cd.value_or(emptyData));
-                } else {
-                    recommender.addCandidate(g, emptyData);
-                }
-            }
-
-            const auto& hm = m_carveJob->heightmap();
-            carve::RecommendationInput input;
-            input.curvature = m_carveJob->curvatureResult();
-            input.islands = m_carveJob->islandResult();
-            input.modelDepthMm = hm.maxZ() - hm.minZ();
-            input.stockThicknessMm = m_stock.thickness;
-            m_recommendation = recommender.recommend(input);
-            m_recommendationRun = true;
-
-            // Auto-select top clearing tool
-            if (m_recommendation.needsClearing && !m_recommendation.clearing.empty()) {
-                m_clearTool = m_recommendation.clearing[0].geometry;
-                m_clearToolSelected = true;
-                m_selectedClearIdx = 0;
-                m_toolSetupConfirmed = false;
-                markToolpathSettingsChanged();
-            }
-        }
-
-        // Show clearing tool section when recommendation has been run
-        if (m_recommendationRun) {
-            ImGui::Spacing();
-
-            if (m_recommendation.needsClearing) {
-                const auto& islands = m_carveJob->islandResult().islands;
-                f32 maxDepth = 0.0f;
-                for (const auto& island : islands)
-                    maxDepth = std::max(maxDepth, island.depth);
-
-                ImGui::TextColored(kYellow, "%s %d island%s detected (max depth: %.1fmm)",
-                                   Icons::Warning,
-                                   static_cast<int>(islands.size()),
-                                   islands.size() != 1 ? "s" : "",
-                                   static_cast<double>(maxDepth));
-                ImGui::TextWrapped("A roughing pass will clear material around islands before "
-                                   "the finishing pass, preventing deep plunges with the finishing tool.");
-
-                ImGui::Spacing();
-
-                if (!m_recommendation.clearing.empty()) {
-                    ImGui::Text("Clearing Tool:");
-                    ImGui::Indent();
-                    for (int i = 0; i < static_cast<int>(m_recommendation.clearing.size()); ++i) {
-                        const auto& tc = m_recommendation.clearing[static_cast<size_t>(i)];
-                        bool selected = (i == m_selectedClearIdx);
-
-                        char label[192];
-                        const char* clearTypeStr = (tc.geometry.tool_type == VtdbToolType::EndMill)
-                            ? "End Mill" : "Ball Nose";
-                        std::snprintf(label, sizeof(label), "%s %.3gmm  (score: %.0f%%)",
-                                      clearTypeStr,
-                                      tc.geometry.diameter,
-                                      static_cast<double>(tc.score * 100.0f));
-
-                        if (ImGui::Selectable(label, selected)) {
-                            bool changed = false;
-                            if (selected) {
-                                changed = m_clearToolSelected;
-                                m_selectedClearIdx = -1;
-                                m_clearToolSelected = false;
-                            } else {
-                                changed = (m_selectedClearIdx != i);
-                                m_selectedClearIdx = i;
-                                m_clearTool = tc.geometry;
-                                m_clearToolSelected = true;
-                            }
-                            if (changed) markToolpathSettingsChanged();
-                            if (changed) m_toolSetupConfirmed = false;
-                        }
-                        // Show reasoning as tooltip
-                        if (ImGui::IsItemHovered() && !tc.reasoning.empty())
-                            ImGui::SetTooltip("%s", tc.reasoning.c_str());
-                    }
-                    ImGui::Unindent();
-                } else {
-                    ImGui::TextColored(kYellow,
-                        "No suitable clearing tools in your toolbox. "
-                        "Add an end mill or ball nose to My Toolbox.");
-                }
-
-                if (m_clearToolSelected) {
-                    const char* clrType = (m_clearTool.tool_type == VtdbToolType::EndMill)
-                        ? "End Mill" : "Ball Nose";
-                    ImGui::TextColored(kGreen, "%s Clearing: %s  %.3gmm",
-                                       Icons::Check, clrType, diameterMm(m_clearTool));
-                }
-            } else {
-                ImGui::TextColored(kGreen, "%s No islands detected - no roughing pass needed.",
-                                   Icons::Check);
-            }
-        }
-
         ImGui::Spacing();
         if (ImGui::Checkbox("Tool setup verified", &m_toolSetupConfirmed)) {
             clearFinalConfirmation();
         }
         if (ImGui::IsItemHovered()) {
-            if (m_clearToolSelected) {
-                ImGui::SetTooltip("Finishing and clearing tools are installed or ready for the planned change.");
-            } else {
-                ImGui::SetTooltip("The selected tool is installed and tightened.");
-            }
+            ImGui::SetTooltip("The selected tool is installed and tightened.");
         }
     }
 }
@@ -1741,7 +1600,6 @@ void DirectCarvePanel::renderToolLibraryPicker() {
                 m_finishTool = g;
                 m_finishingToolSelected = true;
                 m_toolSetupConfirmed = false;
-                m_recommendationRun = false;
                 markToolpathSettingsChanged();
             }
         }
@@ -1812,7 +1670,6 @@ void DirectCarvePanel::renderManualToolEntry() {
         m_finishTool.units = VtdbUnits::Metric;
         m_finishingToolSelected = true;
         m_toolSetupConfirmed = false;
-        m_recommendationRun = false;
         markToolpathSettingsChanged();
     }
     if (!canAccept) ImGui::EndDisabled();
@@ -1887,12 +1744,14 @@ void DirectCarvePanel::renderMaterialSetup() {
 
                             auto result = ToolCalculator::calculate(ci);
 
-                            // Result is in native units; convert to mm/min
+                            // Result is in native units; convert to millimeters.
                             f64 feedMm = result.feed_rate;
                             f64 plungeMm = result.plunge_rate;
+                            f64 stepdownMm = result.stepdown;
                             if (ci.units == VtdbUnits::Imperial) {
                                 feedMm *= 25.4;
                                 plungeMm *= 25.4;
+                                stepdownMm *= 25.4;
                             }
 
                             // Round to nearest 50
@@ -1900,11 +1759,14 @@ void DirectCarvePanel::renderMaterialSetup() {
                                 std::round(static_cast<f32>(feedMm) / 50.0f) * 50.0f;
                             m_toolpathConfig.plungeRateMmMin =
                                 std::round(static_cast<f32>(plungeMm) / 50.0f) * 50.0f;
+                            m_toolpathConfig.stepdownMm = static_cast<f32>(stepdownMm);
 
                             m_toolpathConfig.feedRateMmMin =
                                 std::clamp(m_toolpathConfig.feedRateMmMin, 100.0f, 10000.0f);
                             m_toolpathConfig.plungeRateMmMin =
                                 std::clamp(m_toolpathConfig.plungeRateMmMin, 50.0f, 5000.0f);
+                            m_toolpathConfig.stepdownMm =
+                                std::clamp(m_toolpathConfig.stepdownMm, 0.1f, 50.0f);
                         }
                         markToolpathSettingsChanged();
                     }
@@ -1961,6 +1823,12 @@ void DirectCarvePanel::renderMaterialSetup() {
     if (m_toolpathConfig.plungeRateMmMin != prevPlunge) markToolpathSettingsChanged();
 
     ImGui::SetNextItemWidth(iw);
+    f32 prevStepdown = m_toolpathConfig.stepdownMm;
+    ImGui::InputFloat("Stepdown (mm)", &m_toolpathConfig.stepdownMm, 0.1f, 0.5f, "%.2f");
+    m_toolpathConfig.stepdownMm = std::clamp(m_toolpathConfig.stepdownMm, 0.1f, 50.0f);
+    if (m_toolpathConfig.stepdownMm != prevStepdown) markToolpathSettingsChanged();
+
+    ImGui::SetNextItemWidth(iw);
     f32 prevSafeZ = m_toolpathConfig.safeZMm;
     ImGui::InputFloat("Safe Z (mm)", &m_toolpathConfig.safeZMm, 0.5f, 2.0f, "%.1f");
     m_toolpathConfig.safeZMm = std::clamp(m_toolpathConfig.safeZMm, 1.0f, 50.0f);
@@ -1976,19 +1844,26 @@ void DirectCarvePanel::renderMaterialSetup() {
 
     // Toolpath point resolution along scan lines
     ImGui::SetNextItemWidth(iw);
-    f32 hmRes = 0.1f;
-    if (m_carveJob && m_carveJob->state() == carve::CarveJobState::Ready)
-        hmRes = m_carveJob->heightmap().resolution();
     if (m_toolpathConfig.scanResolutionMm <= 0.0f)
-        m_toolpathConfig.scanResolutionMm = std::max(hmRes, 0.2f);
+        m_toolpathConfig.scanResolutionMm = 1.0f;
     if (ImGui::SliderFloat("Path Detail (mm)", &m_toolpathConfig.scanResolutionMm,
-                            hmRes, 2.0f, "%.2f"))
+                            0.2f, 10.0f, "%.2f"))
         markToolpathSettingsChanged();
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Point spacing along each scan line.\n"
-                          "Lower = more detail, more G-code lines.\n"
-                          "Heightmap resolution: %.2f mm",
-                          static_cast<double>(hmRes));
+                          "Lower = more preview and G-code points.");
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Cut Area");
+
+    ImGui::SetNextItemWidth(iw);
+    const char* extentLabels[] = {"Model extents", "Material extents"};
+    int extentsIdx = static_cast<int>(m_toolpathConfig.cutExtents);
+    if (ImGui::Combo("Cut Extents", &extentsIdx, extentLabels, 2)) {
+        m_toolpathConfig.cutExtents =
+            static_cast<carve::CutExtents>(extentsIdx);
+        markToolpathSettingsChanged();
+    }
 
     ImGui::Spacing();
     ImGui::SeparatorText("Scan Pattern");
@@ -2002,7 +1877,11 @@ void DirectCarvePanel::renderMaterialSetup() {
     }
 
     ImGui::SetNextItemWidth(iw);
-    const char* dirLabels[] = {"Climb", "Conventional", "Alternating (Zigzag)"};
+    const char* dirLabels[] = {
+        "Left/Up to Right/Down",
+        "Right/Down to Left/Up",
+        "Bidirectional"
+    };
     int dirIdx = static_cast<int>(m_toolpathConfig.direction);
     if (ImGui::Combo("Mill Direction", &dirIdx, dirLabels, 3)) {
         m_toolpathConfig.direction = static_cast<carve::MillDirection>(dirIdx);
@@ -2018,7 +1897,7 @@ void DirectCarvePanel::renderMaterialSetup() {
     }
 }
 
-// --- renderPreview (18-02): Heightmap overlay, toolpath lines, stats, controls ---
+// --- renderPreview: fixed-depth raster preview, stats, controls ---
 
 void DirectCarvePanel::renderPreview() {
     syncToolpathRapidRateFromProfile();
@@ -2036,216 +1915,89 @@ void DirectCarvePanel::renderPreview() {
         return;
     }
 
-    auto jobState = m_carveJob->state();
     float bw = ImGui::GetFontSize() * 14.0f;
-    bool hmReady = (jobState == carve::CarveJobState::Ready);
-    bool hmComputing = (jobState == carve::CarveJobState::Computing);
 
-    if (hmReady && m_heightmapRequestedAtGeometryVersion >= 0 &&
-        m_heightmapGeneratedAtGeometryVersion !=
-            m_heightmapRequestedAtGeometryVersion) {
-        m_heightmapGeneratedAtGeometryVersion =
-            m_heightmapRequestedAtGeometryVersion;
+    carve::ModelFitter fitter = m_fitter;
+    fitter.setStock(m_stock);
+    const auto& profile = Config::instance().getActiveMachineProfile();
+    fitter.setMachineTravel(profile.maxTravelX,
+                            profile.maxTravelY,
+                            profile.maxTravelZ);
+    const auto fit = fitter.fit(m_fitParams);
+    const f32 autoDepth =
+        (m_modelBoundsMax.z - m_modelBoundsMin.z) * m_fitParams.scale;
+    const f32 depthMm = std::clamp(
+        m_fitParams.depthMm > 0.0f ? m_fitParams.depthMm : autoDepth,
+        0.0f,
+        std::max(m_stock.thickness, 0.0f));
+
+    if (!m_finishingToolSelected) {
+        ImGui::TextColored(kYellow, "Select a tool first.");
+        return;
     }
-
-    if (hmReady && m_heightmapGeneratedAtGeometryVersion != m_geometryVersion) {
-        startHeightmapForCurrentGeometry();
-        jobState = m_carveJob->state();
-        hmReady = false;
-        hmComputing = true;
-    }
-
-    // Auto-load or auto-compute heightmap on first entry to Preview
-    if (jobState == carve::CarveJobState::Idle && !m_hmInitAttempted && !m_hmFileMissing) {
-        m_hmInitAttempted = true;
-
-        // Check project manifest for cached heightmap
-        bool loaded = false;
-        if (m_projectManager) {
-            auto dir = m_projectManager->ensureProjectForModel(m_modelName, m_modelSourcePath);
-            if (dir && !dir->heightmaps().empty()) {
-                const auto& entry = dir->heightmaps().front();
-                Path fullPath = dir->heightmapsDir() / entry.filename;
-                if (fs::exists(fullPath)) {
-                    if (m_carveJob->loadHeightmap(fullPath.string())) {
-                        loaded = true;
-                        m_heightmapSaved = true; // Already on disk
-                        m_heightmapRequestedAtGeometryVersion = m_geometryVersion;
-                        m_heightmapGeneratedAtGeometryVersion = m_geometryVersion;
-                        ToastManager::instance().show(ToastType::Success,
-                            "Heightmap Loaded", "Loaded cached heightmap from project");
-                    }
-                } else {
-                    m_hmFileMissing = true;
-                    m_hmMissingPath = fullPath.string();
-                }
-            }
-        }
-
-        // First time — no cache found, auto-compute
-        if (!loaded && !m_hmFileMissing) {
-            startHeightmapForCurrentGeometry();
-            hmComputing = true;
-        }
-
-        // Refresh state after potential load
-        jobState = m_carveJob->state();
-        hmReady = (jobState == carve::CarveJobState::Ready);
-    }
-
-    // Missing file recovery UI
-    if (m_hmFileMissing) {
-        ImGui::TextColored(kRed, "Cached heightmap file not found:");
-        ImGui::TextWrapped("%s", m_hmMissingPath.c_str());
-        ImGui::Spacing();
-
-        if (ImGui::Button("Regenerate", ImVec2(bw, 0))) {
-            ImGui::OpenPopup("Confirm Regenerate##missing");
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Locate...", ImVec2(bw, 0))) {
-            if (m_fileDialog) {
-                m_fileDialog->showOpen(
-                    "Locate Heightmap",
-                    {{"Heightmap", "*.dwhm"}},
-                    [this](const std::string& path) {
-                        if (m_carveJob->loadHeightmap(path)) {
-                            m_hmFileMissing = false;
-                            m_heightmapSaved = true;
-                            m_heightmapRequestedAtGeometryVersion = m_geometryVersion;
-                            m_heightmapGeneratedAtGeometryVersion = m_geometryVersion;
-                            ToastManager::instance().show(ToastType::Success,
-                                "Heightmap Loaded", path);
-                        } else {
-                            ToastManager::instance().show(ToastType::Error,
-                                "Load Failed", "Could not read " + path);
-                        }
-                    });
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(bw, 0))) {
-            m_hmFileMissing = false;
-        }
-
-        if (ImGui::BeginPopupModal("Confirm Regenerate##missing", nullptr,
-                                    ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextWrapped("This will recompute the heightmap from the mesh. This may take a while.");
-            ImGui::Spacing();
-            if (ImGui::Button("Continue", ImVec2(bw, 0))) {
-                m_hmFileMissing = false;
-                startHeightmapForCurrentGeometry();
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel##regen", ImVec2(bw, 0))) {
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
-        }
+    if (depthMm <= 0.0f) {
+        ImGui::TextColored(kYellow, "Set a cut depth greater than zero.");
         return;
     }
 
-    // Step 1: Heightmap
-    {
-        if (hmComputing) {
-            ImGui::TextColored(kYellow, "1. Computing heightmap...");
-            CenteredProgressBar(m_carveJob->progress(), ImVec2(-1, 0), "Computing heightmap...");
-        } else if (jobState == carve::CarveJobState::Error) {
-            ImGui::TextColored(kRed, "1. Heightmap error: %s", m_carveJob->errorMessage().c_str());
-            if (ImGui::Button("Retry", ImVec2(bw, 0))) {
-                startHeightmapForCurrentGeometry();
-            }
-        } else if (hmReady) {
-            // Auto-save after first computation
-            if (!m_heightmapSaved) {
-                saveHeightmapToProject();
-                m_heightmapSaved = true;
-            }
-
-            // Upload preview texture once when heightmap becomes ready
-            if (m_hmPreviewTex == 0)
-                uploadHeightmapPreview();
-
-            const auto& hm = m_carveJob->heightmap();
-            ImGui::TextColored(kGreen, "1. Heightmap: Ready");
-            ImGui::SameLine();
-            ImGui::TextDisabled("(%dx%d, %.2f mm/px)",
-                                hm.cols(),
-                                hm.rows(),
-                                static_cast<double>(hm.resolution()));
-
-            // Heightmap preview image (fit to available width, preserve aspect)
-            if (m_hmPreviewTex != 0 && m_hmPreviewW > 0 && m_hmPreviewH > 0) {
-                f32 availW = ImGui::GetContentRegionAvail().x;
-                f32 aspect = static_cast<f32>(m_hmPreviewH) / static_cast<f32>(m_hmPreviewW);
-                f32 dispW = std::min(availW, static_cast<f32>(m_hmPreviewW));
-                f32 dispH = dispW * aspect;
-                ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(m_hmPreviewTex)),
-                             ImVec2(dispW, dispH));
-            }
-
-            // Export + Regenerate buttons
-            if (ImGui::Button("Export Image")) saveImageToProject();
-            ImGui::SameLine();
-            if (ImGui::Button("Regenerate Heightmap")) {
-                ImGui::OpenPopup("Confirm Regenerate");
-            }
-
-            if (ImGui::BeginPopupModal("Confirm Regenerate", nullptr,
-                                        ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::TextWrapped(
-                    "This will recompute the heightmap and overwrite the cached version. "
-                    "This may take a while. Continue?");
-                ImGui::Spacing();
-                if (ImGui::Button("Continue", ImVec2(bw, 0))) {
-                    m_toolpathGenerated = false;  // Hard reset: heightmap changed
-                    m_generatedAtVersion = -1;
-                    markToolpathSettingsChanged();
-                    startHeightmapForCurrentGeometry();
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Cancel##regen2", ImVec2(bw, 0))) {
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::EndPopup();
-            }
-        }
+    const Vec3 stockMin{0.0f, 0.0f, 0.0f};
+    const Vec3 stockMax{m_stock.width, m_stock.height, 0.0f};
+    const auto roughingSelection = carve::selectFixedDepthRoughingTool(
+        m_toolboxTools, m_finishTool, stockMin, stockMax,
+        fit.modelMin, fit.modelMax, m_toolpathConfig.cutExtents);
+    if (roughingSelection.tool) {
+        ImGui::TextColored(
+            roughingSelection.requiresToolChange ? kYellow : kGreen,
+            "Auto roughing: %s%s",
+            resolveToolNameFormat(*roughingSelection.tool).c_str(),
+            roughingSelection.requiresToolChange
+                ? "  (tool change before raster)"
+                : "");
+    } else {
+        ImGui::TextDisabled("%s", roughingSelection.warning.c_str());
     }
 
-    // Step 2: Toolpath (only after heightmap)
-    ImGui::Spacing();
     bool toolpathStale = m_toolpathGenerated
                          && (m_generatedAtVersion != m_settingsVersion);
     {
         ImVec4 tpColor = kDimmed;
-        const char* tpLabel = "2. Toolpath: Not generated";
+        const char* tpLabel = "Toolpath: Not generated";
         if (m_toolpathGenerated && !toolpathStale) {
             tpColor = kGreen;
-            tpLabel = "2. Toolpath: Generated";
+            tpLabel = "Toolpath: Generated";
         } else if (m_toolpathGenerated && toolpathStale) {
             tpColor = kYellow;
-            tpLabel = "2. Toolpath: Settings changed";
-        } else if (hmReady) {
+            tpLabel = "Toolpath: Settings changed";
+        } else {
             tpColor = kYellow;
         }
         ImGui::TextColored(tpColor, "%s", tpLabel);
+        ImGui::SameLine();
+        ImGui::TextDisabled("Depth %.2f mm, stepdown %.2f mm",
+                            static_cast<double>(depthMm),
+                            static_cast<double>(m_toolpathConfig.stepdownMm));
 
-        if (hmReady && (!m_toolpathGenerated || toolpathStale)) {
+        if (!m_toolpathGenerated || toolpathStale) {
             const char* btnLabel = toolpathStale
                 ? "Regenerate Toolpath" : "Generate Toolpath";
             if (ImGui::Button(btnLabel, ImVec2(bw, 0))) {
-                f32 toolAngle = static_cast<f32>(m_finishTool.included_angle);
-                if (toolAngle <= 0.0f) toolAngle = 90.0f;
-                if (!m_recommendationRun)
-                    m_carveJob->analyzeHeightmap(toolAngle);
-
-                const VtdbToolGeometry* clrPtr =
-                    m_clearToolSelected ? &m_clearTool : nullptr;
-                m_carveJob->generateToolpath(m_toolpathConfig, m_finishTool, clrPtr);
-                m_toolpathGenerated = true;
-                m_generatedAtVersion = m_settingsVersion;
+                m_autoRoughingTool = roughingSelection.tool;
+                m_autoRoughingWarning = roughingSelection.warning;
+                m_carveJob->generateFixedDepthToolpath(
+                    stockMin, stockMax, fit.modelMin, fit.modelMax, depthMm,
+                    m_toolpathConfig, m_finishTool,
+                    m_autoRoughingTool ? &*m_autoRoughingTool : nullptr);
+                if (m_carveJob->state() == carve::CarveJobState::Ready) {
+                    m_toolpathGenerated = true;
+                    m_generatedAtVersion = m_settingsVersion;
+                } else {
+                    m_toolpathGenerated = false;
+                    m_generatedAtVersion = -1;
+                    ToastManager::instance().show(
+                        ToastType::Error,
+                        "Toolpath Failed",
+                        m_carveJob->errorMessage());
+                }
             }
         }
     }
@@ -2255,12 +2007,16 @@ void DirectCarvePanel::renderPreview() {
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
 
     const auto& tp = m_carveJob->toolpath();
-    const auto& hm = m_carveJob->heightmap();
 
-    // Preview area sized to heightmap aspect ratio
+    // Preview area sized to stock so automatic clearing outside the model is visible.
     float panelW = ImGui::GetContentRegionAvail().x;
-    float aspect = (hm.cols() > 0 && hm.rows() > 0)
-        ? static_cast<f32>(hm.cols()) / static_cast<f32>(hm.rows()) : 1.0f;
+    const f32 previewMinX = std::min(0.0f, fit.modelMin.x);
+    const f32 previewMinY = std::min(0.0f, fit.modelMin.y);
+    const f32 previewMaxX = std::max(m_stock.width, fit.modelMax.x);
+    const f32 previewMaxY = std::max(m_stock.height, fit.modelMax.y);
+    const f32 rx = std::max(previewMaxX - previewMinX, 1.0f);
+    const f32 ry = std::max(previewMaxY - previewMinY, 1.0f);
+    float aspect = rx / ry;
     float imgW = panelW * m_previewZoom;
     float imgH = imgW / aspect;
 
@@ -2269,24 +2025,25 @@ void DirectCarvePanel::renderPreview() {
 
     // Toolpath overlay via ImDrawList
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    Vec3 hmMin = hm.boundsMin();
-    Vec3 hmMax = hm.boundsMax();
-    f32 rx = hmMax.x - hmMin.x;
-    f32 ry = hmMax.y - hmMin.y;
 
     auto toScreen = [&](const Vec3& p) -> ImVec2 {
-        f32 nx = (rx > 0.0f) ? (p.x - hmMin.x) / rx : 0.5f;
-        f32 ny = (ry > 0.0f) ? (p.y - hmMin.y) / ry : 0.5f;
+        f32 nx = (p.x - previewMinX) / rx;
+        f32 ny = (p.y - previewMinY) / ry;
         return ImVec2(imgPos.x + nx * imgW, imgPos.y + (1.0f - ny) * imgH);
     };
+    auto addWorldRect = [&](const Vec3& a, const Vec3& b, ImU32 color) {
+        const ImVec2 p0 = toScreen(a);
+        const ImVec2 p1 = toScreen(b);
+        const ImVec2 rmin{std::min(p0.x, p1.x), std::min(p0.y, p1.y)};
+        const ImVec2 rmax{std::max(p0.x, p1.x), std::max(p0.y, p1.y)};
+        dl->AddRect(rmin, rmax, color, 0.0f, 0, 1.0f);
+    };
 
-    if (m_showFinishing && tp.finishing.points.size() > 1) {
-        for (size_t i = 1; i < tp.finishing.points.size(); ++i) {
-            ImU32 c = tp.finishing.points[i].rapid ? kRapidColor : kFinishColor;
-            dl->AddLine(toScreen(tp.finishing.points[i-1].position),
-                        toScreen(tp.finishing.points[i].position), c, 1.0f);
-        }
-    }
+    addWorldRect(Vec3{0.0f, 0.0f, 0.0f},
+                 Vec3{m_stock.width, m_stock.height, 0.0f},
+                 IM_COL32(140, 150, 160, 180));
+    addWorldRect(fit.modelMin, fit.modelMax, IM_COL32(255, 255, 255, 170));
+
     if (m_showClearing && tp.clearing.points.size() > 1) {
         for (size_t i = 1; i < tp.clearing.points.size(); ++i) {
             ImU32 c = tp.clearing.points[i].rapid ? kRapidColor : kClearColor;
@@ -2295,27 +2052,42 @@ void DirectCarvePanel::renderPreview() {
         }
     }
 
+    if (m_showFinishing && tp.finishing.points.size() > 1) {
+        for (size_t i = 1; i < tp.finishing.points.size(); ++i) {
+            ImU32 c = tp.finishing.points[i].rapid ? kRapidColor : kFinishColor;
+            dl->AddLine(toScreen(tp.finishing.points[i-1].position),
+                        toScreen(tp.finishing.points[i].position), c, 1.0f);
+        }
+    }
+
     // Statistics
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-    ImGui::Text("Finishing: %d scan passes, %s, %.0f mm",
-                tp.finishing.scanLineCount,
-                formatTime(tp.finishing.estimatedTimeSec).c_str(),
-                static_cast<double>(tp.finishing.totalDistanceMm));
-    ImGui::TextDisabled("  G-code lines: %d", tp.finishing.lineCount);
     if (!tp.clearing.points.empty()) {
-        ImGui::Text("Clearing:  %d scan passes, %s, %.0f mm",
+        ImGui::Text("Auto clear: %d scan passes, %s, %.0f mm",
                     tp.clearing.scanLineCount,
                     formatTime(tp.clearing.estimatedTimeSec).c_str(),
                     static_cast<double>(tp.clearing.totalDistanceMm));
         ImGui::TextDisabled("  G-code lines: %d", tp.clearing.lineCount);
+        if (tp.requiresToolChange) {
+            ImGui::TextColored(kYellow,
+                               "Tool change required before raster: %s",
+                               tp.finishingToolName.c_str());
+        }
+    } else {
+        ImGui::TextDisabled("Auto clear: no stock area outside model clearance");
     }
+    ImGui::Text("Raster: %d scan passes, %s, %.0f mm",
+                tp.finishing.scanLineCount,
+                formatTime(tp.finishing.estimatedTimeSec).c_str(),
+                static_cast<double>(tp.finishing.totalDistanceMm));
+    ImGui::TextDisabled("  G-code lines: %d", tp.finishing.lineCount);
     ImGui::Text("Total estimated time: %s", formatTime(tp.totalTimeSec).c_str());
 
     // Controls
     ImGui::Spacing();
-    ImGui::Checkbox("Show finishing", &m_showFinishing);
+    ImGui::Checkbox("Show auto clear", &m_showClearing);
     ImGui::SameLine();
-    ImGui::Checkbox("Show clearing", &m_showClearing);
+    ImGui::Checkbox("Show raster", &m_showFinishing);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
     ImGui::SliderFloat("Zoom", &m_previewZoom, 0.25f, 4.0f, "%.1fx");
@@ -2341,14 +2113,18 @@ void DirectCarvePanel::renderOutlineTest() {
 
     const auto& tp = m_carveJob->toolpath();
     f32 minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f;
-    for (const auto& pt : tp.finishing.points) {
-        if (!pt.rapid) {
-            minX = std::min(minX, pt.position.x);
-            maxX = std::max(maxX, pt.position.x);
-            minY = std::min(minY, pt.position.y);
-            maxY = std::max(maxY, pt.position.y);
+    auto includeCutBounds = [&](const carve::Toolpath& path) {
+        for (const auto& pt : path.points) {
+            if (!pt.rapid) {
+                minX = std::min(minX, pt.position.x);
+                maxX = std::max(maxX, pt.position.x);
+                minY = std::min(minY, pt.position.y);
+                maxY = std::max(maxY, pt.position.y);
+            }
         }
-    }
+    };
+    includeCutBounds(tp.clearing);
+    includeCutBounds(tp.finishing);
 
     ImGui::Text("Bounding box: X[%.1f .. %.1f]  Y[%.1f .. %.1f]",
                 static_cast<double>(minX), static_cast<double>(maxX),
@@ -2671,6 +2447,19 @@ void DirectCarvePanel::renderZeroConfirm() {
     ImGui::TextUnformatted("Zero Position Confirmation");
     ImGui::Spacing();
 
+    const VtdbToolGeometry* zeroTool =
+        m_autoRoughingTool ? &*m_autoRoughingTool :
+        (m_finishingToolSelected ? &m_finishTool : nullptr);
+    if (zeroTool) {
+        ImGui::TextDisabled("Initial tool: %s",
+                            resolveToolNameFormat(*zeroTool).c_str());
+        if (m_carveJob && m_carveJob->toolpath().requiresToolChange) {
+            ImGui::TextColored(kYellow,
+                               "Roughing runs first; re-zero Z after the tool-change pause.");
+        }
+        ImGui::Spacing();
+    }
+
     ImGui::Text("Current Work Position:");
     ImGui::Indent();
     ImGui::Text("X: %.3f  Y: %.3f  Z: %.3f",
@@ -2828,17 +2617,18 @@ void DirectCarvePanel::renderZeroConfirm() {
 
         // Tool diameter (auto-populated from selected finishing tool)
         if (needsXY && m_touchPlate == carve::DirectCarveTouchPlate::Generic) {
-            if (m_probeToolDiameter <= 0.0f && m_finishingToolSelected)
-                m_probeToolDiameter = static_cast<f32>(m_finishTool.diameter);
+            if (m_probeToolDiameter <= 0.0f && zeroTool)
+                m_probeToolDiameter = static_cast<f32>(diameterMm(*zeroTool));
 
             ImGui::SetNextItemWidth(fieldW);
             zeroingConfigChanged |= ImGui::InputFloat("Tool Diameter (mm)",
                                                       &m_probeToolDiameter,
                                                       0.1f, 1.0f, "%.3f");
             m_probeToolDiameter = std::max(0.0f, m_probeToolDiameter);
-            if (m_finishingToolSelected) {
+            if (zeroTool) {
                 ImGui::SameLine();
-                ImGui::TextDisabled("(from %s)", m_finishTool.name_format.c_str());
+                ImGui::TextDisabled("(from %s)",
+                                    resolveToolNameFormat(*zeroTool).c_str());
             }
         } else if (needsXY) {
             ImGui::TextDisabled("AutoZero measures center from probe contacts; tool diameter is not assumed.");
@@ -3079,6 +2869,16 @@ void DirectCarvePanel::renderCommit() {
                       static_cast<double>(m_toolpathConfig.feedRateMmMin),
                       static_cast<double>(m_toolpathConfig.plungeRateMmMin));
     ImGui::BulletText("Safe Z: %.1f mm", static_cast<double>(m_toolpathConfig.safeZMm));
+    if (m_autoRoughingTool) {
+        ImGui::BulletText("Roughing tool: %s",
+                          resolveToolNameFormat(*m_autoRoughingTool).c_str());
+    } else if (!m_autoRoughingWarning.empty()) {
+        ImGui::BulletText("Roughing: %s", m_autoRoughingWarning.c_str());
+    }
+    if (m_finishingToolSelected) {
+        ImGui::BulletText("Finish tool: %s",
+                          resolveToolNameFormat(m_finishTool).c_str());
+    }
     const auto units = detectedSendUnits();
     ImGui::BulletText("Send units: %s (%s)",
                       cnc::unitLabel(units),
@@ -3088,6 +2888,9 @@ void DirectCarvePanel::renderCommit() {
         const auto& tp = m_carveJob->toolpath();
         ImGui::BulletText("Estimated time: %s", formatTime(tp.totalTimeSec).c_str());
         ImGui::BulletText("G-code lines: %d", tp.totalLineCount);
+        if (tp.requiresToolChange) {
+            ImGui::BulletText("Tool change pause: enabled before raster");
+        }
     }
 
     ImGui::Spacing();
@@ -3254,102 +3057,6 @@ void DirectCarvePanel::renderRunning() {
     }
 }
 
-void DirectCarvePanel::saveHeightmapToProject() {
-    if (!m_projectManager || !m_carveJob) {
-        // Fallback to FileDialog
-        if (m_fileDialog) {
-            m_fileDialog->showSave(
-                "Save Heightmap",
-                {{"Heightmap", "*.dwhm"}},
-                "heightmap.dwhm",
-                [this](const std::string& path) {
-                    m_carveJob->heightmap().save(path);
-                });
-        }
-        return;
-    }
-
-    auto dir = m_projectManager->ensureProjectForModel(m_modelName, m_modelSourcePath);
-    if (!dir) {
-        ToastManager::instance().show(ToastType::Error,
-            "Project Error", "Failed to create project directory");
-        return;
-    }
-
-    std::string baseName = ProjectDirectory::sanitizeName(m_modelName);
-    Path destPath = dir->heightmapsDir() / (baseName + ".dwhm");
-    const auto& hm = m_carveJob->heightmap();
-
-    if (hm.save(destPath.string())) {
-        dir->addHeightmap(baseName + ".dwhm", hm.resolution());
-        dir->save();
-        ToastManager::instance().show(ToastType::Success,
-            "Heightmap Saved", destPath.string());
-    } else {
-        ToastManager::instance().show(ToastType::Error,
-            "Save Failed", "Could not write " + destPath.string());
-    }
-}
-
-void DirectCarvePanel::saveImageToProject() {
-    if (!m_projectManager || !m_carveJob) {
-        // Fallback to FileDialog
-        if (m_fileDialog) {
-            m_fileDialog->showSave(
-                "Export Heightmap Image",
-                {{"PGM Image (16-bit)", "*.pgm"}},
-                "heightmap.pgm",
-                [this](const std::string& path) {
-                    m_carveJob->heightmap().exportPng(path);
-                });
-        }
-        return;
-    }
-
-    auto dir = m_projectManager->ensureProjectForModel(m_modelName, m_modelSourcePath);
-    if (!dir) {
-        ToastManager::instance().show(ToastType::Error,
-            "Project Error", "Failed to create project directory");
-        return;
-    }
-
-    std::string baseName = ProjectDirectory::sanitizeName(m_modelName);
-    Path destPath = dir->imagesDir() / (baseName + ".pgm");
-
-    if (m_carveJob->heightmap().exportPng(destPath.string())) {
-        dir->save();
-        ToastManager::instance().show(ToastType::Success,
-            "Image Exported", destPath.string());
-    } else {
-        ToastManager::instance().show(ToastType::Error,
-            "Export Failed", "Could not write " + destPath.string());
-    }
-}
-
-void DirectCarvePanel::uploadHeightmapPreview() {
-    if (!m_carveJob) return;
-    const auto& hm = m_carveJob->heightmap();
-    if (hm.empty()) return;
-
-    int w = hm.cols();
-    int h = hm.rows();
-    auto pixels = carve::generateHeightmapPreviewPixels(hm);
-    if (pixels.empty()) return;
-
-    if (m_hmPreviewTex == 0)
-        glGenTextures(1, &m_hmPreviewTex);
-
-    glBindTexture(GL_TEXTURE_2D, m_hmPreviewTex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    m_hmPreviewW = w;
-    m_hmPreviewH = h;
-}
-
 void DirectCarvePanel::saveGCodeToProject() {
     if (!m_projectManager || !m_carveJob) {
         showExportDialog();
@@ -3367,7 +3074,7 @@ void DirectCarvePanel::saveGCodeToProject() {
     std::string baseName = ProjectDirectory::sanitizeName(m_modelName);
     Path destPath = dir->gcodeDir() / (baseName + ".nc");
     const auto& tp = m_carveJob->toolpath();
-    std::string toolName = m_finishTool.name_format;
+    std::string toolName = resolveToolNameFormat(m_finishTool);
 
     if (!carve::exportGcode(destPath.string(), tp, m_toolpathConfig,
                             m_modelName, toolName, detectedSendUnits())) {
@@ -3478,7 +3185,7 @@ void DirectCarvePanel::showExportDialog() {
     if (!m_fileDialog || !m_carveJob) return;
     const auto& tp = m_carveJob->toolpath();
     std::string modelName = m_modelName;
-    std::string toolName = m_finishTool.name_format;
+    std::string toolName = resolveToolNameFormat(m_finishTool);
     carve::ToolpathConfig config = m_toolpathConfig;
     auto units = detectedSendUnits();
     m_fileDialog->showSave("Save G-code",

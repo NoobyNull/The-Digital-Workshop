@@ -485,17 +485,12 @@ void GCodePanel::renderMachineProfileSelector() {
     }
 
     if (ImGui::Button("Edit Machine Profile")) {
-        if (!m_profileDialog.isOpen()) {
-            m_profileDialog.setOnProfileChanged([this]() { reanalyze(); });
-            m_profileDialog.open();
-        } else {
-            m_profileDialog.close();
-        }
+        if (m_openMachineProfiles)
+            m_openMachineProfiles();
     }
-
-    // Render the dialog window (it's a floating window, renders itself)
-    m_profileDialog.render();
 }
+
+void GCodePanel::onMachineProfileChanged() { reanalyze(); }
 
 void GCodePanel::reanalyze() {
     if (m_program.commands.empty())

@@ -68,6 +68,14 @@ public:
     void generateToolpath(const ToolpathConfig& config,
                           const VtdbToolGeometry& finishTool,
                           const VtdbToolGeometry* clearTool);
+    void generateFixedDepthToolpath(const Vec3& stockMin,
+                                    const Vec3& stockMax,
+                                    const Vec3& modelMin,
+                                    const Vec3& modelMax,
+                                    f32 depthMm,
+                                    const ToolpathConfig& config,
+                                    const VtdbToolGeometry& finishTool,
+                                    const VtdbToolGeometry* roughingTool = nullptr);
     const MultiPassToolpath& toolpath() const;
 
     // Start streaming the generated toolpath

@@ -169,6 +169,30 @@ TEST(GcodeExport, ClearingPassBeforeFinishing)
     EXPECT_LT(clearingPos, finishingPos);
 }
 
+TEST(GcodeExport, ToolChangeBoundarySeparatesRoughingAndFinishingTools)
+{
+    auto tp = makeTestToolpathWithClearing();
+    tp.requiresToolChange = true;
+    tp.clearingToolName = "6mm End Mill";
+    tp.finishingToolName = "1/32 TBN";
+    auto cfg = makeTestConfig();
+
+    std::string gcode = generateGcode(tp, cfg, "test", "1/32 TBN");
+
+    auto clearingPos = gcode.find("Clearing pass");
+    auto changePos = gcode.find("Tool change: 6mm End Mill -> 1/32 TBN");
+    auto m0Pos = gcode.find("M0");
+    auto finishingPos = gcode.find("Finishing pass");
+
+    ASSERT_NE(clearingPos, std::string::npos);
+    ASSERT_NE(changePos, std::string::npos);
+    ASSERT_NE(m0Pos, std::string::npos);
+    ASSERT_NE(finishingPos, std::string::npos);
+    EXPECT_LT(clearingPos, changePos);
+    EXPECT_LT(changePos, finishingPos);
+    EXPECT_NE(gcode.find("Re-zero Z with finish tool"), std::string::npos);
+}
+
 TEST(GcodeExport, NoClearingWhenEmpty)
 {
     auto tp = makeTestToolpath();  // No clearing points

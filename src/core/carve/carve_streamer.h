@@ -54,7 +54,14 @@ private:
     ToolpathConfig m_config;
 
     // Current position in toolpath
-    enum class Phase { Preamble, Clearing, Finishing, Postamble, Complete };
+    enum class Phase {
+        Preamble,
+        Clearing,
+        ToolChange,
+        Finishing,
+        Postamble,
+        Complete
+    };
     Phase m_phase = Phase::Complete;
     size_t m_pointIndex = 0;
     int m_lineNumber = 0;

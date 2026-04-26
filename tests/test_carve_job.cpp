@@ -113,3 +113,87 @@ TEST(CarveJob, CancelMidCompute) {
     // Should be back to Idle (cancelled)
     EXPECT_EQ(job.state(), CarveJobState::Idle);
 }
+
+TEST(CarveJob, FixedDepthToolpathIncludesAutomaticClearingOutsideModel)
+{
+    CarveJob job;
+
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Alternating;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 1.0f;
+    cfg.stepdownMm = 10.0f;
+
+    VtdbToolGeometry finishTool;
+    finishTool.id = "finish";
+    finishTool.tool_type = VtdbToolType::TaperedBallNose;
+    finishTool.units = VtdbUnits::Metric;
+    finishTool.diameter = 1.0;
+
+    VtdbToolGeometry roughingTool;
+    roughingTool.id = "rough";
+    roughingTool.tool_type = VtdbToolType::EndMill;
+    roughingTool.units = VtdbUnits::Metric;
+    roughingTool.diameter = 4.0;
+
+    job.generateFixedDepthToolpath(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{30.0f, 20.0f, 0.0f},
+        Vec3{10.0f, 5.0f, 0.0f},
+        Vec3{20.0f, 15.0f, 0.0f},
+        2.0f,
+        cfg,
+        finishTool,
+        &roughingTool);
+
+    ASSERT_EQ(job.state(), CarveJobState::Ready);
+    const auto& path = job.toolpath();
+    EXPECT_FALSE(path.clearing.points.empty());
+    EXPECT_FALSE(path.finishing.points.empty());
+    EXPECT_TRUE(path.requiresToolChange);
+    EXPECT_GT(path.totalLineCount, path.finishing.lineCount);
+}
+
+TEST(CarveJob, FixedDepthToolpathCanRasterFullMaterialExtents)
+{
+    CarveJob job;
+
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Climb;
+    cfg.cutExtents = CutExtents::Material;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 5.0f;
+    cfg.stepdownMm = 10.0f;
+
+    VtdbToolGeometry finishTool;
+    finishTool.id = "finish";
+    finishTool.tool_type = VtdbToolType::EndMill;
+    finishTool.units = VtdbUnits::Metric;
+    finishTool.diameter = 5.0;
+
+    job.generateFixedDepthToolpath(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{30.0f, 20.0f, 0.0f},
+        Vec3{10.0f, 5.0f, 0.0f},
+        Vec3{20.0f, 15.0f, 0.0f},
+        2.0f,
+        cfg,
+        finishTool);
+
+    ASSERT_EQ(job.state(), CarveJobState::Ready);
+    const auto& finishing = job.toolpath().finishing;
+    ASSERT_FALSE(finishing.points.empty());
+
+    f32 maxCutX = -1.0f;
+    f32 maxCutY = -1.0f;
+    for (const auto& pt : finishing.points) {
+        if (pt.rapid) continue;
+        maxCutX = std::max(maxCutX, pt.position.x);
+        maxCutY = std::max(maxCutY, pt.position.y);
+    }
+
+    EXPECT_NEAR(maxCutX, 30.0f, 0.001f);
+    EXPECT_NEAR(maxCutY, 20.0f, 0.001f);
+}

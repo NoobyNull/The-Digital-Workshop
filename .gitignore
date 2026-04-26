@@ -73,6 +73,7 @@ package.json
 
 # Claude/Ralph directories
 .claude/
+.superpowers/
 CLAUDE.md
 !.ralph/
 

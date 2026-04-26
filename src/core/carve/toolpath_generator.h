@@ -25,6 +25,23 @@ class ToolpathGenerator {
                               const ToolpathConfig& config,
                               f32 toolDiameter);
 
+    // Generate a fixed-depth 2.5D raster from top-zero work coordinates.
+    Toolpath generateFixedDepthRaster(const Vec3& boundsMin,
+                                      const Vec3& boundsMax,
+                                      const ToolpathConfig& config,
+                                      f32 toolDiameter,
+                                      f32 depthMm);
+
+    // Generate fixed-depth clearing over stock while avoiding the model
+    // footprint expanded by the selected cutter radius.
+    Toolpath generateFixedDepthClearingAroundModel(const Vec3& stockMin,
+                                                   const Vec3& stockMax,
+                                                   const Vec3& modelMin,
+                                                   const Vec3& modelMax,
+                                                   const ToolpathConfig& config,
+                                                   f32 toolDiameter,
+                                                   f32 depthMm);
+
     // Validate toolpath against machine travel limits, return warnings
     std::vector<std::string> validateLimits(
         const Toolpath& path,
@@ -36,6 +53,23 @@ class ToolpathGenerator {
                            const ToolpathConfig& config,
                            f32 stepoverMm,
                            bool primaryAxis);  // true=X, false=Y
+    void generateFixedDepthScanLines(Toolpath& path,
+                                     const Vec3& boundsMin,
+                                     const Vec3& boundsMax,
+                                     const ToolpathConfig& config,
+                                     f32 stepoverMm,
+                                     f32 cutZ,
+                                     bool primaryAxis);
+    void generateFixedDepthClearingScanLines(Toolpath& path,
+                                             const Vec3& stockMin,
+                                             const Vec3& stockMax,
+                                             const Vec3& noCutMin,
+                                             const Vec3& noCutMax,
+                                             bool hasNoCutRegion,
+                                             const ToolpathConfig& config,
+                                             f32 stepoverMm,
+                                             f32 cutZ,
+                                             bool primaryAxis);
 
     void addRetract(Toolpath& path, f32 safeZ);
     void addRapidTo(Toolpath& path, const Vec3& pos);

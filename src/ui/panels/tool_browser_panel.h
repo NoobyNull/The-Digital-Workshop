@@ -1,11 +1,13 @@
 #pragma once
 
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "../../core/cnc/cnc_tool.h"
 #include "../../core/cnc/tool_calculator.h"
+#include "../../core/gcode/machine_profile.h"
 #include "panel.h"
 
 namespace dw {
@@ -14,6 +16,27 @@ class ToolDatabase;
 class ToolboxRepository;
 class MaterialManager;
 class FileDialog;
+
+inline bool toolBrowserSelectionNeedsReload(const std::string& loadedGeometryId,
+                                            const std::string& selectedGeometryId) {
+    return !selectedGeometryId.empty() && loadedGeometryId != selectedGeometryId;
+}
+
+inline bool toolBrowserMachineProfileConfigured(const gcode::MachineProfile& profile) {
+    return !profile.name.empty()
+        && profile.name != "Default"
+        && profile.maxTravelX > 0.0f
+        && profile.maxTravelY > 0.0f
+        && profile.maxTravelZ > 0.0f
+        && profile.spindleMaxRPM > 0.0f
+        && profile.spindlePower > 0.0f;
+}
+
+inline std::string toolBrowserMachineProfileLabel(const gcode::MachineProfile& profile) {
+    return toolBrowserMachineProfileConfigured(profile)
+        ? profile.name
+        : std::string("Machine not configured");
+}
 
 class ToolBrowserPanel : public Panel {
   public:
@@ -26,6 +49,10 @@ class ToolBrowserPanel : public Panel {
     void setToolboxRepository(ToolboxRepository* repo) { m_toolboxRepo = repo; }
     void setMaterialManager(MaterialManager* mgr) { m_materialManager = mgr; }
     void setFileDialog(FileDialog* dlg) { m_fileDialog = dlg; }
+    void setOpenMachineProfilesCallback(std::function<void()> cb) {
+        m_openMachineProfiles = std::move(cb);
+    }
+    void onMachineProfileChanged();
     void refresh();
 
   private:
@@ -50,14 +77,13 @@ class ToolBrowserPanel : public Panel {
     // Cached data
     std::vector<VtdbTreeEntry> m_treeEntries;
     std::vector<VtdbMaterial> m_materials;
-    std::vector<VtdbMachine> m_machines;
     std::vector<VtdbToolGeometry> m_geometries;
 
     // Selection state
     std::string m_selectedTreeEntryId;
     std::string m_selectedGeometryId;
+    std::string m_loadedGeometryId;
     std::string m_selectedMaterialId;
-    std::string m_selectedMachineId;
 
     // Editing state
     VtdbToolGeometry m_editGeometry;
@@ -69,6 +95,7 @@ class ToolBrowserPanel : public Panel {
     bool m_hasCalcResult = false;
     float m_calcJanka = 0.0f;
     std::string m_calcMaterialName;
+    std::function<void()> m_openMachineProfiles;
 
     // Add Tool popup state
     bool m_showAddTool = false;

@@ -21,6 +21,11 @@ enum class MillDirection {
     Alternating     // Bidirectional (zigzag)
 };
 
+enum class CutExtents {
+    Model,     // Raster within fitted model extents
+    Material   // Raster across the full material blank
+};
+
 enum class StepoverPreset {
     UltraFine,  // 1% of tip diameter
     Fine,       // 8%
@@ -31,6 +36,7 @@ enum class StepoverPreset {
 
 struct ToolpathConfig {
     ScanAxis axis = ScanAxis::XOnly;
+    CutExtents cutExtents = CutExtents::Model;
     MillDirection direction = MillDirection::Alternating;
     StepoverPreset stepoverPreset = StepoverPreset::Basic;
     f32 customStepoverPct = 0.0f;  // If non-zero, overrides preset
@@ -38,6 +44,7 @@ struct ToolpathConfig {
     f32 feedRateMmMin = 1000.0f;
     f32 plungeRateMmMin = 300.0f;
     f32 rapidRateMmMin = 5000.0f;
+    f32 stepdownMm = 1.0f;
     f32 leadInMm = 2.0f;  // Ramp distance for clearing lead-in/out
     f32 scanResolutionMm = 0.0f;  // Point spacing along scan lines (0 = heightmap resolution)
 };
@@ -64,6 +71,9 @@ struct MultiPassToolpath {
     Toolpath finishing;   // Run second
     f32 totalTimeSec = 0.0f;
     int totalLineCount = 0;
+    bool requiresToolChange = false;
+    std::string clearingToolName;
+    std::string finishingToolName;
 };
 
 // Convert preset to percentage

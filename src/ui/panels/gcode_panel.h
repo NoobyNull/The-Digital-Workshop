@@ -11,7 +11,6 @@
 #include "../../core/gcode/machine_profile.h"
 #include "../../core/cnc/cnc_types.h"
 #include "../../core/database/job_repository.h"
-#include "../dialogs/machine_profile_dialog.h"
 #include "panel.h"
 
 namespace dw {
@@ -46,10 +45,14 @@ class GCodePanel : public Panel {
     void setCncController(CncController* ctrl) { m_cnc = ctrl; }
     void setJobRepository(JobRepository* repo) { m_jobRepo = repo; }
     void setToolDatabase(ToolDatabase* db) { m_toolDatabase = db; }
+    void setOpenMachineProfilesCallback(std::function<void()> cb) {
+        m_openMachineProfiles = std::move(cb);
+    }
 
     // Callback notifications for program load/clear
     void setOnProgramLoaded(std::function<void(const gcode::Program&)> cb) { m_onProgramLoaded = std::move(cb); }
     void setOnProgramCleared(std::function<void()> cb) { m_onProgramCleared = std::move(cb); }
+    void onMachineProfileChanged();
 
     // Load G-code from file
     bool loadFile(const std::string& path);
@@ -164,8 +167,8 @@ class GCodePanel : public Panel {
     // Job completion flash timer
     float m_jobFlashTimer = 0.0f;
 
-    // Machine profile editor dialog
-    MachineProfileDialog m_profileDialog;
+    // Global machine profile editor opener
+    std::function<void()> m_openMachineProfiles;
 
     // G-code search/goto (EXT-12)
     char m_searchBuf[128] = "";

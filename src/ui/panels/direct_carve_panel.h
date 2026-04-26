@@ -11,7 +11,6 @@
 #include "core/carve/direct_carve_operation_state.h"
 #include "core/carve/direct_carve_zeroing_probe.h"
 #include "core/carve/direct_carve_workflow.h"
-#include "core/carve/tool_recommender.h"
 #include "core/carve/toolpath_types.h"
 #include "core/cnc/machine_units.h"
 #include "core/cnc/cnc_tool.h"
@@ -19,7 +18,6 @@
 #include "core/materials/material.h"
 #include "core/mesh/vertex.h"
 #include "core/types.h"
-#include "ui/dialogs/machine_profile_dialog.h"
 
 namespace dw {
 
@@ -58,6 +56,7 @@ class DirectCarvePanel : public Panel {
     void setMaterialManager(MaterialManager* mgr);
     void setProjectManager(ProjectManager* pm);
     void setOpenToolBrowserCallback(std::function<void()> cb);
+    void setOpenMachineProfilesCallback(std::function<void()> cb);
     void setCutOptimizerPanel(class CutOptimizerPanel* cop);
 
     struct MaterialPartSync {
@@ -138,6 +137,7 @@ class DirectCarvePanel : public Panel {
     void renderStepIndicator();
     void renderNavButtons();
     bool canAdvance();
+    void navigateToStep(Step target);
     void advanceStep();
     void retreatStep();
     carve::DirectCarveWorkflowState workflowState() const;
@@ -147,8 +147,6 @@ class DirectCarvePanel : public Panel {
     void clearFinalConfirmation();
     void markToolpathSettingsChanged();
     void markGeometryChanged();
-    void clearHeightmapPreviewTexture();
-    void startHeightmapForCurrentGeometry();
 
     // Validation
     bool validateMachineReady() const;
@@ -175,8 +173,6 @@ class DirectCarvePanel : public Panel {
     bool m_homingSkipped = false;
 
     // Model data (set via onModelLoaded)
-    std::vector<Vertex> m_vertices;
-    std::vector<u32> m_indices;
     bool m_modelLoaded = false;
     Vec3 m_modelBoundsMin{0.0f};
     Vec3 m_modelBoundsMax{0.0f};
@@ -190,9 +186,7 @@ class DirectCarvePanel : public Panel {
 
     // Tool selection state
     VtdbToolGeometry m_finishTool;
-    VtdbToolGeometry m_clearTool;
     bool m_finishingToolSelected = false;
-    bool m_clearToolSelected = false;
     bool m_toolSetupConfirmed = false;
     bool m_toolLibraryLoaded = false;
     std::vector<VtdbToolGeometry> m_libraryTools;  // Currently displayed tool list
@@ -201,10 +195,6 @@ class DirectCarvePanel : public Panel {
     bool m_showAllTools = false;                   // false = My Toolbox, true = All Tools
     int m_selectedLibToolIdx = -1;
     bool m_useManualTool = false;
-    // Tool recommendation state
-    carve::RecommendationResult m_recommendation;
-    bool m_recommendationRun = false;
-    int m_selectedClearIdx = -1;
     // Manual tool entry fields
     int m_manualToolType = 0;   // 0=BallNose, 1=VBit, 2=EndMill, 3=TaperedBallNose
     f32 m_manualDiameter = 3.175f;  // 1/8" default
@@ -219,32 +209,15 @@ class DirectCarvePanel : public Panel {
     int m_selectedMaterialIdx = -1;
     bool m_materialSelected = false;
 
-    // Heightmap cache state
-    bool m_hmInitAttempted = false;   // Prevents re-triggering auto-load every frame
-    bool m_hmFileMissing = false;     // Shows locate/regen/cancel UI
-    bool m_heightmapSaved = false;    // Tracks whether auto-save fired
-    bool m_hmRegenConfirm = false;    // Regenerate confirmation popup open
-    std::string m_hmMissingPath;      // Path of the missing .dwhm file
-
-    // Heightmap preview texture
-    u32 m_hmPreviewTex = 0;
-    int m_hmPreviewW = 0;
-    int m_hmPreviewH = 0;
-    void uploadHeightmapPreview();
-
     // Preview state
     bool m_toolpathGenerated = false;
     int m_settingsVersion = 0;       // Bumped when toolpath-affecting settings change
     int m_generatedAtVersion = -1;   // Version when toolpath was last generated
-    int m_geometryVersion = 0;       // Bumped when stock/model/fit changes
-    int m_heightmapRequestedAtGeometryVersion = -1;
-    int m_heightmapGeneratedAtGeometryVersion = -1;
     f32 m_previewZoom = 1.0f;
-    bool m_showFinishing = true;
     bool m_showClearing = true;
-    u32 m_overlayTexture = 0;
-    int m_overlayWidth = 0;
-    int m_overlayHeight = 0;
+    bool m_showFinishing = true;
+    std::optional<VtdbToolGeometry> m_autoRoughingTool;
+    std::string m_autoRoughingWarning;
 
     // Outline test state
     bool m_outlineCompleted = false;
@@ -335,15 +308,13 @@ class DirectCarvePanel : public Panel {
     ProjectManager* m_projectManager = nullptr;
     CutOptimizerPanel* m_cutOptimizer = nullptr;
     std::function<void()> m_openToolBrowser;
+    std::function<void()> m_openMachineProfiles;
     FitParamsCallback m_onFitParamsChanged;
     MaterialPartSyncCallback m_onMaterialPartSync;
     Path m_modelSourcePath;
-    MachineProfileDialog m_profileDialog;
     int m_maxStepVisited = 0;
 
     // Project-aware save helpers
-    void saveHeightmapToProject();
-    void saveImageToProject();
     void saveGCodeToProject();
     void syncSetupToOptimizerAndProject();
     cnc::SendUnits detectedSendUnits() const;

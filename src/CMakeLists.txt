@@ -43,6 +43,7 @@ set(DW_SOURCES
     core/config/config_watcher.cpp
     core/config/input_binding.cpp
     core/config/layout_preset.cpp
+    core/config/window_catalog.cpp
     core/config/settings_archive.cpp
 
     # Database
@@ -114,6 +115,7 @@ set(DW_SOURCES
 
     # CNC Controller (multi-firmware support)
     core/cnc/cnc_tool.cpp
+    core/cnc/tool_profile.cpp
     core/cnc/serial_port.cpp
     core/cnc/tcp_socket.cpp
     core/cnc/cnc_controller.cpp
@@ -139,6 +141,7 @@ set(DW_SOURCES
     core/carve/heightmap_preview.cpp
     core/carve/model_fitter.cpp
     core/carve/material_blank_defaults.cpp
+    core/carve/roughing_tool_selector.cpp
     core/carve/alignment_validator.cpp
     core/carve/carve_job.cpp
     core/carve/direct_carve_operation_state.cpp
@@ -212,6 +215,7 @@ set(DW_SOURCES
     ui/widgets/status_bar.cpp
     ui/widgets/status_tips.cpp
     ui/widgets/toast.cpp
+    ui/widgets/tool_profile_preview.cpp
     ui/widgets/tool_recommendation_widget.cpp
 
     # UI Dialogs

@@ -4,10 +4,36 @@
 #include "toolpath_generator.h"
 #include "../cnc/cnc_controller.h"
 
+#include <cmath>
 #include <stdexcept>
 
 namespace dw {
 namespace carve {
+namespace {
+
+f64 diameterMm(const VtdbToolGeometry& tool)
+{
+    f64 diameter = tool.diameter > 0.0 ? tool.diameter : tool.flat_diameter;
+    if (tool.units == VtdbUnits::Imperial) {
+        diameter *= 25.4;
+    }
+    return diameter;
+}
+
+bool sameTool(const VtdbToolGeometry& a, const VtdbToolGeometry& b)
+{
+    if (!a.id.empty() && !b.id.empty()) {
+        return a.id == b.id;
+    }
+
+    return a.tool_type == b.tool_type &&
+           a.units == b.units &&
+           std::abs(a.diameter - b.diameter) < 0.0001 &&
+           std::abs(a.flat_diameter - b.flat_diameter) < 0.0001 &&
+           std::abs(a.tip_radius - b.tip_radius) < 0.0001;
+}
+
+} // namespace
 
 CarveJob::~CarveJob()
 {
@@ -175,6 +201,72 @@ void CarveJob::generateToolpath(const ToolpathConfig& config,
         m_toolpath.clearing = Toolpath{};
         m_toolpath.totalTimeSec = m_toolpath.finishing.estimatedTimeSec;
         m_toolpath.totalLineCount = m_toolpath.finishing.lineCount;
+    }
+}
+
+void CarveJob::generateFixedDepthToolpath(const Vec3& stockMin,
+                                           const Vec3& stockMax,
+                                           const Vec3& modelMin,
+                                           const Vec3& modelMax,
+                                           f32 depthMm,
+                                           const ToolpathConfig& config,
+                                           const VtdbToolGeometry& finishTool,
+                                           const VtdbToolGeometry* roughingTool)
+{
+    if (m_future.valid()) {
+        m_future.wait();
+    }
+
+    m_toolpathConfig = config;
+    m_error.clear();
+    m_cancelled.store(false, std::memory_order_release);
+
+    ToolpathGenerator gen;
+    const f64 finishDia = diameterMm(finishTool);
+
+    m_toolpath.clearing = Toolpath{};
+    m_toolpath.requiresToolChange = false;
+    m_toolpath.clearingToolName.clear();
+    m_toolpath.finishingToolName = resolveToolNameFormat(finishTool);
+
+    if (roughingTool) {
+        const f64 roughDia = diameterMm(*roughingTool);
+        if (config.cutExtents == CutExtents::Material) {
+            m_toolpath.clearing = gen.generateFixedDepthRaster(
+                stockMin, stockMax, config, static_cast<f32>(roughDia),
+                depthMm);
+        } else {
+            m_toolpath.clearing = gen.generateFixedDepthClearingAroundModel(
+                stockMin, stockMax, modelMin, modelMax, config,
+                static_cast<f32>(roughDia), depthMm);
+        }
+        m_toolpath.clearingToolName = resolveToolNameFormat(*roughingTool);
+        m_toolpath.requiresToolChange =
+            !m_toolpath.clearing.points.empty() &&
+            !sameTool(*roughingTool, finishTool);
+    }
+    const Vec3& finishMin =
+        config.cutExtents == CutExtents::Material ? stockMin : modelMin;
+    const Vec3& finishMax =
+        config.cutExtents == CutExtents::Material ? stockMax : modelMax;
+    m_toolpath.finishing = gen.generateFixedDepthRaster(
+        finishMin, finishMax, config, static_cast<f32>(finishDia), depthMm);
+    m_toolpath.totalTimeSec =
+        m_toolpath.clearing.estimatedTimeSec +
+        m_toolpath.finishing.estimatedTimeSec;
+    m_toolpath.totalLineCount =
+        m_toolpath.clearing.lineCount + m_toolpath.finishing.lineCount +
+        (m_toolpath.requiresToolChange ? 6 : 0);
+    m_curvature = CurvatureResult{};
+    m_islands = IslandResult{};
+    m_analyzed = true;
+    m_progress.store(1.0f, std::memory_order_release);
+    m_state.store(m_toolpath.finishing.points.empty()
+                      ? CarveJobState::Error
+                      : CarveJobState::Ready,
+                  std::memory_order_release);
+    if (m_toolpath.finishing.points.empty()) {
+        m_error = "Fixed-depth raster toolpath is empty";
     }
 }
 

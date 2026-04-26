@@ -9,6 +9,7 @@
 #include <imgui_internal.h>
 
 #include "core/config/config.h"
+#include "ui/tool_library_access.h"
 #include "ui/panels/viewport_panel.h"
 
 namespace dw {
@@ -49,7 +50,7 @@ void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Project Costing", dockLeftBottom);
     ImGui::DockBuilderDockWindow("Materials", dockLeftBottom);
     ImGui::DockBuilderDockWindow("Tool & Material", dockRight);
-    ImGui::DockBuilderDockWindow("Tool Browser", dockRight);
+    ImGui::DockBuilderDockWindow(kToolLibraryWindowTitle, dockRight);
 
     // CNC panels — docked as center tabs
     ImGui::DockBuilderDockWindow("CNC Status", dockCenter);
@@ -57,7 +58,7 @@ void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("MDI Console", dockCenter);
     ImGui::DockBuilderDockWindow("WCS", dockCenter);
     ImGui::DockBuilderDockWindow("Safety", dockCenter);
-    ImGui::DockBuilderDockWindow("Firmware", dockCenter);
+    ImGui::DockBuilderDockWindow("Machine Settings", dockCenter);
     ImGui::DockBuilderDockWindow("Macros", dockCenter);
     ImGui::DockBuilderDockWindow("Job Progress", dockCenter);
     ImGui::DockBuilderDockWindow("Direct Carve", dockCenter);

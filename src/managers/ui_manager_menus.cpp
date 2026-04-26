@@ -12,6 +12,7 @@
 #include "ui/dialogs/lighting_dialog.h"
 #include "ui/icons.h"
 #include "ui/panels/cnc_jog_panel.h"
+#include "ui/tool_library_access.h"
 #include "ui/panels/viewport_panel.h"
 #include "ui/ui_colors.h"
 #include "version.h"
@@ -188,18 +189,28 @@ void UIManager::renderViewMenu() {
         setWorkspaceMode(WorkspaceMode::CNC);
     ImGui::Separator();
 
-    ImGui::MenuItem("Viewport", nullptr, &m_showViewport);
-    ImGui::MenuItem("Project", nullptr, &m_showProject);
+    if (ImGui::MenuItem("Viewport", nullptr, isWindowVisible("viewport")))
+        toggleWindow("viewport");
+    if (ImGui::MenuItem("Project", nullptr, isWindowVisible("project")))
+        toggleWindow("project");
+    if (ImGui::MenuItem(kToolLibraryMenuLabel, nullptr, isWindowVisible("tool_library")))
+        toggleWindow("tool_library");
     ImGui::Separator();
 
     if (m_workspaceMode == WorkspaceMode::Model) {
-        ImGui::MenuItem("Start Page", nullptr, &m_showStartPage);
-        ImGui::MenuItem("Library", nullptr, &m_showLibrary);
-        ImGui::MenuItem("Properties", nullptr, &m_showProperties);
+        if (ImGui::MenuItem("Start Page", nullptr, isWindowVisible("start_page")))
+            toggleWindow("start_page");
+        if (ImGui::MenuItem("Library", nullptr, isWindowVisible("library")))
+            toggleWindow("library");
+        if (ImGui::MenuItem("Properties", nullptr, isWindowVisible("properties")))
+            toggleWindow("properties");
         ImGui::Separator();
-        ImGui::MenuItem("Cut Optimizer", nullptr, &m_showCutOptimizer);
-        ImGui::MenuItem("Project Costing", nullptr, &m_showProjectCosting);
-        ImGui::MenuItem("Materials", nullptr, &m_showMaterials);
+        if (ImGui::MenuItem("Cut Optimizer", nullptr, isWindowVisible("cut_optimizer")))
+            toggleWindow("cut_optimizer");
+        if (ImGui::MenuItem("Project Costing", nullptr, isWindowVisible("project_costing")))
+            toggleWindow("project_costing");
+        if (ImGui::MenuItem("Materials", nullptr, isWindowVisible("materials")))
+            toggleWindow("materials");
     } else if (ImGui::BeginMenu("Sender Panels")) {
         renderSenderSubmenu();
         ImGui::EndMenu();
@@ -208,27 +219,38 @@ void UIManager::renderViewMenu() {
     if (ImGui::MenuItem("Add Group Panel"))
         addGroupPanel();
     ImGui::Separator();
-    if (ImGui::MenuItem("Lighting Settings", "Ctrl+L") && m_lightingDialog)
-        m_lightingDialog->open();
+    if (ImGui::MenuItem("Lighting Settings", "Ctrl+L", isWindowVisible("lighting_settings")))
+        toggleWindow("lighting_settings");
     ImGui::EndMenu();
 }
 
 void UIManager::renderSenderSubmenu() {
-    ImGui::MenuItem("G-code Viewer", nullptr, &m_showGCode);
+    if (ImGui::MenuItem("G-code Viewer", nullptr, isWindowVisible("gcode_viewer")))
+        toggleWindow("gcode_viewer");
     ImGui::Separator();
-    ImGui::MenuItem("Status", nullptr, &m_showCncStatus);
-    ImGui::MenuItem("Jog Control", nullptr, &m_showCncJog);
-    ImGui::MenuItem("MDI Console", nullptr, &m_showCncConsole);
-    ImGui::MenuItem("Work Zero / WCS", nullptr, &m_showCncWcs);
+    if (ImGui::MenuItem("Status", nullptr, isWindowVisible("cnc_status")))
+        toggleWindow("cnc_status");
+    if (ImGui::MenuItem("Jog Control", nullptr, isWindowVisible("cnc_jog")))
+        toggleWindow("cnc_jog");
+    if (ImGui::MenuItem("MDI Console", nullptr, isWindowVisible("cnc_console")))
+        toggleWindow("cnc_console");
+    if (ImGui::MenuItem("Work Zero / WCS", nullptr, isWindowVisible("cnc_wcs")))
+        toggleWindow("cnc_wcs");
     ImGui::Separator();
-    ImGui::MenuItem("Tool & Material", nullptr, &m_showCncTool);
-    ImGui::MenuItem("Job Progress", nullptr, &m_showCncJob);
-    ImGui::MenuItem("Safety Controls", nullptr, &m_showCncSafety);
+    if (ImGui::MenuItem("Tool & Material", nullptr, isWindowVisible("runtime_tool_setup")))
+        toggleWindow("runtime_tool_setup");
+    if (ImGui::MenuItem("Job Progress", nullptr, isWindowVisible("cnc_job")))
+        toggleWindow("cnc_job");
+    if (ImGui::MenuItem("Safety Controls", nullptr, isWindowVisible("cnc_safety")))
+        toggleWindow("cnc_safety");
     ImGui::Separator();
-    ImGui::MenuItem("Firmware Settings", nullptr, &m_showCncSettings);
-    ImGui::MenuItem("Macros", nullptr, &m_showCncMacros);
+    if (ImGui::MenuItem("Machine Settings", nullptr, isWindowVisible("machine_settings")))
+        toggleWindow("machine_settings");
+    if (ImGui::MenuItem("Macros", nullptr, isWindowVisible("cnc_macros")))
+        toggleWindow("cnc_macros");
     ImGui::Separator();
-    ImGui::MenuItem("Direct Carve", nullptr, &m_showDirectCarve);
+    if (ImGui::MenuItem("Direct Carve", nullptr, isWindowVisible("direct_carve")))
+        toggleWindow("direct_carve");
     ImGui::Separator();
     if (ImGui::BeginMenu("Live Overlay")) {
         auto& cfg = Config::instance();
@@ -413,8 +435,8 @@ void UIManager::handleKeyboardShortcuts() {
         }
     }
 
-    if (ImGui::IsKeyPressed(ImGuiKey_L) && m_lightingDialog)
-        m_lightingDialog->open();
+    if (ImGui::IsKeyPressed(ImGuiKey_L))
+        openWindow("lighting_settings");
 
     if (ImGui::IsKeyPressed(ImGuiKey_1) && !m_cncStreaming)
         setWorkspaceMode(WorkspaceMode::Model);

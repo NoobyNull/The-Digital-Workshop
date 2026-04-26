@@ -89,6 +89,177 @@ Toolpath ToolpathGenerator::generateClearing(const Heightmap& heightmap,
     return path;
 }
 
+Toolpath ToolpathGenerator::generateFixedDepthRaster(const Vec3& boundsMin,
+                                                      const Vec3& boundsMax,
+                                                      const ToolpathConfig& config,
+                                                      f32 toolDiameter,
+                                                      f32 depthMm)
+{
+    Toolpath path;
+    if (toolDiameter <= 0.0f || depthMm <= 0.0f) return path;
+
+    const Vec3 bmin{
+        std::min(boundsMin.x, boundsMax.x),
+        std::min(boundsMin.y, boundsMax.y),
+        0.0f
+    };
+    const Vec3 bmax{
+        std::max(boundsMin.x, boundsMax.x),
+        std::max(boundsMin.y, boundsMax.y),
+        0.0f
+    };
+    if (bmax.x <= bmin.x || bmax.y <= bmin.y) return path;
+
+    const f32 pct = (config.customStepoverPct > 0.0f)
+                        ? config.customStepoverPct
+                        : stepoverPercent(config.stepoverPreset);
+    const f32 stepoverMm = toolDiameter * pct / 100.0f;
+    if (stepoverMm <= 0.0f) return path;
+
+    const f32 stepdownMm = (config.stepdownMm > 0.0f)
+                               ? config.stepdownMm
+                               : std::max(0.25f, toolDiameter * 0.5f);
+    const int passCount = std::max(
+        1, static_cast<int>(std::ceil(depthMm / stepdownMm)));
+
+    auto generateAxis = [&](bool primaryAxis, f32 cutZ) {
+        generateFixedDepthScanLines(path, bmin, bmax, config, stepoverMm,
+                                    cutZ, primaryAxis);
+    };
+
+    for (int passIdx = 0; passIdx < passCount; ++passIdx) {
+        const f32 passDepth = std::min(
+            depthMm, stepdownMm * static_cast<f32>(passIdx + 1));
+        const f32 cutZ = -passDepth;
+
+        switch (config.axis) {
+            case ScanAxis::XOnly:
+                generateAxis(true, cutZ);
+                break;
+            case ScanAxis::YOnly:
+                generateAxis(false, cutZ);
+                break;
+            case ScanAxis::XThenY:
+                generateAxis(true, cutZ);
+                generateAxis(false, cutZ);
+                break;
+            case ScanAxis::YThenX:
+                generateAxis(false, cutZ);
+                generateAxis(true, cutZ);
+                break;
+        }
+    }
+
+    computeMetrics(path, config);
+    return path;
+}
+
+Toolpath ToolpathGenerator::generateFixedDepthClearingAroundModel(
+    const Vec3& stockMin,
+    const Vec3& stockMax,
+    const Vec3& modelMin,
+    const Vec3& modelMax,
+    const ToolpathConfig& config,
+    f32 toolDiameter,
+    f32 depthMm)
+{
+    Toolpath path;
+    if (toolDiameter <= 0.0f || depthMm <= 0.0f) return path;
+
+    const Vec3 smin{
+        std::min(stockMin.x, stockMax.x),
+        std::min(stockMin.y, stockMax.y),
+        0.0f
+    };
+    const Vec3 smax{
+        std::max(stockMin.x, stockMax.x),
+        std::max(stockMin.y, stockMax.y),
+        0.0f
+    };
+    if (smax.x <= smin.x || smax.y <= smin.y) return path;
+
+    const Vec3 mmin{
+        std::min(modelMin.x, modelMax.x),
+        std::min(modelMin.y, modelMax.y),
+        0.0f
+    };
+    const Vec3 mmax{
+        std::max(modelMin.x, modelMax.x),
+        std::max(modelMin.y, modelMax.y),
+        0.0f
+    };
+    if (mmax.x <= mmin.x || mmax.y <= mmin.y) return path;
+
+    const f32 pct = (config.customStepoverPct > 0.0f)
+                        ? config.customStepoverPct
+                        : stepoverPercent(config.stepoverPreset);
+    const f32 stepoverMm = toolDiameter * pct / 100.0f;
+    if (stepoverMm <= 0.0f) return path;
+
+    const f32 toolRadius = toolDiameter * 0.5f;
+    const Vec3 expandedNoCutMin{mmin.x - toolRadius, mmin.y - toolRadius, 0.0f};
+    const Vec3 expandedNoCutMax{mmax.x + toolRadius, mmax.y + toolRadius, 0.0f};
+    const bool hasNoCutRegion =
+        expandedNoCutMax.x > smin.x && expandedNoCutMin.x < smax.x &&
+        expandedNoCutMax.y > smin.y && expandedNoCutMin.y < smax.y;
+
+    const Vec3 noCutMin{
+        std::clamp(expandedNoCutMin.x, smin.x, smax.x),
+        std::clamp(expandedNoCutMin.y, smin.y, smax.y),
+        0.0f
+    };
+    const Vec3 noCutMax{
+        std::clamp(expandedNoCutMax.x, smin.x, smax.x),
+        std::clamp(expandedNoCutMax.y, smin.y, smax.y),
+        0.0f
+    };
+
+    if (hasNoCutRegion &&
+        noCutMin.x <= smin.x && noCutMax.x >= smax.x &&
+        noCutMin.y <= smin.y && noCutMax.y >= smax.y) {
+        return path;
+    }
+
+    const f32 stepdownMm = (config.stepdownMm > 0.0f)
+                               ? config.stepdownMm
+                               : std::max(0.25f, toolDiameter * 0.5f);
+    const int passCount = std::max(
+        1, static_cast<int>(std::ceil(depthMm / stepdownMm)));
+
+    auto generateAxis = [&](bool primaryAxis, f32 cutZ) {
+        generateFixedDepthClearingScanLines(path, smin, smax,
+                                            noCutMin, noCutMax,
+                                            hasNoCutRegion, config,
+                                            stepoverMm, cutZ, primaryAxis);
+    };
+
+    for (int passIdx = 0; passIdx < passCount; ++passIdx) {
+        const f32 passDepth = std::min(
+            depthMm, stepdownMm * static_cast<f32>(passIdx + 1));
+        const f32 cutZ = -passDepth;
+
+        switch (config.axis) {
+            case ScanAxis::XOnly:
+                generateAxis(true, cutZ);
+                break;
+            case ScanAxis::YOnly:
+                generateAxis(false, cutZ);
+                break;
+            case ScanAxis::XThenY:
+                generateAxis(true, cutZ);
+                generateAxis(false, cutZ);
+                break;
+            case ScanAxis::YThenX:
+                generateAxis(false, cutZ);
+                generateAxis(true, cutZ);
+                break;
+        }
+    }
+
+    computeMetrics(path, config);
+    return path;
+}
+
 // ---------------------------------------------------------------------------
 // Island clearing
 // ---------------------------------------------------------------------------
@@ -256,6 +427,183 @@ void ToolpathGenerator::generateScanLines(Toolpath& path,
             f32 z = heightmap.atMm(x, y);
 
             addCutTo(path, {x, y, z});
+        }
+    }
+}
+
+void ToolpathGenerator::generateFixedDepthScanLines(Toolpath& path,
+                                                     const Vec3& boundsMin,
+                                                     const Vec3& boundsMax,
+                                                     const ToolpathConfig& config,
+                                                     f32 stepoverMm,
+                                                     f32 cutZ,
+                                                     bool primaryAxis)
+{
+    const f32 res = (config.scanResolutionMm > 0.0f)
+                        ? config.scanResolutionMm
+                        : std::max(0.25f, stepoverMm);
+
+    const f32 scanMin = primaryAxis ? boundsMin.x : boundsMin.y;
+    const f32 scanMax = primaryAxis ? boundsMax.x : boundsMax.y;
+    const f32 stepMin = primaryAxis ? boundsMin.y : boundsMin.x;
+    const f32 stepMax = primaryAxis ? boundsMax.y : boundsMax.x;
+
+    const f32 scanExtent = scanMax - scanMin;
+    const f32 stepExtent = stepMax - stepMin;
+    if (scanExtent <= 0.0f || stepoverMm <= 0.0f || res <= 0.0f) return;
+
+    const int lineCount =
+        std::max(1, static_cast<int>(stepExtent / stepoverMm) + 1);
+    path.scanLineCount += lineCount;
+
+    const int pointCount =
+        std::max(2, static_cast<int>(scanExtent / res) + 1);
+
+    for (int lineIdx = 0; lineIdx < lineCount; ++lineIdx) {
+        const f32 stepPos = std::min(
+            stepMax, stepMin + static_cast<f32>(lineIdx) * stepoverMm);
+
+        bool forward = true;
+        switch (config.direction) {
+            case MillDirection::Climb:
+                forward = true;
+                break;
+            case MillDirection::Conventional:
+                forward = false;
+                break;
+            case MillDirection::Alternating:
+                forward = (lineIdx % 2 == 0);
+                break;
+        }
+
+        const f32 startScan = forward ? scanMin : scanMax;
+        Vec3 startPos = primaryAxis
+            ? Vec3{startScan, stepPos, config.safeZMm}
+            : Vec3{stepPos, startScan, config.safeZMm};
+
+        addRetract(path, config.safeZMm);
+        addRapidTo(path, startPos);
+        startPos.z = cutZ;
+        addCutTo(path, startPos);
+
+        for (int ptIdx = 1; ptIdx < pointCount; ++ptIdx) {
+            const int idx = forward ? ptIdx : (pointCount - 1 - ptIdx);
+            const f32 t = static_cast<f32>(idx) /
+                          static_cast<f32>(pointCount - 1);
+            const f32 scanPos = scanMin + t * scanExtent;
+
+            const f32 x = primaryAxis ? scanPos : stepPos;
+            const f32 y = primaryAxis ? stepPos : scanPos;
+            addCutTo(path, {x, y, cutZ});
+        }
+    }
+}
+
+void ToolpathGenerator::generateFixedDepthClearingScanLines(
+    Toolpath& path,
+    const Vec3& stockMin,
+    const Vec3& stockMax,
+    const Vec3& noCutMin,
+    const Vec3& noCutMax,
+    bool hasNoCutRegion,
+    const ToolpathConfig& config,
+    f32 stepoverMm,
+    f32 cutZ,
+    bool primaryAxis)
+{
+    const f32 res = (config.scanResolutionMm > 0.0f)
+                        ? config.scanResolutionMm
+                        : std::max(0.25f, stepoverMm);
+
+    const f32 scanMin = primaryAxis ? stockMin.x : stockMin.y;
+    const f32 scanMax = primaryAxis ? stockMax.x : stockMax.y;
+    const f32 stepMin = primaryAxis ? stockMin.y : stockMin.x;
+    const f32 stepMax = primaryAxis ? stockMax.y : stockMax.x;
+
+    const f32 noCutScanMin = primaryAxis ? noCutMin.x : noCutMin.y;
+    const f32 noCutScanMax = primaryAxis ? noCutMax.x : noCutMax.y;
+    const f32 noCutStepMin = primaryAxis ? noCutMin.y : noCutMin.x;
+    const f32 noCutStepMax = primaryAxis ? noCutMax.y : noCutMax.x;
+
+    const f32 scanExtent = scanMax - scanMin;
+    const f32 stepExtent = stepMax - stepMin;
+    if (scanExtent <= 0.0f || stepoverMm <= 0.0f || res <= 0.0f) return;
+
+    const int lineCount =
+        std::max(1, static_cast<int>(stepExtent / stepoverMm) + 1);
+
+    const auto cutSegment = [&](f32 segMin, f32 segMax, f32 stepPos,
+                                bool forward) {
+        constexpr f32 kEpsilon = 0.001f;
+        segMin = std::clamp(segMin, scanMin, scanMax);
+        segMax = std::clamp(segMax, scanMin, scanMax);
+        if (segMax - segMin <= kEpsilon) return;
+
+        const f32 segmentStart = forward ? segMin : segMax;
+        const f32 segmentEnd = forward ? segMax : segMin;
+        const f32 segmentExtent = std::abs(segmentEnd - segmentStart);
+        const int pointCount =
+            std::max(2, static_cast<int>(segmentExtent / res) + 1);
+
+        Vec3 startPos = primaryAxis
+            ? Vec3{segmentStart, stepPos, config.safeZMm}
+            : Vec3{stepPos, segmentStart, config.safeZMm};
+
+        addRetract(path, config.safeZMm);
+        addRapidTo(path, startPos);
+        startPos.z = cutZ;
+        addCutTo(path, startPos);
+
+        for (int ptIdx = 1; ptIdx < pointCount; ++ptIdx) {
+            const f32 t = static_cast<f32>(ptIdx) /
+                          static_cast<f32>(pointCount - 1);
+            const f32 scanPos =
+                segmentStart + t * (segmentEnd - segmentStart);
+
+            const f32 x = primaryAxis ? scanPos : stepPos;
+            const f32 y = primaryAxis ? stepPos : scanPos;
+            addCutTo(path, {x, y, cutZ});
+        }
+
+        ++path.scanLineCount;
+    };
+
+    for (int lineIdx = 0; lineIdx < lineCount; ++lineIdx) {
+        const f32 stepPos = std::min(
+            stepMax, stepMin + static_cast<f32>(lineIdx) * stepoverMm);
+
+        bool forward = true;
+        switch (config.direction) {
+            case MillDirection::Climb:
+                forward = true;
+                break;
+            case MillDirection::Conventional:
+                forward = false;
+                break;
+            case MillDirection::Alternating:
+                forward = (lineIdx % 2 == 0);
+                break;
+        }
+
+        std::vector<std::pair<f32, f32>> intervals;
+        const bool crossesNoCutStep =
+            hasNoCutRegion &&
+            stepPos > noCutStepMin && stepPos < noCutStepMax;
+        if (crossesNoCutStep) {
+            intervals.push_back({scanMin, noCutScanMin});
+            intervals.push_back({noCutScanMax, scanMax});
+        } else {
+            intervals.push_back({scanMin, scanMax});
+        }
+
+        if (forward) {
+            for (const auto& interval : intervals) {
+                cutSegment(interval.first, interval.second, stepPos, true);
+            }
+        } else {
+            for (auto it = intervals.rbegin(); it != intervals.rend(); ++it) {
+                cutSegment(it->first, it->second, stepPos, false);
+            }
         }
     }
 }

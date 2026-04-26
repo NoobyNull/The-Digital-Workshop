@@ -81,6 +81,12 @@ void Application::wireCncPanels() {
         gcp->setProjectManager(m_projectManager.get());
         gcp->setCncController(m_cncController.get());
         gcp->setToolDatabase(m_toolDatabase.get());
+        gcp->setOpenMachineProfilesCallback([this]() {
+            m_uiManager->openMachineProfiles();
+        });
+        m_uiManager->addMachineProfileChangedCallback([gcp]() {
+            gcp->onMachineProfileChanged();
+        });
 
         // Forward program load/clear to viewport for toolpath rendering + simulation
         gcp->setOnProgramLoaded([this](const gcode::Program& prog) {
@@ -124,7 +130,10 @@ void Application::wireCncPanels() {
             dcarvep->setLibraryManager(m_libraryManager.get());
             dcarvep->setProjectManager(m_projectManager.get());
             dcarvep->setOpenToolBrowserCallback([this]() {
-                m_uiManager->showToolBrowser() = true;
+                m_uiManager->openWindow("tool_library");
+            });
+            dcarvep->setOpenMachineProfilesCallback([this]() {
+                m_uiManager->openMachineProfiles();
             });
             dcarvep->setCutOptimizerPanel(m_uiManager->cutOptimizerPanel());
             dcarvep->setOnMaterialPartSync([this](const DirectCarvePanel::MaterialPartSync& data) {
@@ -163,6 +172,9 @@ void Application::wireCncPanels() {
         if (settsp) {
             settsp->setCncController(m_cncController.get());
             settsp->setFileDialog(m_uiManager->fileDialog());
+            settsp->setOpenMachineProfilesCallback([this]() {
+                m_uiManager->openMachineProfiles();
+            });
         }
         if (macrop) {
             macrop->setCncController(m_cncController.get());
@@ -320,6 +332,12 @@ void Application::wireCncPanels() {
         tbp->setToolboxRepository(m_toolboxRepo.get());
         tbp->setMaterialManager(m_materialManager.get());
         tbp->setFileDialog(m_uiManager->fileDialog());
+        tbp->setOpenMachineProfilesCallback([this]() {
+            m_uiManager->openMachineProfiles();
+        });
+        m_uiManager->addMachineProfileChangedCallback([tbp]() {
+            tbp->onMachineProfileChanged();
+        });
     }
     if (auto* ctp = m_uiManager->cncToolPanel()) {
         ctp->setToolDatabase(m_toolDatabase.get());

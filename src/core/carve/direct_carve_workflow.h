@@ -24,8 +24,6 @@ enum class DirectCarveRequirement {
     FinishingToolSelected,
     ToolSetupConfirmed,
     MaterialConfirmed,
-    HeightmapReady,
-    FreshHeightmap,
     ToolpathGenerated,
     FreshToolpath,
     MachineConnected,
@@ -47,8 +45,6 @@ struct DirectCarveWorkflowState {
     bool finishingToolSelected = false;
     bool toolSetupConfirmed = false;
     bool materialSelected = false;
-    bool heightmapReady = false;
-    bool heightmapFresh = false;
     bool toolpathGenerated = false;
     bool toolpathFresh = false;
     bool machineConnected = false;
@@ -78,6 +74,10 @@ bool isDirectCarveReadyForFinalConfirmation(
     const DirectCarveWorkflowState& state);
 
 bool isDirectCarveReadyToRun(const DirectCarveWorkflowState& state);
+
+bool canNavigateDirectCarveStep(int targetStep,
+                                int maxVisitedStep,
+                                int stepCount);
 
 } // namespace carve
 } // namespace dw

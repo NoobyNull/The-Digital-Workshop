@@ -99,6 +99,36 @@ void writeToolpath(std::ostringstream& out,
     }
 }
 
+void writeToolChangeBoundary(std::ostringstream& out,
+                             const MultiPassToolpath& toolpath,
+                             const ToolpathConfig& config,
+                             f32& lastFeedRate,
+                             bool& hasPosition,
+                             Vec3& lastPosition,
+                             bool& lastRapid,
+                             cnc::SendUnits units)
+{
+    const std::string roughTool = toolpath.clearingToolName.empty()
+        ? "roughing tool"
+        : toolpath.clearingToolName;
+    const std::string finishTool = toolpath.finishingToolName.empty()
+        ? "finish tool"
+        : toolpath.finishingToolName;
+
+    out << "(Tool change: " << roughTool << " -> "
+        << finishTool << ")\n";
+    out << "G0 Z" << fmt(cnc::toSendLength(config.safeZMm, units)) << "\n";
+    out << "M5\n";
+    out << "(Install finish tool: " << finishTool << ")\n";
+    out << "(Re-zero Z with finish tool before continuing)\n";
+    out << "M0\n";
+
+    lastFeedRate = -1.0f;
+    hasPosition = false;
+    lastPosition = Vec3{0.0f};
+    lastRapid = true;
+}
+
 void writeFooter(std::ostringstream& out, f32 safeZ, cnc::SendUnits units)
 {
     out << "G0 Z" << fmt(cnc::toSendLength(safeZ, units)) << "\n";
@@ -131,6 +161,14 @@ std::string generateGcode(const MultiPassToolpath& toolpath,
     if (!toolpath.clearing.points.empty()) {
         writeToolpath(out, toolpath.clearing, config, "Clearing pass",
                       lastFeedRate, hasPosition, lastPosition, lastRapid, units);
+    }
+
+    if (toolpath.requiresToolChange &&
+        !toolpath.clearing.points.empty() &&
+        !toolpath.finishing.points.empty()) {
+        writeToolChangeBoundary(out, toolpath, config,
+                                lastFeedRate, hasPosition,
+                                lastPosition, lastRapid, units);
     }
 
     // Finishing pass

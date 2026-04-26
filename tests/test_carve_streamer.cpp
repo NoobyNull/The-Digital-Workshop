@@ -218,6 +218,37 @@ TEST(CarveStreamer, ClearingThenFinishing)
     EXPECT_LT(clearingCutIdx, finishingCutIdx);
 }
 
+TEST(CarveStreamer, ToolChangeBoundaryBeforeFinishing)
+{
+    CarveStreamer s;
+    auto tp = makeToolpathWithClearing();
+    tp.requiresToolChange = true;
+    tp.clearingToolName = "6mm End Mill";
+    tp.finishingToolName = "1/32 TBN";
+    s.start(tp, makeTestConfig());
+
+    auto lines = drainAll(s);
+
+    auto findLine = [&](const std::string& needle) {
+        for (int i = 0; i < static_cast<int>(lines.size()); ++i) {
+            if (lines[static_cast<size_t>(i)].find(needle) != std::string::npos) {
+                return i;
+            }
+        }
+        return -1;
+    };
+
+    const int toolChange = findLine("Tool change: 6mm End Mill -> 1/32 TBN");
+    const int pause = findLine("M0");
+    const int finishing = findLine("X10.0 Y0.0 Z-1.0");
+
+    ASSERT_NE(toolChange, -1);
+    ASSERT_NE(pause, -1);
+    ASSERT_NE(finishing, -1);
+    EXPECT_LT(toolChange, pause);
+    EXPECT_LT(pause, finishing);
+}
+
 TEST(CarveStreamer, PostambleLast)
 {
     CarveStreamer s;

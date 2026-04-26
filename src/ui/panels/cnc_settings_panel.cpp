@@ -36,7 +36,7 @@ const ImVec4 kChangedFromDefault{0.6f, 0.4f, 1.0f, 1.0f}; // Purple for FluidNC 
 
 } // namespace
 
-CncSettingsPanel::CncSettingsPanel() : Panel("Firmware") {
+CncSettingsPanel::CncSettingsPanel() : Panel("Machine Settings") {
     m_advancedView = Config::instance().getAdvancedSettingsView();
 }
 
@@ -138,18 +138,14 @@ void CncSettingsPanel::renderMachineProfileSection() {
             if (selected)
                 ImGui::SetItemDefaultFocus();
         }
-        ImGui::EndCombo();
+    ImGui::EndCombo();
     }
     ImGui::SameLine();
     if (ImGui::Button("Edit")) {
-        if (!m_profileDialog.isOpen()) {
-            m_profileDialog.open();
-        } else {
-            m_profileDialog.close();
-        }
+        if (m_openMachineProfiles)
+            m_openMachineProfiles();
     }
 
-    m_profileDialog.render();
     ImGui::Separator();
 }
 

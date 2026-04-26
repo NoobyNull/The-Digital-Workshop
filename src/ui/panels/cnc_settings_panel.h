@@ -1,11 +1,11 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
 #include "../../core/cnc/cnc_types.h"
 #include "../../core/cnc/unified_settings.h"
-#include "../dialogs/machine_profile_dialog.h"
 #include "panel.h"
 
 namespace dw {
@@ -26,6 +26,9 @@ class CncSettingsPanel : public Panel {
     // Dependencies
     void setCncController(CncController* cnc) { m_cnc = cnc; }
     void setFileDialog(FileDialog* fd) { m_fileDialog = fd; }
+    void setOpenMachineProfilesCallback(std::function<void()> cb) {
+        m_openMachineProfiles = std::move(cb);
+    }
 
     // Callbacks (called on main thread via MainThreadQueue)
     void onConnectionChanged(bool connected, const std::string& version);
@@ -105,8 +108,8 @@ class CncSettingsPanel : public Panel {
     float m_writeTimer = 0.0f;
     static constexpr float WRITE_DELAY_SEC = 0.05f; // 50ms between EEPROM writes
 
-    // Machine profile dialog
-    MachineProfileDialog m_profileDialog;
+    // Global machine profile editor opener
+    std::function<void()> m_openMachineProfiles;
 
     // Tab selection
     int m_activeTab = 0;

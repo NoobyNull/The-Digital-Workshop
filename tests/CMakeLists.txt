@@ -35,6 +35,7 @@ set(DW_TEST_SOURCES
     test_schema.cpp
     test_camera.cpp
     test_status_tips.cpp
+    test_window_catalog.cpp
     test_view_cube_orientation.cpp
     test_archive.cpp
     test_library_manager.cpp
@@ -72,6 +73,8 @@ set(DW_TEST_SOURCES
     test_gcode_modal_scanner.cpp
     test_tool_database.cpp
     test_tool_calculator.cpp
+    test_tool_profile.cpp
+    test_tool_browser_panel.cpp
     test_grbl_settings.cpp
     test_macro_manager.cpp
     # Carve (Direct Carve pipeline)
@@ -86,6 +89,7 @@ set(DW_TEST_SOURCES
     test_island_detector.cpp
     test_analysis_overlay.cpp
     test_heightmap_preview.cpp
+    test_roughing_tool_selector.cpp
     test_tool_recommender.cpp
     test_toolpath_generator.cpp
     test_gcode_export.cpp
@@ -132,11 +136,13 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/gcode/machine_profile.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/status_tips.cpp
     ${CMAKE_SOURCE_DIR}/src/core/viewport/view_cube_orientation.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cnc/cnc_tool.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/serial_port.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/tcp_socket.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/cnc_controller.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/preflight_check.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/tool_calculator.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cnc/tool_profile.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/grbl_settings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/unified_settings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/machine_units.cpp
@@ -186,6 +192,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/config/config_watcher.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/input_binding.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/layout_preset.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/config/window_catalog.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/app_paths.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/path_resolver.cpp
     ${CMAKE_SOURCE_DIR}/src/core/storage/storage_manager.cpp
@@ -202,6 +209,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/carve/island_detector.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/analysis_overlay.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap_preview.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/carve/roughing_tool_selector.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/tool_recommender.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/toolpath_generator.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/gcode_export.cpp

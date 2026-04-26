@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "../core/config/layout_preset.h"
+#include "../core/config/window_catalog.h"
 #include "../core/types.h"
 
 using ImGuiID = unsigned int;
@@ -54,6 +55,7 @@ class FileDialog;
 class LightingDialog;
 class ImportSummaryDialog;
 class ImportOptionsDialog;
+class MachineProfileDialog;
 class ProgressDialog;
 class TagImageDialog;
 class MaintenanceDialog;
@@ -187,6 +189,12 @@ class UIManager {
     WorkspaceMode workspaceMode() const { return m_workspaceMode; }
     void setWorkspaceMode(WorkspaceMode mode);
     void showCncPanels(bool show);
+    void openWindow(const std::string& key);
+    void toggleWindow(const std::string& key);
+    [[nodiscard]] bool isWindowVisible(const std::string& key) const;
+    void openToolLibrary();
+    void openMachineProfiles();
+    void addMachineProfileChangedCallback(ActionCallback cb);
     bool& showRestartPopup() { return m_showRestartPopup; }
 
     // Layout presets
@@ -296,20 +304,14 @@ class UIManager {
     int m_nextGroupId = 1;
 
     // Panel registry — maps panel keys to visibility, rendering, and config
-    enum class PanelRole {
-        Shared,
-        Workshop,
-        Sender,
-    };
-
     struct PanelEntry {
-        const char* key;         // Preset key (e.g. "cnc_status")
+        const char* key;         // Layout preset key (e.g. "cnc_status")
         bool* showFlag;          // &m_showCncStatus
         const char* menuLabel;   // View menu display name
         const char* windowTitle; // ImGui window title for focus detection
         Panel* panel;            // Base pointer for render() dispatch
         bool syncClose;          // Handle X-button close → visibility sync
-        PanelRole role;          // Workspace ownership
+        WindowRole role;         // Workspace ownership
     };
     std::vector<PanelEntry> m_panelRegistry;
     void buildPanelRegistry();
@@ -338,6 +340,7 @@ class UIManager {
     // Dialogs
     std::unique_ptr<FileDialog> m_fileDialog;
     std::unique_ptr<LightingDialog> m_lightingDialog;
+    std::unique_ptr<MachineProfileDialog> m_machineProfileDialog;
     std::unique_ptr<ImportSummaryDialog> m_importSummaryDialog;
     std::unique_ptr<ImportOptionsDialog> m_importOptionsDialog;
     std::unique_ptr<ProgressDialog> m_progressDialog;
@@ -357,6 +360,7 @@ class UIManager {
 
     // First frame flag for dock layout
     bool m_firstFrame = true;
+    bool m_focusToolLibraryNextFrame = false;
 
     // Toolbar and menu rendering helpers (in ui_manager_menus.cpp)
     void renderToolbar();
@@ -384,6 +388,7 @@ class UIManager {
     ActionCallback m_onLocateMissingFiles;
     ActionCallback m_onExportSettings;
     ActionCallback m_onImportSettings;
+    std::vector<ActionCallback> m_onMachineProfileChanged;
 
     // CNC menu bar callbacks
     ConnectCallback m_onConnect;

@@ -18,10 +18,6 @@ const char* directCarveRequirementLabel(DirectCarveRequirement requirement)
         return "Required tool setup confirmed";
     case DirectCarveRequirement::MaterialConfirmed:
         return "Material and feeds confirmed";
-    case DirectCarveRequirement::HeightmapReady:
-        return "Heightmap ready";
-    case DirectCarveRequirement::FreshHeightmap:
-        return "Heightmap matches current model setup";
     case DirectCarveRequirement::ToolpathGenerated:
         return "Toolpath generated";
     case DirectCarveRequirement::FreshToolpath:
@@ -67,8 +63,6 @@ missingDirectCarveRequirements(const DirectCarveWorkflowState& state,
     require(state.toolSetupConfirmed,
             DirectCarveRequirement::ToolSetupConfirmed);
     require(state.materialSelected, DirectCarveRequirement::MaterialConfirmed);
-    require(state.heightmapReady, DirectCarveRequirement::HeightmapReady);
-    require(state.heightmapFresh, DirectCarveRequirement::FreshHeightmap);
     require(state.toolpathGenerated, DirectCarveRequirement::ToolpathGenerated);
     require(state.toolpathFresh, DirectCarveRequirement::FreshToolpath);
     require(state.machineConnected, DirectCarveRequirement::MachineConnected);
@@ -104,8 +98,7 @@ bool isDirectCarveStepComplete(DirectCarveWorkflowStep step,
     case DirectCarveWorkflowStep::Material:
         return state.materialSelected;
     case DirectCarveWorkflowStep::Preview:
-        return state.heightmapReady && state.heightmapFresh &&
-               state.toolpathGenerated && state.toolpathFresh;
+        return state.toolpathGenerated && state.toolpathFresh;
     case DirectCarveWorkflowStep::Machine:
         return state.machineConnected && state.machineIdle &&
                state.machineAlarmClear && state.machineProfileConfigured &&
@@ -133,6 +126,19 @@ bool isDirectCarveReadyForFinalConfirmation(
 bool isDirectCarveReadyToRun(const DirectCarveWorkflowState& state)
 {
     return missingDirectCarveRequirements(state, true).empty();
+}
+
+bool canNavigateDirectCarveStep(int targetStep,
+                                int maxVisitedStep,
+                                int stepCount)
+{
+    if (targetStep < 0 || stepCount <= 0 || targetStep >= stepCount) {
+        return false;
+    }
+    if (maxVisitedStep < 0) {
+        maxVisitedStep = 0;
+    }
+    return targetStep <= maxVisitedStep + 1;
 }
 
 } // namespace carve

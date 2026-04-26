@@ -236,7 +236,7 @@ void Application::wireProjectPanel() {
         if (!m_gcodeRepo) return;
         auto rec = m_gcodeRepo->findById(gcodeId);
         if (rec && m_uiManager->gcodePanel()) {
-            m_uiManager->gcodePanel()->setOpen(true);
+            m_uiManager->openWindow("gcode_viewer");
             m_uiManager->gcodePanel()->loadFile(
                 PathResolver::resolve(rec->filePath, PathCategory::GCode).string());
         }
@@ -255,14 +255,20 @@ void Application::wireProjectPanel() {
             }
         }
 
-        directCarve->setOpen(true);
+        m_uiManager->openWindow("direct_carve");
         (void)directCarve->loadOperationOpenItem(item);
     });
     pp->setOnMaterialSelected([this](i64 id) {
-        if (auto* p = m_uiManager->materialsPanel()) { p->setOpen(true); p->selectMaterial(id); }
+        if (auto* p = m_uiManager->materialsPanel()) {
+            m_uiManager->openWindow("materials");
+            p->selectMaterial(id);
+        }
     });
     pp->setOnCostSelected([this](i64 id) {
-        if (auto* p = m_uiManager->costPanel()) { p->setOpen(true); p->selectRecord(id); }
+        if (auto* p = m_uiManager->costPanel()) {
+            m_uiManager->openWindow("project_costing");
+            p->selectRecord(id);
+        }
     });
     pp->setOnCutPlanSelected([this](i64 planId) {
         if (!m_cutPlanRepo || !m_cutListFile) return;
@@ -280,7 +286,7 @@ void Application::wireProjectPanel() {
             lr.parts = CutPlanRepository::jsonToParts(rec->partsJson);
         if (!rec->resultJson.empty())
             lr.result = CutPlanRepository::jsonToCutPlan(rec->resultJson);
-        m_uiManager->cutOptimizerPanel()->setOpen(true);
+        m_uiManager->openWindow("cut_optimizer");
         m_uiManager->cutOptimizerPanel()->loadCutPlan(lr);
     });
 }

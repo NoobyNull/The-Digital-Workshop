@@ -15,8 +15,6 @@ dw::carve::DirectCarveWorkflowState readyState()
     state.finishingToolSelected = true;
     state.toolSetupConfirmed = true;
     state.materialSelected = true;
-    state.heightmapReady = true;
-    state.heightmapFresh = true;
     state.toolpathGenerated = true;
     state.toolpathFresh = true;
     state.machineConnected = true;
@@ -55,18 +53,6 @@ TEST(DirectCarveWorkflow, StaleToolpathBlocksFinalCarve)
     EXPECT_FALSE(dw::carve::isDirectCarveReadyToRun(state));
     EXPECT_TRUE(missingContains(
         missing, dw::carve::DirectCarveRequirement::FreshToolpath));
-}
-
-TEST(DirectCarveWorkflow, StaleHeightmapBlocksFinalCarve)
-{
-    auto state = readyState();
-    state.heightmapFresh = false;
-
-    const auto missing = dw::carve::missingDirectCarveRequirements(state, true);
-
-    EXPECT_FALSE(dw::carve::isDirectCarveReadyToRun(state));
-    EXPECT_TRUE(missingContains(
-        missing, dw::carve::DirectCarveRequirement::FreshHeightmap));
 }
 
 TEST(DirectCarveWorkflow, OutlineSkipSatisfiesOutlineRequirement)
@@ -155,4 +141,23 @@ TEST(DirectCarveWorkflow, FinalConfirmationAloneIsNotEnough)
     EXPECT_FALSE(dw::carve::isDirectCarveReadyToRun(state));
     EXPECT_FALSE(dw::carve::isDirectCarveStepComplete(
         dw::carve::DirectCarveWorkflowStep::Confirm, state));
+}
+
+TEST(DirectCarveWorkflow, StepIndicatorAllowsImmediateNextStep)
+{
+    constexpr int stepCount = 9;
+    constexpr int zeroStep = 5;
+    constexpr int outlineStep = 6;
+    constexpr int confirmStep = 7;
+
+    EXPECT_TRUE(dw::carve::canNavigateDirectCarveStep(
+        outlineStep, zeroStep, stepCount));
+    EXPECT_TRUE(dw::carve::canNavigateDirectCarveStep(
+        2, zeroStep, stepCount));
+    EXPECT_FALSE(dw::carve::canNavigateDirectCarveStep(
+        confirmStep, zeroStep, stepCount));
+    EXPECT_FALSE(dw::carve::canNavigateDirectCarveStep(
+        -1, zeroStep, stepCount));
+    EXPECT_FALSE(dw::carve::canNavigateDirectCarveStep(
+        stepCount, zeroStep, stepCount));
 }

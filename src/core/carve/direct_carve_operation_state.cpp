@@ -14,6 +14,13 @@ ScanAxis parseScanAxis(const std::string& value) {
     return ScanAxis::XOnly;
 }
 
+CutExtents parseCutExtents(const std::string& value) {
+    if (value == "material" || value == "material_extents") {
+        return CutExtents::Material;
+    }
+    return CutExtents::Model;
+}
+
 MillDirection parseMillDirection(const std::string& value) {
     if (value == "climb") return MillDirection::Climb;
     if (value == "conventional") return MillDirection::Conventional;
@@ -178,6 +185,8 @@ parseDirectCarveOperationSetup(const ProjectOpenItem& item) {
 
     const auto toolpath = intent.value("toolpath", nlohmann::json::object());
     setup.toolpath.axis = parseScanAxis(toolpath.value("scan_axis", std::string()));
+    setup.toolpath.cutExtents =
+        parseCutExtents(toolpath.value("cut_extents", std::string()));
     setup.toolpath.direction =
         parseMillDirection(toolpath.value("mill_direction", std::string()));
     setup.toolpath.stepoverPreset =
@@ -191,6 +200,8 @@ parseDirectCarveOperationSetup(const ProjectOpenItem& item) {
         jsonF32(toolpath, "plunge_rate_mm_min", setup.toolpath.plungeRateMmMin);
     setup.toolpath.rapidRateMmMin =
         jsonF32(toolpath, "rapid_rate_mm_min", setup.toolpath.rapidRateMmMin);
+    setup.toolpath.stepdownMm =
+        jsonF32(toolpath, "stepdown_mm", setup.toolpath.stepdownMm);
     setup.toolpath.leadInMm = jsonF32(toolpath, "lead_in_mm", setup.toolpath.leadInMm);
     setup.toolpath.scanResolutionMm =
         jsonF32(toolpath, "scan_resolution_mm", setup.toolpath.scanResolutionMm);

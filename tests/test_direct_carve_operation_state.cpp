@@ -16,6 +16,7 @@ TEST(DirectCarveOperationState, ParsesSetupIntentFromOpenItem) {
         "fit":{"scale":0.75,"offset_x_mm":12.5,"offset_y_mm":8.0,"depth_mm":4.5},
         "toolpath":{
             "scan_axis":"x_then_y",
+            "cut_extents":"material",
             "mill_direction":"climb",
             "stepover_preset":"fine",
             "custom_stepover_pct":3.5,
@@ -68,6 +69,7 @@ TEST(DirectCarveOperationState, ParsesSetupIntentFromOpenItem) {
     EXPECT_FLOAT_EQ(parsed->fit.offsetY, 8.0f);
     EXPECT_FLOAT_EQ(parsed->fit.depthMm, 4.5f);
     EXPECT_EQ(parsed->toolpath.axis, dw::carve::ScanAxis::XThenY);
+    EXPECT_EQ(parsed->toolpath.cutExtents, dw::carve::CutExtents::Material);
     EXPECT_EQ(parsed->toolpath.direction, dw::carve::MillDirection::Climb);
     EXPECT_EQ(parsed->toolpath.stepoverPreset, dw::carve::StepoverPreset::Fine);
     EXPECT_FLOAT_EQ(parsed->toolpath.customStepoverPct, 3.5f);
