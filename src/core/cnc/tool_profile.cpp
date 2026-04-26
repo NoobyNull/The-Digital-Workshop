@@ -12,6 +12,7 @@ namespace dw {
 namespace {
 
 constexpr double kDefaultPreviewDiameterMm = 6.35;
+constexpr double kPi = 3.14159265358979323846;
 constexpr const char* kMeasurementPattern =
     R"(((?:\d+(?:\.\d+)?\s*-\s*)?\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?|\d*\.\d+))";
 constexpr const char* kUnitPattern =
@@ -196,7 +197,7 @@ double fallbackCutHeightMm(ToolProfileShape shape,
                            double sideAngleDeg) {
     if (shape == ToolProfileShape::TaperedBallNose &&
         diameterMm > 0.0 && tipRadiusMm > 0.0 && sideAngleDeg > 0.0) {
-        const double sideAngleRad = sideAngleDeg * M_PI / 180.0;
+        const double sideAngleRad = sideAngleDeg * kPi / 180.0;
         const double taperHeight = ((diameterMm * 0.5) - tipRadiusMm) /
             std::tan(sideAngleRad);
         if (std::isfinite(taperHeight) && taperHeight > 0.0)
@@ -206,7 +207,7 @@ double fallbackCutHeightMm(ToolProfileShape shape,
     if ((shape == ToolProfileShape::VGroove ||
          shape == ToolProfileShape::DrillPoint) &&
         diameterMm > 0.0 && includedAngleDeg > 0.0) {
-        const double halfAngle = includedAngleDeg * 0.5 * M_PI / 180.0;
+        const double halfAngle = includedAngleDeg * 0.5 * kPi / 180.0;
         const double taperHeight = ((diameterMm - flatDiameterMm) * 0.5) /
             std::tan(halfAngle);
         if (std::isfinite(taperHeight) && taperHeight > 0.0)
@@ -349,7 +350,7 @@ ToolProfileResolvedGeometry resolveToolProfileGeometry(const VtdbToolGeometry& g
     if (resolved.shape == ToolProfileShape::TaperedBallNose &&
         resolved.tipRadiusMm > 0.0 && resolved.cutHeightMm > 0.0 &&
         resolved.sideAngleDeg > 0.0) {
-        const double sideAngleRad = resolved.sideAngleDeg * M_PI / 180.0;
+        const double sideAngleRad = resolved.sideAngleDeg * kPi / 180.0;
         const double taperedTop = (resolved.tipRadiusMm +
             std::tan(sideAngleRad) * resolved.cutHeightMm) * 2.0;
         if (std::isfinite(taperedTop) && taperedTop > 0.0) {
