@@ -179,6 +179,26 @@ std::vector<ModelRecord> ModelRepository::findByTag(std::string_view tag) {
     return results;
 }
 
+std::vector<ModelRecord> ModelRepository::findByTagStatus(int status) {
+    std::vector<ModelRecord> results;
+
+    auto stmt =
+        m_db.prepare("SELECT * FROM models WHERE tag_status = ? ORDER BY imported_at DESC");
+    if (!stmt.isValid()) {
+        return results;
+    }
+
+    if (!stmt.bindInt(1, static_cast<i64>(status))) {
+        return results;
+    }
+
+    while (stmt.step()) {
+        results.push_back(rowToModel(stmt));
+    }
+
+    return results;
+}
+
 bool ModelRepository::update(const ModelRecord& model) {
     auto stmt = m_db.prepare(R"(
         UPDATE models SET
@@ -591,6 +611,58 @@ bool ModelRepository::updateTagStatus(i64 id, int status) {
     if (!stmt.bindInt(1, static_cast<i64>(status)) || !stmt.bindInt(2, id))
         return false;
     return stmt.execute();
+}
+
+int ModelRepository::resetTagStatus(int fromStatus, int toStatus) {
+    auto stmt = m_db.prepare("UPDATE models SET tag_status = ? WHERE tag_status = ?");
+    if (!stmt.isValid())
+        return 0;
+    if (!stmt.bindInt(1, static_cast<i64>(toStatus)) ||
+        !stmt.bindInt(2, static_cast<i64>(fromStatus)))
+        return 0;
+    if (!stmt.execute())
+        return 0;
+    return m_db.changesCount();
+}
+
+int ModelRepository::recoverInterruptedTagStatuses() {
+    int changed = 0;
+
+    if (m_db.execute(R"(
+        UPDATE models
+        SET tag_status = 2
+        WHERE tag_status = 1
+          AND COALESCE(descriptor_title, '') != ''
+          AND COALESCE(descriptor_description, '') != ''
+    )")) {
+        changed += m_db.changesCount();
+    }
+
+    if (m_db.execute(R"(
+        UPDATE models
+        SET tag_status = 0
+        WHERE tag_status = 1
+          AND (
+              COALESCE(descriptor_title, '') = ''
+              OR COALESCE(descriptor_description, '') = ''
+          )
+    )")) {
+        changed += m_db.changesCount();
+    }
+
+    if (m_db.execute(R"(
+        UPDATE models
+        SET tag_status = 0
+        WHERE tag_status = 2
+          AND (
+              COALESCE(descriptor_title, '') = ''
+              OR COALESCE(descriptor_description, '') = ''
+          )
+    )")) {
+        changed += m_db.changesCount();
+    }
+
+    return changed;
 }
 
 std::optional<ModelRecord> ModelRepository::findNextUntagged() {

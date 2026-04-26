@@ -35,6 +35,7 @@ class ImportOptionsDialog : public Dialog {
     StorageLocation m_detectedLocation = StorageLocation::Unknown;
     int m_selectedMode = 0; // maps to FileHandlingMode
     bool m_queueForTagging = false;
+    bool m_pendingOpen = false;
     ResultCallback m_onConfirm;
 };
 

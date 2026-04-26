@@ -24,6 +24,7 @@ class Camera {
     // Reset to default view
     void reset();
     void fitToBounds(const Vec3& min, const Vec3& max);
+    void fitToBoundsProjected(const Vec3& min, const Vec3& max, f32 viewportFill = 0.8f);
 
     // Viewport
     void setViewport(int width, int height);

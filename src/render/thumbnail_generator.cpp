@@ -126,9 +126,9 @@ ByteBuffer ThumbnailGenerator::generateToBuffer(const Mesh& mesh,
     camera.setPitch(settings.cameraPitch);
     camera.setYaw(settings.cameraYaw);
 
-    // Fit camera to view the whole model
+    // Fit projected bounds so long or flat models occupy roughly 80% of the thumbnail.
     const auto& bounds = mesh.bounds();
-    camera.fitToBounds(bounds.min, bounds.max);
+    camera.fitToBoundsProjected(bounds.min, bounds.max, settings.viewportFill);
 
     // Render to framebuffer
     fb.bind();

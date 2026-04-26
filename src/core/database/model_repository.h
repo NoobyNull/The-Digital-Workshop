@@ -57,7 +57,7 @@ struct ModelRecord {
     std::string descriptorDescription; // Detailed AI classification
     std::string descriptorHover;       // One-line hover text
 
-    int tagStatus = 0; // 0=untagged, 1=queued, 2=tagged, 3=failed
+    int tagStatus = 0; // 0=untagged, 1=queued/in-progress, 2=tagged, 3=failed, 4=unclassifiable
 };
 
 // Repository for model CRUD operations
@@ -75,6 +75,7 @@ class ModelRepository {
     std::vector<ModelRecord> findByName(std::string_view searchTerm);
     std::vector<ModelRecord> findByFormat(std::string_view format);
     std::vector<ModelRecord> findByTag(std::string_view tag);
+    std::vector<ModelRecord> findByTagStatus(int status);
 
     // Update
     bool update(const ModelRecord& model);
@@ -87,6 +88,8 @@ class ModelRepository {
                           const std::string& description,
                           const std::string& hover);
     bool updateTagStatus(i64 id, int status);
+    int resetTagStatus(int fromStatus, int toStatus);
+    int recoverInterruptedTagStatuses();
 
     // Tag status queries
     std::optional<ModelRecord> findNextUntagged();

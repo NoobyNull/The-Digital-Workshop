@@ -42,6 +42,7 @@ class LibraryPanel;
 class PropertiesPanel;
 class ProjectPanel;
 class GCodePanel;
+class LogViewerPanel;
 class CostingPanel;
 class CutOptimizerPanel;
 class MaterialsPanel;
@@ -138,6 +139,7 @@ class UIManager {
     PropertiesPanel* propertiesPanel() { return m_propertiesPanel.get(); }
     ProjectPanel* projectPanel() { return m_projectPanel.get(); }
     GCodePanel* gcodePanel() { return m_gcodePanel.get(); }
+    LogViewerPanel* logViewerPanel() { return m_logViewerPanel.get(); }
     CutOptimizerPanel* cutOptimizerPanel() { return m_cutOptimizerPanel.get(); }
     MaterialsPanel* materialsPanel() { return m_materialsPanel.get(); }
     CostingPanel* costPanel() { return m_costPanel.get(); }
@@ -169,6 +171,7 @@ class UIManager {
     bool& showProperties() { return m_showProperties; }
     bool& showProject() { return m_showProject; }
     bool& showGCode() { return m_showGCode; }
+    bool& showLogViewer() { return m_showLogViewer; }
     bool& showCutOptimizer() { return m_showCutOptimizer; }
     bool& showProjectCosting() { return m_showProjectCosting; }
     bool& showMaterials() { return m_showMaterials; }
@@ -212,12 +215,19 @@ class UIManager {
     void setOnOpenProject(ActionCallback cb) { m_onOpenProject = std::move(cb); }
     void setOnSaveProject(ActionCallback cb) { m_onSaveProject = std::move(cb); }
     void setOnImportModel(ActionCallback cb) { m_onImportModel = std::move(cb); }
+    void setOnImportFolder(ActionCallback cb) { m_onImportFolder = std::move(cb); }
     void setOnExportModel(ActionCallback cb) { m_onExportModel = std::move(cb); }
     void setOnImportProjectArchive(ActionCallback cb) { m_onImportProjectArchive = std::move(cb); }
     void setOnQuit(ActionCallback cb) { m_onQuit = std::move(cb); }
     void setOnSpawnSettings(ActionCallback cb) { m_onSpawnSettings = std::move(cb); }
     void setOnShowAbout(ActionCallback cb) { m_onShowAbout = std::move(cb); }
     void setOnLibraryMaintenance(ActionCallback cb) { m_onLibraryMaintenance = std::move(cb); }
+    void setOnStartBackgroundTagging(ActionCallback cb) {
+        m_onStartBackgroundTagging = std::move(cb);
+    }
+    void setOnStopBackgroundTagging(ActionCallback cb) {
+        m_onStopBackgroundTagging = std::move(cb);
+    }
     void setOnRelocateWorkspace(ActionCallback cb) { m_onRelocateWorkspace = std::move(cb); }
     void setOnLocateMissingFiles(ActionCallback cb) { m_onLocateMissingFiles = std::move(cb); }
     void setOnExportSettings(ActionCallback cb) { m_onExportSettings = std::move(cb); }
@@ -242,8 +252,10 @@ class UIManager {
 
     // --- Import progress callbacks ---
     void setImportProgress(const ImportProgress* progress);
+    void setTaggerProgress(const TaggerProgress* progress);
     void showImportSummary(const ImportBatchSummary& summary);
     void setImportCancelCallback(std::function<void()> callback);
+    void setTaggerCancelCallback(std::function<void()> callback);
 
     // Show tagger shutdown dialog
     void showTaggerShutdownDialog(const TaggerProgress* progress);
@@ -261,6 +273,7 @@ class UIManager {
     std::unique_ptr<PropertiesPanel> m_propertiesPanel;
     std::unique_ptr<ProjectPanel> m_projectPanel;
     std::unique_ptr<GCodePanel> m_gcodePanel;
+    std::unique_ptr<LogViewerPanel> m_logViewerPanel;
     std::unique_ptr<CutOptimizerPanel> m_cutOptimizerPanel;
     std::unique_ptr<MaterialsPanel> m_materialsPanel;
     std::unique_ptr<CostingPanel> m_costPanel;
@@ -283,6 +296,7 @@ class UIManager {
     bool m_showProperties = true;
     bool m_showProject = true;
     bool m_showGCode = false;
+    bool m_showLogViewer = false;
     bool m_showCutOptimizer = false;
     bool m_showProjectCosting = false;
     bool m_showMaterials = false;
@@ -378,12 +392,15 @@ class UIManager {
     ActionCallback m_onOpenProject;
     ActionCallback m_onSaveProject;
     ActionCallback m_onImportModel;
+    ActionCallback m_onImportFolder;
     ActionCallback m_onExportModel;
     ActionCallback m_onImportProjectArchive;
     ActionCallback m_onQuit;
     ActionCallback m_onSpawnSettings;
     ActionCallback m_onShowAbout;
     ActionCallback m_onLibraryMaintenance;
+    ActionCallback m_onStartBackgroundTagging;
+    ActionCallback m_onStopBackgroundTagging;
     ActionCallback m_onRelocateWorkspace;
     ActionCallback m_onLocateMissingFiles;
     ActionCallback m_onExportSettings;

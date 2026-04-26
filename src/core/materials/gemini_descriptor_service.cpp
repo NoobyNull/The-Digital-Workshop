@@ -8,8 +8,11 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h> // NOLINT
 
+#include "../import/smart_tagger.h"
 #include "../utils/gemini_http.h"
 #include "../utils/log.h"
+
+#include <algorithm>
 
 namespace dw {
 
@@ -24,6 +27,30 @@ void pngWriteCallback(void* context, void* data, int size) {
     auto* ctx = static_cast<PngWriteContext*>(context);
     auto* bytes = static_cast<uint8_t*>(data);
     ctx->data.insert(ctx->data.end(), bytes, bytes + size);
+}
+
+TagClassificationStatus statusFromString(const std::string& value) {
+    if (value == "retry_view") return TagClassificationStatus::RetryView;
+    if (value == "fallback_isometric") return TagClassificationStatus::FallbackIsometric;
+    if (value == "unclassifiable") return TagClassificationStatus::Unclassifiable;
+    return TagClassificationStatus::FinalTag;
+}
+
+const char* statusName(TagClassificationStatus status) {
+    switch (status) {
+    case TagClassificationStatus::FinalTag: return "final_tag";
+    case TagClassificationStatus::RetryView: return "retry_view";
+    case TagClassificationStatus::FallbackIsometric: return "fallback_isometric";
+    case TagClassificationStatus::Unclassifiable: return "unclassifiable";
+    }
+    return "final_tag";
+}
+
+GeometryType geometryTypeFromString(const std::string& value) {
+    if (value == "true_3d") return GeometryType::True3D;
+    if (value == "2.5d_relief") return GeometryType::Relief25D;
+    if (value == "flat_part") return GeometryType::FlatPart;
+    return GeometryType::Unknown;
 }
 
 } // anonymous namespace
@@ -76,7 +103,8 @@ std::vector<uint8_t> GeminiDescriptorService::tgaToPng(const std::string& tgaPat
 }
 
 std::string GeminiDescriptorService::fetchClassification(const std::vector<uint8_t>& imageData,
-                                                         const std::string& apiKey) {
+                                                         const std::string& apiKey,
+                                                         ThumbnailView currentView) {
     std::string url = std::string(kGeminiApiBase) +
                       "gemini-2.5-flash:generateContent?key=" + apiKey;
 
@@ -85,22 +113,66 @@ std::string GeminiDescriptorService::fetchClassification(const std::vector<uint8
     // Structured response schema for reliable JSON output
     nlohmann::json schema;
     schema["type"] = "OBJECT";
-    schema["properties"] = {{"title", {{"type", "STRING"}}},
+    schema["properties"] = {{"status", {{"type", "STRING"},
+                                         {"enum", nlohmann::json::array({"final_tag",
+                                                                         "retry_view",
+                                                                         "fallback_isometric",
+                                                                         "unclassifiable"})}}},
+                            {"confidence", {{"type", "NUMBER"}}},
+                            {"geometryType", {{"type", "STRING"},
+                                              {"enum", nlohmann::json::array({"true_3d",
+                                                                              "2.5d_relief",
+                                                                              "flat_part",
+                                                                              "unknown"})}}},
+                            {"needsRetag", {{"type", "BOOLEAN"}}},
+                            {"recommendedView", {{"type", "STRING"},
+                                                 {"enum", nlohmann::json::array({"front",
+                                                                                 "back",
+                                                                                 "left",
+                                                                                 "right",
+                                                                                 "top",
+                                                                                 "bottom",
+                                                                                 "isometric",
+                                                                                 "unknown"})}}},
+                            {"viewReason", {{"type", "STRING"}}},
+                            {"title", {{"type", "STRING"}}},
                             {"description", {{"type", "STRING"}}},
                             {"hoverNarrative", {{"type", "STRING"}}},
                             {"keywords", {{"type", "ARRAY"}, {"items", {{"type", "STRING"}}}}},
                             {"associations", {{"type", "ARRAY"}, {"items", {{"type", "STRING"}}}}},
                             {"categories", {{"type", "ARRAY"}, {"items", {{"type", "STRING"}}}}}};
-    schema["required"] =
-        nlohmann::json::array({"title", "description", "hoverNarrative", "keywords", "categories"});
+    schema["required"] = nlohmann::json::array({"status",
+                                                "confidence",
+                                                "geometryType",
+                                                "needsRetag",
+                                                "recommendedView",
+                                                "viewReason",
+                                                "title",
+                                                "description",
+                                                "hoverNarrative",
+                                                "keywords",
+                                                "associations",
+                                                "categories"});
 
     nlohmann::json requestBody;
     requestBody["systemInstruction"]["parts"] = nlohmann::json::array(
         {{{"text",
-           "You are The Descriptor — an art historian and design taxonomist. "
+           "You are The Descriptor — an art historian, design taxonomist, and CNC model "
+           "classification reviewer. "
            "Analyze the depicted SUBJECT MATTER of the 3D model shown in the thumbnail, "
-           "ignoring the physical medium (it is always a 3D model). "
            "Focus on WHAT is depicted, not HOW it is rendered. "
+           "Also judge whether the thumbnail view is good enough to identify the subject. "
+           "Available retag views are exactly: front, back, left, right, top, bottom. "
+           "Do not request arbitrary camera angles. "
+           "If this view hides key identifying features, set status='retry_view', "
+           "needsRetag=true, title='', description='', hoverNarrative='', and choose exactly "
+           "one better perpendicular recommendedView. "
+           "If a perpendicular retry is unlikely to help, set status='fallback_isometric'. "
+           "If the object remains generic or semantically unidentifiable, set "
+           "status='unclassifiable' and leave title/description empty. "
+           "Only set status='final_tag' when the tag is specific and useful. "
+           "Use confidence 0.0-1.0. "
+           "Set geometryType to true_3d, 2.5d_relief, flat_part, or unknown. "
            "Provide:\n"
            "- title: A concise name for the depicted object (max 60 chars)\n"
            "- description: 2-3 sentence description of the subject, style, and design intent\n"
@@ -112,10 +184,14 @@ std::string GeminiDescriptorService::fetchClassification(const std::vector<uint8
            "Each entry must be ONE concept only — never combine with 'and', '&', or '/'. "
            "Example: [\"Art\", \"Sculpture\", \"Figurine\"] not [\"Art & Sculpture\"]"}}});
 
+    std::string viewText = std::string("Classify this 3D model thumbnail. Current view: ") +
+                           smart_tagging::thumbnailViewName(currentView) +
+                           ". Available retag views: front, back, left, right, top, bottom.";
+
     requestBody["contents"] = nlohmann::json::array(
         {{{"parts",
            nlohmann::json::array(
-               {{{"text", "Classify this 3D model thumbnail."}},
+               {{{"text", viewText}},
                 {{"inlineData", {{"mimeType", "image/png"}, {"data", base64Image}}}}})}}});
 
     requestBody["generationConfig"]["responseMimeType"] = "application/json";
@@ -150,11 +226,20 @@ DescriptorResult GeminiDescriptorService::parseClassification(const std::string&
 
     try {
         auto response = nlohmann::json::parse(json);
+        result.status = statusFromString(response.value("status", "final_tag"));
+        result.confidence =
+            std::clamp(static_cast<float>(response.value("confidence", 0.0)), 0.0f, 1.0f);
+        result.geometryType = geometryTypeFromString(response.value("geometryType", "unknown"));
+        result.needsRetag = response.value("needsRetag", false);
+        result.recommendedView =
+            smart_tagging::thumbnailViewFromString(response.value("recommendedView", "unknown"));
+        result.viewReason = response.value("viewReason", "");
         result.title = response.value("title", "");
         result.description = response.value("description", "");
         result.hoverNarrative = response.value("hoverNarrative", "");
 
-        if (result.title.empty() || result.description.empty()) {
+        if (result.status == TagClassificationStatus::FinalTag &&
+            (result.title.empty() || result.description.empty())) {
             result.error = "Missing title or description in Gemini response";
             return result;
         }
@@ -189,7 +274,8 @@ DescriptorResult GeminiDescriptorService::parseClassification(const std::string&
 }
 
 DescriptorResult GeminiDescriptorService::describe(const std::string& modelFilePath,
-                                                   const std::string& apiKey) {
+                                                   const std::string& apiKey,
+                                                   ThumbnailView currentView) {
     DescriptorResult result;
 
     log::infof("DescriptorService", "Describing model: %s", modelFilePath.c_str());
@@ -202,7 +288,7 @@ DescriptorResult GeminiDescriptorService::describe(const std::string& modelFileP
     }
 
     // Fetch classification from Gemini
-    std::string classificationJson = fetchClassification(pngData, apiKey);
+    std::string classificationJson = fetchClassification(pngData, apiKey, currentView);
     if (classificationJson.empty()) {
         result.error = "Failed to fetch classification from Gemini API";
         return result;
@@ -210,9 +296,19 @@ DescriptorResult GeminiDescriptorService::describe(const std::string& modelFileP
 
     // Parse classification response
     result = parseClassification(classificationJson);
+    result.currentView = currentView;
 
     if (result.success) {
-        log::infof("DescriptorService", "Successfully described model: %s", result.title.c_str());
+        log::infof("DescriptorService",
+                   "Descriptor result: status=%s confidence=%.2f currentView=%s "
+                   "needsRetag=%s recommendedView=%s reason='%s' title='%s'",
+                   statusName(result.status),
+                   static_cast<double>(result.confidence),
+                   smart_tagging::thumbnailViewName(currentView),
+                   result.needsRetag ? "true" : "false",
+                   smart_tagging::thumbnailViewName(result.recommendedView),
+                   result.viewReason.c_str(),
+                   result.title.c_str());
     }
 
     return result;

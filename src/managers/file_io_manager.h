@@ -56,6 +56,7 @@ class FileIOManager {
 
     // Import/Export
     void importModel();
+    void importFolder();
     void exportModel();
     void onFilesDropped(const std::vector<std::string>& paths);
     void processCompletedImports(ViewportPanel* viewport,

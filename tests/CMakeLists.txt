@@ -42,6 +42,7 @@ set(DW_TEST_SOURCES
     test_threemf_loader.cpp
     test_import_pipeline.cpp
     test_import_mode_policy.cpp
+    test_import_path_collector.cpp
     test_config_watcher.cpp
     test_app_paths.cpp
     test_path_resolver.cpp
@@ -65,6 +66,8 @@ set(DW_TEST_SOURCES
     # Import log + tagger
     test_import_log.cpp
     test_background_tagger.cpp
+    test_smart_tagger.cpp
+    test_gemini_descriptor_parser.cpp
     # CNC Controller (multi-firmware support)
     test_serial_port.cpp
     test_tcp_socket.cpp
@@ -75,6 +78,9 @@ set(DW_TEST_SOURCES
     test_tool_calculator.cpp
     test_tool_profile.cpp
     test_tool_browser_panel.cpp
+    test_log_viewer_panel.cpp
+    test_file_dialog_filters.cpp
+    test_modal_dialogs.cpp
     test_grbl_settings.cpp
     test_macro_manager.cpp
     # Carve (Direct Carve pipeline)
@@ -130,11 +136,19 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/loaders/threemf_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/loaders/gcode_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/loaders/loader_factory.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/import/smart_tagger.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/materials/gemini_descriptor_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/utils/gemini_http.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_analyzer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_modal_scanner.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/machine_profile.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/status_tips.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/log_viewer_panel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/file_filter_utils.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/import_options_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/import_summary_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/tagger_shutdown_dialog.cpp
     ${CMAKE_SOURCE_DIR}/src/core/viewport/view_cube_orientation.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/cnc_tool.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/serial_port.cpp
@@ -184,6 +198,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/graph/graph_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_queue.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_log.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/import/import_path_collector.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/file_handler.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/file_validator.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/filesystem_detector.cpp
@@ -234,6 +249,7 @@ target_link_libraries(dw_tests PRIVATE
     ZLIB::ZLIB
     miniz_static
     nlohmann_json::nlohmann_json
+    CURL::libcurl
 )
 
 # Include source directories for testing internal modules

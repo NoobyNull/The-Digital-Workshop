@@ -93,6 +93,7 @@ class LibraryPanel : public Panel {
 
   private:
     enum class ViewTab { All, Models, GCode };
+    enum class TagReviewFilter { All, NeedsRetag };
 
     void renderToolbar();
     void renderTabs();
@@ -165,6 +166,7 @@ class LibraryPanel : public Panel {
     // Category filter state
     int64_t m_selectedCategoryId = -1;        // -1 = show all
     std::string m_selectedCategoryName;       // For breadcrumb display
+    TagReviewFilter m_tagReviewFilter = TagReviewFilter::All;
     std::vector<CategoryRecord> m_categories; // Cached category list
     bool m_showCategoryAssignDialog = false;
     float m_searchDebounceTimer = 0.0f;

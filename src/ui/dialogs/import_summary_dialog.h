@@ -30,6 +30,7 @@ class ImportSummaryDialog : public Dialog {
     ImportBatchSummary m_summary;
     std::vector<uint8_t>
         m_checked; // per-duplicate checkbox state (uint8_t avoids vector<bool> issues)
+    bool m_pendingOpen = false;
     ReimportCallback m_onReimport;
 };
 

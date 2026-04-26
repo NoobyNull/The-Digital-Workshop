@@ -115,6 +115,10 @@ std::vector<ModelRecord> LibraryManager::searchModels(const std::string& query) 
     return m_modelRepo.findByName(query);
 }
 
+std::vector<ModelRecord> LibraryManager::filterByTagStatus(int status) {
+    return m_modelRepo.findByTagStatus(status);
+}
+
 std::optional<ModelRecord> LibraryManager::getModel(i64 modelId) {
     return m_modelRepo.findById(modelId);
 }
@@ -148,6 +152,10 @@ bool LibraryManager::updateModel(const ModelRecord& record) {
 
 bool LibraryManager::updateTags(i64 modelId, const std::vector<std::string>& tags) {
     return m_modelRepo.updateTags(modelId, tags);
+}
+
+bool LibraryManager::updateTagStatus(i64 modelId, int status) {
+    return m_modelRepo.updateTagStatus(modelId, status);
 }
 
 bool LibraryManager::removeModel(i64 modelId) {

@@ -218,9 +218,16 @@ void StartPage::renderQuickActions() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (ImGui::Button("Import Model", ImVec2(buttonWidth, buttonHeight))) {
+    if (ImGui::Button("Import Models", ImVec2(buttonWidth, buttonHeight))) {
         if (m_onImportModel)
             m_onImportModel();
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::Button("Import Folder", ImVec2(buttonWidth, buttonHeight))) {
+        if (m_onImportFolder)
+            m_onImportFolder();
     }
 }
 

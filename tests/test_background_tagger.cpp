@@ -60,6 +60,11 @@ TEST_F(TagStatusTest, UpdateTagStatus) {
     model = m_repo.findById(id);
     ASSERT_TRUE(model.has_value());
     EXPECT_EQ(model->tagStatus, 3);
+
+    EXPECT_TRUE(m_repo.updateTagStatus(id, 4)); // unclassifiable/manual review
+    model = m_repo.findById(id);
+    ASSERT_TRUE(model.has_value());
+    EXPECT_EQ(model->tagStatus, 4);
 }
 
 TEST_F(TagStatusTest, FindNextUntagged_ReturnsUntaggedWithThumbnail) {
@@ -102,4 +107,67 @@ TEST_F(TagStatusTest, CountByTagStatus) {
     EXPECT_EQ(m_repo.countByTagStatus(0), 1);
     EXPECT_EQ(m_repo.countByTagStatus(2), 1);
     EXPECT_EQ(m_repo.countByTagStatus(3), 1);
+}
+
+TEST_F(TagStatusTest, ResetTagStatus_RecoversQueuedRows) {
+    auto queued = insertTestModel("queued", "hash1");
+    auto tagged = insertTestModel("tagged", "hash2");
+    auto failed = insertTestModel("failed", "hash3");
+    ASSERT_TRUE(m_repo.updateTagStatus(queued, 1));
+    ASSERT_TRUE(m_repo.updateTagStatus(tagged, 2));
+    ASSERT_TRUE(m_repo.updateTagStatus(failed, 3));
+
+    EXPECT_EQ(m_repo.resetTagStatus(1, 0), 1);
+
+    auto recovered = m_repo.findById(queued);
+    ASSERT_TRUE(recovered.has_value());
+    EXPECT_EQ(recovered->tagStatus, 0);
+
+    auto stillTagged = m_repo.findById(tagged);
+    ASSERT_TRUE(stillTagged.has_value());
+    EXPECT_EQ(stillTagged->tagStatus, 2);
+
+    auto stillFailed = m_repo.findById(failed);
+    ASSERT_TRUE(stillFailed.has_value());
+    EXPECT_EQ(stillFailed->tagStatus, 3);
+}
+
+TEST_F(TagStatusTest, RecoverInterruptedTagStatuses_SplitsBlankAndDescribedRows) {
+    auto blankQueued = insertTestModel("blank", "hash1");
+    auto describedQueued = insertTestModel("described", "hash2");
+    auto tagsOnlyQueued = insertTestModel("tags_only", "hash3");
+    auto incompleteTagged = insertTestModel("incomplete_tagged", "hash4");
+    auto tagged = insertTestModel("tagged", "hash5");
+
+    ASSERT_TRUE(m_repo.updateTagStatus(blankQueued, 1));
+    ASSERT_TRUE(m_repo.updateTagStatus(describedQueued, 1));
+    ASSERT_TRUE(m_repo.updateDescriptor(describedQueued, "Carved Panel", "A relief panel", ""));
+    ASSERT_TRUE(m_repo.updateTagStatus(tagsOnlyQueued, 1));
+    ASSERT_TRUE(m_repo.updateTags(tagsOnlyQueued, {"relief", "panel"}));
+    ASSERT_TRUE(m_repo.updateTagStatus(incompleteTagged, 2));
+    ASSERT_TRUE(m_repo.updateTags(incompleteTagged, {"mythology", "bas-relief"}));
+    ASSERT_TRUE(m_repo.updateTagStatus(tagged, 2));
+    ASSERT_TRUE(m_repo.updateDescriptor(tagged, "Finished Tag", "A complete descriptor", ""));
+
+    EXPECT_EQ(m_repo.recoverInterruptedTagStatuses(), 4);
+
+    auto blank = m_repo.findById(blankQueued);
+    ASSERT_TRUE(blank.has_value());
+    EXPECT_EQ(blank->tagStatus, 0);
+
+    auto described = m_repo.findById(describedQueued);
+    ASSERT_TRUE(described.has_value());
+    EXPECT_EQ(described->tagStatus, 2);
+
+    auto tagsOnly = m_repo.findById(tagsOnlyQueued);
+    ASSERT_TRUE(tagsOnly.has_value());
+    EXPECT_EQ(tagsOnly->tagStatus, 0);
+
+    auto incomplete = m_repo.findById(incompleteTagged);
+    ASSERT_TRUE(incomplete.has_value());
+    EXPECT_EQ(incomplete->tagStatus, 0);
+
+    auto alreadyTagged = m_repo.findById(tagged);
+    ASSERT_TRUE(alreadyTagged.has_value());
+    EXPECT_EQ(alreadyTagged->tagStatus, 2);
 }

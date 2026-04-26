@@ -17,6 +17,7 @@ struct ThumbnailSettings {
     const Texture* materialTexture = nullptr;
     float cameraPitch = 30.0f;
     float cameraYaw = 45.0f;
+    float viewportFill = 0.8f;
 };
 
 // Generates thumbnail images for 3D models

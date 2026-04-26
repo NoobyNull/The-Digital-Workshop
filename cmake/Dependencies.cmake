@@ -223,6 +223,9 @@ FetchContent_Declare(
     GIT_TAG v1.2.1
     GIT_SHALLOW TRUE
 )
+if(UNIX AND NOT APPLE)
+    set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal for native Linux file dialogs" FORCE)
+endif()
 set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nfd)
 if(TARGET nfd)

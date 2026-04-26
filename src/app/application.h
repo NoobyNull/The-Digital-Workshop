@@ -49,6 +49,7 @@ class BackgroundTagger;
 class ImportLog;
 class Mesh;
 class Texture;
+enum class ThumbnailView;
 
 namespace carve { class CarveJob; }
 
@@ -120,6 +121,8 @@ class Application {
     void assignMaterialToCurrentModel(int64_t materialId);
     void loadMaterialTextureForModel(int64_t modelId);
     bool generateMaterialThumbnail(int64_t modelId, Mesh& mesh);
+    bool generateMaterialThumbnail(int64_t modelId, Mesh& mesh, ThumbnailView view);
+    bool regenerateSmartTagThumbnail(int64_t modelId, ThumbnailView view);
 
     SDL_Window* m_window = nullptr;
     void* m_glContext = nullptr;

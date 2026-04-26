@@ -13,6 +13,7 @@ namespace dw {
 // Forward declarations
 struct ImportProgress;
 struct LoadingState;
+struct TaggerProgress;
 
 class StatusBar {
   public:
@@ -28,8 +29,16 @@ class StatusBar {
     // Clear import progress (called when batch completes)
     void clearImportProgress();
 
+    // Set background tagger progress reference.
+    void setTaggerProgress(const TaggerProgress* progress);
+
     // Set cancel callback (wired by Application to ImportQueue::cancel)
     void setOnCancel(std::function<void()> callback) { m_onCancel = std::move(callback); }
+
+    // Set cancel callback for background AI tagging.
+    void setOnCancelTagging(std::function<void()> callback) {
+        m_onCancelTagging = std::move(callback);
+    }
 
     // Set idle context tips shown when no loading/import work is active.
     void setContextTips(std::vector<std::string> tips) { m_contextTips = std::move(tips); }
@@ -43,7 +52,9 @@ class StatusBar {
     void renderContextTip() const;
 
     const ImportProgress* m_progress = nullptr;
+    const TaggerProgress* m_taggerProgress = nullptr;
     std::function<void()> m_onCancel;
+    std::function<void()> m_onCancelTagging;
     std::function<void()> m_onOpenToolLibrary;
     std::vector<std::string> m_contextTips;
 };

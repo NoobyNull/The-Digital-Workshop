@@ -7,6 +7,7 @@
 #include "app/workspace.h"
 #include "core/config/config.h"
 #include "core/export/model_exporter.h"
+#include "core/import/import_path_collector.h"
 #include "core/export/project_export_manager.h"
 #include "core/import/import_queue.h"
 #include "core/import/import_task.h"
@@ -31,15 +32,6 @@
 #include <thread>
 
 namespace dw {
-namespace {
-
-bool isMeshImportExtension(const std::string& ext) {
-    std::string lower = str::toLower(ext);
-    return lower == "stl" || lower == "obj" || lower == "3mf";
-}
-
-} // namespace
-
 FileIOManager::FileIOManager(Database* database,
                              LibraryManager* libraryManager,
                              ProjectManager* projectManager,
@@ -65,12 +57,11 @@ void FileIOManager::importModel() {
                                         std::vector<Path> importPaths;
                                         for (const auto& p : paths) {
                                             Path path{p};
-                                            if (fs::is_directory(path)) {
-                                                collectSupportedFiles(path, importPaths);
-                                            } else if (isMeshImportExtension(
-                                                           file::getExtension(path))) {
-                                                importPaths.push_back(path);
-                                            }
+                                            auto collected =
+                                                import_paths::collectSupportedModelFiles(path);
+                                            importPaths.insert(importPaths.end(),
+                                                               collected.begin(),
+                                                               collected.end());
                                         }
 
                                         if (!importPaths.empty()) {
@@ -82,6 +73,92 @@ void FileIOManager::importModel() {
                                         }
                                     });
     }
+}
+
+void FileIOManager::importFolder() {
+    if (!m_fileDialog)
+        return;
+
+    m_fileDialog->showNativeFolder("Import Folder", [this](const std::string& path) {
+        if (path.empty())
+            return;
+
+        if (!m_mainThreadQueue || !m_progressDialog) {
+            auto importPaths = import_paths::collectSupportedModelFiles(Path(path));
+            if (importPaths.empty()) {
+                MessageDialog::warning("No Models Found",
+                                       "No supported model files were found in that folder.");
+                return;
+            }
+
+            if (m_importOptionsDialog) {
+                m_importOptionsDialog->open(importPaths);
+            } else if (m_importQueue) {
+                m_importQueue->enqueue(importPaths);
+            }
+            return;
+        }
+
+        Path folderPath(path);
+        auto* mainThreadQueue = m_mainThreadQueue;
+        auto* progressDialog = m_progressDialog;
+        auto* importOptionsDialog = m_importOptionsDialog;
+        auto* importQueue = m_importQueue;
+
+        progressDialog->start("Scanning Import Folder", 0, true);
+        progressDialog->setStatus(folderPath.string());
+
+        std::thread([folderPath,
+                     mainThreadQueue,
+                     progressDialog,
+                     importOptionsDialog,
+                     importQueue]() {
+            auto importPaths = import_paths::collectSupportedModelFiles(
+                folderPath, [progressDialog](const import_paths::ScanProgress& progress) {
+                    if (progressDialog->isCancelled()) {
+                        return false;
+                    }
+
+                    std::string item = progress.currentPath.filename().string();
+                    if (item.empty()) {
+                        item = progress.currentPath.string();
+                    }
+                    progressDialog->setStatus(
+                        "Scanned " + std::to_string(progress.filesVisited) + " file(s), found " +
+                        std::to_string(progress.supportedFilesFound) + " model(s)\n" + item);
+                    return true;
+                });
+
+            bool cancelled = progressDialog->isCancelled();
+            mainThreadQueue->enqueue([progressDialog,
+                                      importOptionsDialog,
+                                      importQueue,
+                                      cancelled,
+                                      importPaths = std::move(importPaths)]() mutable {
+                progressDialog->finish();
+
+                if (cancelled) {
+                    ToastManager::instance().show(ToastType::Info,
+                                                  "Folder Import Cancelled",
+                                                  "Stopped scanning before import.");
+                    return;
+                }
+
+                if (importPaths.empty()) {
+                    MessageDialog::warning(
+                        "No Models Found",
+                        "No supported model files were found in that folder.");
+                    return;
+                }
+
+                if (importOptionsDialog) {
+                    importOptionsDialog->open(importPaths);
+                } else if (importQueue) {
+                    importQueue->enqueue(importPaths);
+                }
+            });
+        }).detach();
+    });
 }
 
 void FileIOManager::exportModel() {
@@ -113,24 +190,8 @@ void FileIOManager::exportModel() {
 }
 
 void FileIOManager::collectSupportedFiles(const Path& directory, std::vector<Path>& outPaths) {
-    try {
-        for (const auto& entry : fs::recursive_directory_iterator(directory)) {
-            // Skip non-regular files (directories, symlinks, etc.)
-            if (!entry.is_regular_file()) {
-                continue;
-            }
-
-            // Get extension and check if supported
-            auto ext = file::getExtension(entry.path());
-            if (isMeshImportExtension(ext) && LoaderFactory::isSupported(ext)) {
-                outPaths.push_back(entry.path());
-            }
-        }
-    } catch (const fs::filesystem_error& e) {
-        // Log warning but continue - don't crash on permission denied or broken symlinks
-        log::warningf(
-            "FileIO", "Failed to scan directory %s: %s", directory.string().c_str(), e.what());
-    }
+    auto collected = import_paths::collectSupportedModelFiles(directory);
+    outPaths.insert(outPaths.end(), collected.begin(), collected.end());
 }
 
 void FileIOManager::onFilesDropped(const std::vector<std::string>& paths) {

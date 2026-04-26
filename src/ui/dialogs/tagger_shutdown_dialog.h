@@ -19,6 +19,7 @@ class TaggerShutdownDialog : public Dialog {
 
   private:
     const TaggerProgress* m_progress = nullptr;
+    bool m_pendingOpen = false;
     std::function<void()> m_onQuit;
 };
 

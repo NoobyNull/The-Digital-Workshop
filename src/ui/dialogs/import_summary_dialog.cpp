@@ -18,7 +18,7 @@ void ImportSummaryDialog::open(const ImportBatchSummary& summary) {
     m_summary = summary;
     m_checked.assign(m_summary.duplicates.size(), true); // default: all checked
     m_open = true;
-    ImGui::OpenPopup(m_title.c_str());
+    m_pendingOpen = true;
 }
 
 void ImportSummaryDialog::setOnReimport(ReimportCallback callback) {
@@ -28,6 +28,11 @@ void ImportSummaryDialog::setOnReimport(ReimportCallback callback) {
 void ImportSummaryDialog::render() {
     if (!m_open)
         return;
+
+    if (m_pendingOpen) {
+        ImGui::OpenPopup(m_title.c_str());
+        m_pendingOpen = false;
+    }
 
     const auto* viewport = ImGui::GetMainViewport();
     ImVec2 center = viewport->GetCenter();

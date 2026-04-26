@@ -44,6 +44,7 @@
 #include "ui/panels/group_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/library_panel.h"
+#include "ui/panels/log_viewer_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/project_panel.h"
 #include "ui/panels/properties_panel.h"
@@ -77,6 +78,7 @@ void UIManager::init(LibraryManager* libraryManager,
     m_projectPanel = std::make_unique<ProjectPanel>(
         projectManager, modelRepo, gcodeRepo, cutPlanRepo, costRepo);
     m_gcodePanel = std::make_unique<GCodePanel>();
+    m_logViewerPanel = std::make_unique<LogViewerPanel>();
     m_cutOptimizerPanel = std::make_unique<CutOptimizerPanel>();
     m_materialsPanel = std::make_unique<MaterialsPanel>(materialManager);
     if (costRepo)
@@ -161,6 +163,7 @@ void UIManager::shutdown() {
     m_propertiesPanel.reset();
     m_projectPanel.reset();
     m_gcodePanel.reset();
+    m_logViewerPanel.reset();
     m_cutOptimizerPanel.reset();
     m_costPanel.reset();
     m_materialsPanel.reset();
@@ -194,6 +197,8 @@ void UIManager::buildPanelRegistry() {
          m_projectPanel.get(), false, WindowRole::Shared},
         {"gcode",           &m_showGCode,           "G-code Viewer",     "G-code",
          m_gcodePanel.get(), false, WindowRole::Sender},
+        {"log_viewer",      &m_showLogViewer,       "Log Viewer",        "Log Viewer",
+         m_logViewerPanel.get(), true, WindowRole::Shared},
         {"cut_optimizer",   &m_showCutOptimizer,    "Cut Optimizer",     "Cut Optimizer",
          m_cutOptimizerPanel.get(), false, WindowRole::Workshop},
         {"project_costing", &m_showProjectCosting,  "Project Costing",   "Project Costing",
@@ -337,6 +342,11 @@ void UIManager::setImportProgress(const ImportProgress* progress) {
         m_statusBar->setImportProgress(progress);
 }
 
+void UIManager::setTaggerProgress(const TaggerProgress* progress) {
+    if (m_statusBar)
+        m_statusBar->setTaggerProgress(progress);
+}
+
 void UIManager::showImportSummary(const ImportBatchSummary& summary) {
     if (m_importSummaryDialog)
         m_importSummaryDialog->open(summary);
@@ -345,6 +355,11 @@ void UIManager::showImportSummary(const ImportBatchSummary& summary) {
 void UIManager::setImportCancelCallback(std::function<void()> callback) {
     if (m_statusBar)
         m_statusBar->setOnCancel(std::move(callback));
+}
+
+void UIManager::setTaggerCancelCallback(std::function<void()> callback) {
+    if (m_statusBar)
+        m_statusBar->setOnCancelTagging(std::move(callback));
 }
 
 void UIManager::showTaggerShutdownDialog(const TaggerProgress* progress) {

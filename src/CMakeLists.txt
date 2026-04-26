@@ -94,6 +94,8 @@ set(DW_SOURCES
     core/import/import_queue.cpp
     core/import/import_log.cpp
     core/import/background_tagger.cpp
+    core/import/smart_tagger.cpp
+    core/import/import_path_collector.cpp
     core/import/file_handler.cpp
     core/import/file_validator.cpp
     core/import/filesystem_detector.cpp
@@ -188,6 +190,7 @@ set(DW_SOURCES
     ui/panels/viewport_panel.cpp
     ui/panels/library_panel.cpp
     ui/panels/library_panel_items.cpp
+    ui/panels/log_viewer_panel.cpp
     ui/panels/materials_panel.cpp
     ui/panels/materials_panel_dialogs.cpp
     ui/panels/materials_panel_stock.cpp
@@ -221,6 +224,7 @@ set(DW_SOURCES
     # UI Dialogs
     ui/dialogs/message_dialog.cpp
     ui/dialogs/settings_import_dialog.cpp
+    ui/dialogs/file_filter_utils.cpp
     ui/dialogs/file_dialog.cpp
     ui/dialogs/lighting_dialog.cpp
     ui/dialogs/machine_profile_dialog.cpp

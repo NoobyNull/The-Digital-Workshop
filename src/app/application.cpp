@@ -42,6 +42,7 @@
 #include "core/import/import_log.h"
 #include "core/import/import_queue.h"
 #include "core/library/library_manager.h"
+#include "core/loaders/texture_loader.h"
 #include "core/materials/gemini_descriptor_service.h"
 #include "core/materials/gemini_material_service.h"
 #include "core/materials/material_manager.h"
@@ -50,6 +51,7 @@
 #include "core/storage/storage_manager.h"
 #include "core/threading/main_thread_queue.h"
 #include "core/threading/thread_pool.h"
+#include "core/utils/file_utils.h"
 #include "core/utils/log.h"
 #include "core/utils/startup_timer.h"
 #include "core/utils/thread_utils.h"
@@ -66,6 +68,47 @@
 #include "version.h"
 
 namespace dw {
+
+namespace {
+
+void setWindowIcon(SDL_Window* window) {
+    if (window == nullptr)
+        return;
+
+    auto icon = TextureLoader::loadPNG(paths::getBundledIconsDir() / "Digital Workshop.png");
+    if (!icon || icon->pixels.empty() || icon->width <= 0 || icon->height <= 0)
+        return;
+
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(
+        icon->pixels.data(),
+        icon->width,
+        icon->height,
+        32,
+        icon->width * 4,
+        SDL_PIXELFORMAT_RGBA32);
+    if (surface == nullptr) {
+        log::warningf("Application", "Failed to create window icon surface: %s", SDL_GetError());
+        return;
+    }
+
+    SDL_SetWindowIcon(window, surface);
+    SDL_FreeSurface(surface);
+}
+
+void initializeLoggingFiles(Config& cfg) {
+    Path appLogPath = cfg.getLogFilePath().empty() ? paths::getLogPath() : cfg.getLogFilePath();
+    (void)file::touch(appLogPath);
+    (void)file::touch(paths::getDataDir() / "tagger.log");
+    (void)file::touch(cfg.getSupportDir() / ".import-log");
+
+    if (cfg.getLogToFile()) {
+        if (cfg.getLogFilePath().empty())
+            cfg.setLogFilePath(appLogPath);
+        log::setLogFile(appLogPath.string());
+    }
+}
+
+} // namespace
 
 // Explicit destructors needed for unique_ptr of incomplete types
 Application::Application() {}
@@ -93,6 +136,7 @@ bool Application::init(bool diagnosticMode) {
     {
         TIME_STARTUP(timer, "Directory Creation");
         paths::ensureDirectoriesExist();
+        initializeLoggingFiles(cfg);
     }
 
     {
@@ -145,6 +189,7 @@ bool Application::init(bool diagnosticMode) {
             std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
             return false;
         }
+        setWindowIcon(m_window);
         if (cfg.getWindowMaximized())
             SDL_MaximizeWindow(m_window);
 
@@ -337,6 +382,10 @@ bool Application::init(bool diagnosticMode) {
 
         m_backgroundTagger = std::make_unique<BackgroundTagger>(
             *m_connectionPool, m_libraryManager.get(), m_descriptorService.get());
+        m_backgroundTagger->setThumbnailViewCallback(
+            [this](int64_t modelId, ThumbnailView view) {
+                return regenerateSmartTagThumbnail(modelId, view);
+            });
     }
 
     {

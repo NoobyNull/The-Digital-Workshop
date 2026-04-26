@@ -27,6 +27,7 @@ bool isFile(const Path& path);
 bool isDirectory(const Path& path);
 [[nodiscard]] bool createDirectory(const Path& path);
 [[nodiscard]] bool createDirectories(const Path& path);
+[[nodiscard]] bool touch(const Path& path);
 [[nodiscard]] bool remove(const Path& path);
 [[nodiscard]] bool copy(const Path& from, const Path& to);
 [[nodiscard]] bool move(const Path& from, const Path& to);

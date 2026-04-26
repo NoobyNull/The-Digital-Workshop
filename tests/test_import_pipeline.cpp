@@ -151,6 +151,29 @@ TEST_F(ImportQueueTest, EnqueueAndProcess) {
     EXPECT_EQ(model->fileFormat, "stl");
 }
 
+TEST_F(ImportQueueTest, QueuedForTaggingRemainsDiscoverableByBackgroundTagger) {
+    auto stlPath = writeMiniSTL("tag_queue_model");
+    dw::ImportQueue queue(*m_pool);
+    queue.setQueueForTagging(true);
+
+    queue.enqueue(stlPath);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (queue.isActive() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_FALSE(queue.isActive()) << "Queue did not finish in time";
+
+    auto completed = queue.pollCompleted();
+    ASSERT_EQ(completed.size(), 1u);
+
+    dw::ScopedConnection conn(*m_pool);
+    dw::ModelRepository repo(*conn);
+    auto model = repo.findById(completed[0].modelId);
+    ASSERT_TRUE(model.has_value());
+    EXPECT_EQ(model->tagStatus, 0);
+}
+
 TEST_F(ImportQueueTest, DuplicateRejected) {
     auto stlPath = writeMiniSTL("dup_test");
     dw::ImportQueue queue(*m_pool);

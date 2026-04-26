@@ -137,6 +137,18 @@ TEST_F(LibraryManagerTest, GetAllModels_AfterImport) {
     EXPECT_EQ(models.size(), 2u);
 }
 
+TEST_F(LibraryManagerTest, UpdateTagStatus_PersistsStatus) {
+    auto path = writeMiniSTL("taggable");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    ASSERT_TRUE(m_mgr->updateTagStatus(result.modelId, 2));
+
+    auto model = m_mgr->getModel(result.modelId);
+    ASSERT_TRUE(model.has_value());
+    EXPECT_EQ(model->tagStatus, 2);
+}
+
 TEST_F(LibraryManagerTest, SearchModels) {
     auto pathA = writeMiniSTL("widget_bracket");
     m_mgr->importModel(pathA);

@@ -23,6 +23,9 @@ class ProgressDialog : public Dialog {
     // Thread-safe: called by worker threads to advance progress
     void advance(const std::string& currentItem = "");
 
+    // Thread-safe: update status text without advancing a known-size batch
+    void setStatus(const std::string& currentItem);
+
     // Thread-safe: check if user pressed Cancel
     bool isCancelled() const;
 

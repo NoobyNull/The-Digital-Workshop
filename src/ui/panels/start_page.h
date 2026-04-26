@@ -26,6 +26,7 @@ class StartPage : public Panel {
     void setOnNewProject(VoidCallback cb) { m_onNewProject = std::move(cb); }
     void setOnOpenProject(VoidCallback cb) { m_onOpenProject = std::move(cb); }
     void setOnImportModel(VoidCallback cb) { m_onImportModel = std::move(cb); }
+    void setOnImportFolder(VoidCallback cb) { m_onImportFolder = std::move(cb); }
     void setOnOpenRecentProject(PathCallback cb) { m_onOpenRecentProject = std::move(cb); }
     void setOnWorkspaceModeChanged(WorkspaceModeCallback cb) { m_onWorkspaceModeChanged = std::move(cb); }
 
@@ -37,6 +38,7 @@ class StartPage : public Panel {
     VoidCallback m_onNewProject;
     VoidCallback m_onOpenProject;
     VoidCallback m_onImportModel;
+    VoidCallback m_onImportFolder;
     PathCallback m_onOpenRecentProject;
     WorkspaceModeCallback m_onWorkspaceModeChanged;
 

@@ -199,6 +199,24 @@ TEST_F(ModelRepoTest, FindByTag) {
     EXPECT_EQ(results[0].name, "chair");
 }
 
+TEST_F(ModelRepoTest, FindByTagStatus) {
+    auto id1 = m_repo->insert(makeModel("hash-review-a", "review_a"));
+    auto id2 = m_repo->insert(makeModel("hash-tagged-b", "tagged_b"));
+    auto id3 = m_repo->insert(makeModel("hash-review-c", "review_c"));
+    ASSERT_TRUE(id1.has_value());
+    ASSERT_TRUE(id2.has_value());
+    ASSERT_TRUE(id3.has_value());
+
+    EXPECT_TRUE(m_repo->updateTagStatus(*id1, 4));
+    EXPECT_TRUE(m_repo->updateTagStatus(*id2, 2));
+    EXPECT_TRUE(m_repo->updateTagStatus(*id3, 4));
+
+    auto results = m_repo->findByTagStatus(4);
+    ASSERT_EQ(results.size(), 2u);
+    EXPECT_EQ(results[0].tagStatus, 4);
+    EXPECT_EQ(results[1].tagStatus, 4);
+}
+
 // --- Remove ---
 
 TEST_F(ModelRepoTest, Remove_ById) {

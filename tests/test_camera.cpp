@@ -147,6 +147,34 @@ TEST(Camera, FitToBounds_DistanceProportional) {
     EXPECT_NEAR(cam.distance(), 95.0f, EPS);
 }
 
+TEST(Camera, FitToBoundsProjected_UsesRequestedViewportFill) {
+    dw::Camera cam;
+    cam.setViewport(512, 512);
+    cam.setPitch(0.0f);
+    cam.setYaw(0.0f);
+    cam.fitToBoundsProjected(dw::Vec3(-50.0f, -0.5f, -0.5f),
+                             dw::Vec3(50.0f, 0.5f, 0.5f),
+                             0.8f);
+
+    float fovRad = cam.fov() * 3.14159265359f / 180.0f;
+    float expected = 0.5f + 50.0f / (std::tan(fovRad * 0.5f) * 0.8f);
+    EXPECT_NEAR(cam.distance(), expected, 0.01f);
+}
+
+TEST(Camera, FitToBoundsProjected_AccountsForAspectRatio) {
+    dw::Camera cam;
+    cam.setViewport(1024, 512);
+    cam.setPitch(0.0f);
+    cam.setYaw(0.0f);
+    cam.fitToBoundsProjected(dw::Vec3(-50.0f, -0.5f, -0.5f),
+                             dw::Vec3(50.0f, 0.5f, 0.5f),
+                             0.8f);
+
+    float fovRad = cam.fov() * 3.14159265359f / 180.0f;
+    float expected = 0.5f + 50.0f / ((std::tan(fovRad * 0.5f) * 2.0f) * 0.8f);
+    EXPECT_NEAR(cam.distance(), expected, 0.01f);
+}
+
 // --- Reset ---
 
 TEST(Camera, Reset_RestoresDefaults) {

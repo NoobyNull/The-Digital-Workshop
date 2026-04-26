@@ -2,10 +2,14 @@
 
 #include "app/application.h"
 
+#include <chrono>
+#include <future>
+
 #include "app/workspace.h"
 #include "core/config/config.h"
 #include "core/database/connection_pool.h"
 #include "core/database/model_repository.h"
+#include "core/import/smart_tagger.h"
 #include "core/library/library_manager.h"
 #include "core/loaders/loader_factory.h"
 #include "core/loaders/texture_loader.h"
@@ -13,6 +17,7 @@
 #include "core/materials/material_manager.h"
 #include "core/paths/path_resolver.h"
 #include "core/threading/main_thread_queue.h"
+#include "core/utils/log.h"
 #include <glad/gl.h>
 
 #include "managers/ui_manager.h"
@@ -194,12 +199,29 @@ void Application::loadMaterialTextureForModel(int64_t modelId) {
 }
 
 bool Application::generateMaterialThumbnail(int64_t modelId, Mesh& mesh) {
+    return generateMaterialThumbnail(modelId, mesh, ThumbnailView::Unknown);
+}
+
+bool Application::generateMaterialThumbnail(int64_t modelId, Mesh& mesh, ThumbnailView view) {
+    float cameraYaw = 0.0f;
     if (Config::instance().getAutoOrient()) {
         auto record = m_libraryManager->getModel(modelId);
-        if (record && record->orientYaw && record->orientMatrix)
-            mesh.applyStoredOrient(*record->orientMatrix);
-        else
-            static_cast<void>(mesh.autoOrient());
+        if (record && record->orientYaw)
+            cameraYaw = *record->orientYaw;
+
+        if (!mesh.wasAutoOriented()) {
+            if (record && record->orientMatrix)
+                mesh.applyStoredOrient(*record->orientMatrix);
+            else
+                cameraYaw = mesh.autoOrient();
+        }
+    }
+
+    float cameraPitch = 0.0f;
+    if (view != ThumbnailView::Unknown) {
+        auto camera = smart_tagging::cameraForView(view, cameraYaw);
+        cameraYaw = camera.yawDeg;
+        cameraPitch = camera.pitchDeg;
     }
 
     std::unique_ptr<Texture> tex;
@@ -227,7 +249,57 @@ bool Application::generateMaterialThumbnail(int64_t modelId, Mesh& mesh) {
             mesh.generatePlanarUVs(mat->grainDirectionDeg);
     }
 
-    return m_libraryManager->generateThumbnail(modelId, mesh, tex.get(), 0.0f, 0.0f);
+    log::infof("Thumbnail",
+               "Generating model=%lld view=%s cameraPitch=%.2f cameraYaw=%.2f",
+               static_cast<long long>(modelId),
+               smart_tagging::thumbnailViewName(view),
+               static_cast<double>(cameraPitch),
+               static_cast<double>(cameraYaw));
+    bool ok = m_libraryManager->generateThumbnail(modelId, mesh, tex.get(), cameraPitch, cameraYaw);
+    log::infof("Thumbnail",
+               "Generated model=%lld view=%s result=%s",
+               static_cast<long long>(modelId),
+               smart_tagging::thumbnailViewName(view),
+               ok ? "ok" : "failed");
+    return ok;
+}
+
+bool Application::regenerateSmartTagThumbnail(int64_t modelId, ThumbnailView view) {
+    if (!m_mainThreadQueue || !m_libraryManager)
+        return false;
+
+    auto promise = std::make_shared<std::promise<bool>>();
+    auto future = promise->get_future();
+    m_mainThreadQueue->enqueue([this, modelId, view, promise]() {
+        auto record = m_libraryManager->getModel(modelId);
+        if (!record) {
+            promise->set_value(false);
+            return;
+        }
+
+        auto loadResult =
+            LoaderFactory::load(PathResolver::resolve(record->filePath, PathCategory::Support));
+        if (!loadResult) {
+            promise->set_value(false);
+            return;
+        }
+
+        bool ok = generateMaterialThumbnail(modelId, *loadResult.mesh, view);
+        if (ok && m_uiManager && m_uiManager->libraryPanel()) {
+            m_uiManager->libraryPanel()->invalidateThumbnail(modelId);
+            m_uiManager->libraryPanel()->refresh();
+        }
+        promise->set_value(ok);
+    });
+
+    if (future.wait_for(std::chrono::seconds(30)) != std::future_status::ready) {
+        log::warningf("Thumbnail",
+                      "Timed out waiting for smart-tag thumbnail model=%lld view=%s",
+                      static_cast<long long>(modelId),
+                      smart_tagging::thumbnailViewName(view));
+        return false;
+    }
+    return future.get();
 }
 
 } // namespace dw

@@ -472,9 +472,6 @@ bool ImportQueue::stageInsertMesh(ImportTask& task, TaskContext& ctx, u64 fileSi
     task.record = record;
     task.record.id = *modelId;
 
-    if (task.queueForTagging)
-        ctx.modelRepo.updateTagStatus(*modelId, 1);
-
     log::infof("Import",
                "Mesh '%s' inserted (id=%lld)",
                record.name.c_str(),

@@ -107,6 +107,59 @@ void Camera::fitToBounds(const Vec3& min, const Vec3& max) {
     updateVectors();
 }
 
+void Camera::fitToBoundsProjected(const Vec3& min, const Vec3& max, f32 viewportFill) {
+    Vec3 center{(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, (min.z + max.z) * 0.5f};
+    Vec3 size = max - min;
+    f32 maxExtent = std::max({size.x, size.y, size.z});
+
+    m_lastBoundsCenter = center;
+    m_lastBoundsExtent = maxExtent;
+    m_hasBounds = true;
+    m_target = center;
+
+    viewportFill = std::clamp(viewportFill, 0.1f, 0.95f);
+
+    f32 yawRad = m_yaw * DEG_TO_RAD;
+    f32 pitchRad = m_pitch * DEG_TO_RAD;
+    Vec3 cameraOffsetDir{std::sin(yawRad) * std::cos(pitchRad),
+                         std::sin(pitchRad),
+                         std::cos(yawRad) * std::cos(pitchRad)};
+    Vec3 forward = glm::normalize(-cameraOffsetDir);
+    Vec3 worldUp{0.0f, 1.0f, 0.0f};
+    Vec3 right = glm::cross(forward, worldUp);
+    if (glm::length(right) < 0.0001f) {
+        right = Vec3{1.0f, 0.0f, 0.0f};
+    } else {
+        right = glm::normalize(right);
+    }
+    Vec3 up = glm::normalize(glm::cross(right, forward));
+
+    f32 verticalTan = std::tan((m_fov * DEG_TO_RAD) * 0.5f);
+    f32 horizontalTan = verticalTan * aspectRatio();
+    f32 requiredDistance = DEFAULT_DISTANCE;
+
+    for (int x = 0; x < 2; ++x) {
+        for (int y = 0; y < 2; ++y) {
+            for (int z = 0; z < 2; ++z) {
+                Vec3 corner{x == 0 ? min.x : max.x,
+                            y == 0 ? min.y : max.y,
+                            z == 0 ? min.z : max.z};
+                Vec3 rel = corner - center;
+                f32 depthOffset = glm::dot(rel, forward);
+                f32 horizontalNeed =
+                    std::abs(glm::dot(rel, right)) / (horizontalTan * viewportFill);
+                f32 verticalNeed =
+                    std::abs(glm::dot(rel, up)) / (verticalTan * viewportFill);
+                requiredDistance =
+                    std::max(requiredDistance, std::max(horizontalNeed, verticalNeed) - depthOffset);
+            }
+        }
+    }
+
+    m_distance = std::clamp(requiredDistance, m_minDistance, m_maxDistance);
+    updateVectors();
+}
+
 void Camera::setViewport(int width, int height) {
     m_viewportWidth = std::max(1, width);
     m_viewportHeight = std::max(1, height);

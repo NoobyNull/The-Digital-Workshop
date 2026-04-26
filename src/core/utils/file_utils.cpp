@@ -146,6 +146,19 @@ bool createDirectories(const Path& path) {
     return result || file::exists(path);
 }
 
+bool touch(const Path& path) {
+    auto parent = path.parent_path();
+    if (!parent.empty() && !createDirectories(parent))
+        return false;
+
+    std::ofstream file(path, std::ios::app);
+    if (!file.is_open()) {
+        log::errorf("FileIO", "Failed to touch file: %s", path.string().c_str());
+        return false;
+    }
+    return file.good();
+}
+
 bool remove(const Path& path) {
     bool result = false;
     fsOp("remove", path, [&](std::error_code& ec) { result = fs::remove(path, ec); });

@@ -34,7 +34,7 @@ void ImportOptionsDialog::open(const std::vector<Path>& paths) {
     m_selectedMode = static_cast<int>(initialMode);
 
     m_open = true;
-    ImGui::OpenPopup(m_title.c_str());
+    m_pendingOpen = true;
 }
 
 void ImportOptionsDialog::setOnConfirm(ResultCallback callback) {
@@ -44,6 +44,11 @@ void ImportOptionsDialog::setOnConfirm(ResultCallback callback) {
 void ImportOptionsDialog::render() {
     if (!m_open)
         return;
+
+    if (m_pendingOpen) {
+        ImGui::OpenPopup(m_title.c_str());
+        m_pendingOpen = false;
+    }
 
     const auto* viewport = ImGui::GetMainViewport();
     ImVec2 center = viewport->GetCenter();

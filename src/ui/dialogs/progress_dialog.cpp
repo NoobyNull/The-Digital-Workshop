@@ -1,5 +1,7 @@
 #include "progress_dialog.h"
 
+#include <cmath>
+
 #include <imgui.h>
 
 namespace dw {
@@ -23,9 +25,13 @@ void ProgressDialog::start(const std::string& title, int total, bool cancellable
 void ProgressDialog::advance(const std::string& currentItem) {
     m_completed.fetch_add(1, std::memory_order_relaxed);
     if (!currentItem.empty()) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_currentItem = currentItem;
+        setStatus(currentItem);
     }
+}
+
+void ProgressDialog::setStatus(const std::string& currentItem) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_currentItem = currentItem;
 }
 
 bool ProgressDialog::isCancelled() const {
@@ -58,12 +64,16 @@ void ProgressDialog::render() {
         int total = m_total.load(std::memory_order_relaxed);
 
         // Status text
-        ImGui::Text("Processing %d of %d...", completed, total);
+        if (total > 0) {
+            ImGui::Text("Processing %d of %d...", completed, total);
+        } else {
+            ImGui::Text("Scanning...");
+        }
         ImGui::Spacing();
 
         // Progress bar
         float fraction = total > 0 ? static_cast<float>(completed) / static_cast<float>(total)
-                                   : 0.0f;
+                                   : static_cast<float>(std::fmod(ImGui::GetTime() * 0.25, 1.0));
         ImGui::ProgressBar(fraction, ImVec2(-1, 0));
         ImGui::Spacing();
 

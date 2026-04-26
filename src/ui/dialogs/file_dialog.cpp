@@ -6,6 +6,7 @@
 #include <nfd.h>
 
 #include "../../core/utils/file_utils.h"
+#include "file_filter_utils.h"
 #include "../icons.h"
 
 namespace dw {
@@ -329,33 +330,33 @@ bool FileDialog::matchesFilter(const std::string& filename) const {
 
 namespace {
 
-// Convert our FileFilter format to NFD's filter format
-std::vector<nfdfilteritem_t> toNfdFilters(const std::vector<FileFilter>& filters) {
-    std::vector<nfdfilteritem_t> nfdFilters;
-    for (const auto& f : filters) {
-        if (f.extensions == "*" || f.extensions == "*.*")
-            continue; // NFD handles "all files" automatically
-
-        // Convert "*.stl;*.obj" → "stl,obj"
-        std::string spec;
-        std::string exts = f.extensions;
-        size_t pos = 0;
-        while (pos < exts.size()) {
-            size_t next = exts.find(';', pos);
-            std::string pattern = exts.substr(pos, next == std::string::npos ? next : next - pos);
-            // Strip leading "*."
-            size_t dot = pattern.find('.');
-            if (dot != std::string::npos) {
-                if (!spec.empty()) spec += ',';
-                spec += pattern.substr(dot + 1);
+class NfdFilterList {
+  public:
+    explicit NfdFilterList(const std::vector<FileFilter>& filters) {
+        for (const auto& filter : filters) {
+            std::string spec = file_dialog::toNativeFilterSpec(filter.extensions);
+            if (spec.empty()) {
+                continue; // NFD handles all-files automatically.
             }
-            if (next == std::string::npos) break;
-            pos = next + 1;
+            m_names.push_back(filter.name);
+            m_specs.push_back(std::move(spec));
         }
-        nfdFilters.push_back({f.name.c_str(), spec.c_str()});
+
+        m_items.reserve(m_specs.size());
+        for (size_t i = 0; i < m_specs.size(); ++i) {
+            m_items.push_back({m_names[i].c_str(), m_specs[i].c_str()});
+        }
     }
-    return nfdFilters;
-}
+
+    bool empty() const { return m_items.empty(); }
+    const nfdfilteritem_t* data() const { return m_items.data(); }
+    nfdfiltersize_t size() const { return static_cast<nfdfiltersize_t>(m_items.size()); }
+
+  private:
+    std::vector<std::string> m_names;
+    std::vector<std::string> m_specs;
+    std::vector<nfdfilteritem_t> m_items;
+};
 
 } // anonymous namespace
 
@@ -364,11 +365,11 @@ void FileDialog::showNativeOpen(const std::string& /*title*/,
                                 std::function<void(const std::string&)> callback) {
     NFD_Init();
 
-    auto nfdFilters = toNfdFilters(filters);
+    NfdFilterList nfdFilters(filters);
     nfdchar_t* outPath = nullptr;
     nfdresult_t result = NFD_OpenDialog(&outPath,
                                          nfdFilters.empty() ? nullptr : nfdFilters.data(),
-                                         static_cast<nfdfiltersize_t>(nfdFilters.size()),
+                                         nfdFilters.size(),
                                          nullptr);
 
     if (result == NFD_OKAY && outPath) {
@@ -390,11 +391,11 @@ void FileDialog::showNativeOpenMulti(const std::string& /*title*/,
                                      std::function<void(const std::vector<std::string>&)> callback) {
     NFD_Init();
 
-    auto nfdFilters = toNfdFilters(filters);
+    NfdFilterList nfdFilters(filters);
     const nfdpathset_t* outPaths = nullptr;
     nfdresult_t result = NFD_OpenDialogMultiple(&outPaths,
                                                  nfdFilters.empty() ? nullptr : nfdFilters.data(),
-                                                 static_cast<nfdfiltersize_t>(nfdFilters.size()),
+                                                 nfdFilters.size(),
                                                  nullptr);
 
     if (result == NFD_OKAY && outPaths) {
@@ -426,11 +427,11 @@ void FileDialog::showNativeSave(const std::string& /*title*/,
                                 std::function<void(const std::string&)> callback) {
     NFD_Init();
 
-    auto nfdFilters = toNfdFilters(filters);
+    NfdFilterList nfdFilters(filters);
     nfdchar_t* outPath = nullptr;
     nfdresult_t result = NFD_SaveDialog(&outPath,
                                          nfdFilters.empty() ? nullptr : nfdFilters.data(),
-                                         static_cast<nfdfiltersize_t>(nfdFilters.size()),
+                                         nfdFilters.size(),
                                          nullptr,
                                          defaultName.c_str());
 

@@ -10,6 +10,26 @@
 
 namespace dw {
 
+namespace {
+
+void renderLabeledInput(const char* label, char* buffer, size_t bufferSize, float width) {
+    ImGui::TextUnformatted(label);
+    ImGui::SetNextItemWidth(width);
+    std::string inputId = std::string("##") + label;
+    ImGui::InputText(inputId.c_str(), buffer, bufferSize);
+}
+
+void renderLabeledMultiline(const char* label,
+                            char* buffer,
+                            size_t bufferSize,
+                            const ImVec2& size) {
+    ImGui::TextUnformatted(label);
+    std::string inputId = std::string("##") + label;
+    ImGui::InputTextMultiline(inputId.c_str(), buffer, bufferSize, size);
+}
+
+} // namespace
+
 TagImageDialog::TagImageDialog() : Dialog("Tag Image") {}
 
 void TagImageDialog::open(const ModelRecord& record, GLuint thumbnailTexture) {
@@ -162,27 +182,28 @@ void TagImageDialog::render() {
 
     float fieldWidth = ImGui::GetContentRegionAvail().x;
 
-    ImGui::SetNextItemWidth(fieldWidth);
-    ImGui::InputText("Title", m_titleBuf, sizeof(m_titleBuf));
+    renderLabeledInput("Title", m_titleBuf, sizeof(m_titleBuf), fieldWidth);
 
-    ImGui::SetNextItemWidth(fieldWidth);
-    ImGui::InputTextMultiline(
-        "Description", m_description, sizeof(m_description),
-        ImVec2(fieldWidth, ImGui::GetTextLineHeightWithSpacing() * 3));
+    renderLabeledMultiline("Description",
+                           m_description,
+                           sizeof(m_description),
+                           ImVec2(fieldWidth, ImGui::GetTextLineHeightWithSpacing() * 3));
 
-    ImGui::SetNextItemWidth(fieldWidth);
-    ImGui::InputText("Hover", m_hover, sizeof(m_hover));
+    renderLabeledInput("Hover Tooltip", m_hover, sizeof(m_hover), fieldWidth);
 
     ImGui::Spacing();
 
-    ImGui::SetNextItemWidth(fieldWidth);
-    ImGui::InputText("Keywords", m_keywords, sizeof(m_keywords));
+    renderLabeledInput("Keywords / Tags", m_keywords, sizeof(m_keywords), fieldWidth);
 
-    ImGui::SetNextItemWidth(fieldWidth);
-    ImGui::InputText("Associations", m_associations, sizeof(m_associations));
+    renderLabeledInput("Associations / References",
+                       m_associations,
+                       sizeof(m_associations),
+                       fieldWidth);
 
-    ImGui::SetNextItemWidth(fieldWidth);
-    ImGui::InputText("Categories", m_categories, sizeof(m_categories));
+    renderLabeledInput("Categories / Taxonomy",
+                       m_categories,
+                       sizeof(m_categories),
+                       fieldWidth);
 
     if (isLoading) {
         ImGui::EndDisabled();

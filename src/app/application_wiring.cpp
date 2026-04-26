@@ -4,6 +4,13 @@
 
 #include "app/application.h"
 
+#include <algorithm>
+#include <chrono>
+#include <ctime>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -17,6 +24,7 @@
 #include "core/database/model_repository.h"
 #include "core/import/background_tagger.h"
 #include "core/import/import_queue.h"
+#include "core/import/smart_tagger.h"
 #include "core/library/library_manager.h"
 #include "core/loaders/loader_factory.h"
 #include "core/materials/gemini_descriptor_service.h"
@@ -24,6 +32,7 @@
 #include "core/materials/material_manager.h"
 #include "core/paths/path_recovery.h"
 #include "core/paths/path_resolver.h"
+#include "core/paths/app_paths.h"
 #include "core/threading/main_thread_queue.h"
 #include "core/utils/log.h"
 #include "core/workspace/workspace_relocator.h"
@@ -80,6 +89,134 @@ void persistTagResults(LibraryManager* libMgr, int64_t modelId, const Descriptor
     }
     if (!result.categories.empty())
         libMgr->resolveAndAssignCategories(modelId, result.categories);
+    libMgr->updateTagStatus(modelId, 2);
+}
+
+std::string utcTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &time);
+#else
+    gmtime_r(&time, &tm);
+#endif
+
+    std::ostringstream out;
+    out << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    return out.str();
+}
+
+const char* descriptorStatusName(TagClassificationStatus status) {
+    switch (status) {
+    case TagClassificationStatus::FinalTag: return "final_tag";
+    case TagClassificationStatus::RetryView: return "retry_view";
+    case TagClassificationStatus::FallbackIsometric: return "fallback_isometric";
+    case TagClassificationStatus::Unclassifiable: return "unclassifiable";
+    }
+    return "final_tag";
+}
+
+void appendManualTaggerLog(const std::string& line) {
+    std::ofstream out(paths::getDataDir() / "tagger.log", std::ios::app);
+    if (!out.is_open())
+        return;
+    out << utcTimestamp() << ' ' << line << '\n';
+}
+
+void appendManualTaggerResultLog(int64_t modelId,
+                                const std::string& modelName,
+                                const char* eventName,
+                                const DescriptorResult& result) {
+    std::ostringstream line;
+    line << eventName << " model_id=" << modelId
+         << " name=\"" << modelName << "\""
+         << " success=" << (result.success ? "true" : "false")
+         << " confidence=" << result.confidence
+         << " response_status=" << descriptorStatusName(result.status)
+         << " needs_retag=" << (result.needsRetag ? "true" : "false")
+         << " current_view=" << smart_tagging::thumbnailViewName(result.currentView)
+         << " recommended_view=" << smart_tagging::thumbnailViewName(result.recommendedView)
+         << " reason=\"" << result.viewReason << "\""
+         << " title=\"" << result.title << "\""
+         << " error=\"" << result.error << "\"";
+    appendManualTaggerLog(line.str());
+}
+
+void markManualUnclassifiable(DescriptorResult& result) {
+    result.success = true;
+    result.status = TagClassificationStatus::Unclassifiable;
+    result.title.clear();
+    result.description.clear();
+    result.hoverNarrative.clear();
+    result.keywords.clear();
+    result.associations.clear();
+    result.categories.clear();
+}
+
+DescriptorResult runSmartTagLoop(int64_t modelId,
+                                 const std::string& modelName,
+                                 const std::string& thumbnailPath,
+                                 const std::string& apiKey,
+                                 GeminiDescriptorService* svc,
+                                 std::function<bool(ThumbnailView)> regenerateThumbnail,
+                                 const char* resultEventName) {
+    ThumbnailView currentView = ThumbnailView::Unknown;
+    std::vector<ThumbnailView> triedViews;
+    DescriptorResult result;
+
+    for (int attempt = 0; attempt < smart_tagging::kMaxPerpendicularRetries + 2; ++attempt) {
+        triedViews.push_back(currentView);
+        result = svc->describe(thumbnailPath, apiKey, currentView);
+        appendManualTaggerResultLog(modelId, modelName, resultEventName, result);
+
+        auto decision = smart_tagging::decideNextStep(
+            result,
+            triedViews,
+            static_cast<int>(std::count_if(triedViews.begin(),
+                                           triedViews.end(),
+                                           smart_tagging::isPerpendicularView)));
+
+        appendManualTaggerLog(std::string("manual_decision model_id=") +
+                              std::to_string(modelId) + " name=\"" + modelName +
+                              "\" attempt=" + std::to_string(attempt + 1) +
+                              " view=" + smart_tagging::thumbnailViewName(currentView) +
+                              " decision=" +
+                              smart_tagging::tagDecisionActionName(decision.action) +
+                              " next_view=" +
+                              smart_tagging::thumbnailViewName(decision.nextView));
+
+        if (decision.action == smart_tagging::TagDecisionAction::Accept ||
+            decision.action == smart_tagging::TagDecisionAction::Failed) {
+            return result;
+        }
+
+        if (decision.action == smart_tagging::TagDecisionAction::Unclassifiable) {
+            markManualUnclassifiable(result);
+            return result;
+        }
+
+        appendManualTaggerLog(std::string("thumbnail_request model_id=") +
+                              std::to_string(modelId) + " name=\"" + modelName +
+                              "\" requested_view=" +
+                              smart_tagging::thumbnailViewName(decision.nextView));
+        if (!regenerateThumbnail(decision.nextView)) {
+            result.success = false;
+            result.error = std::string("Failed to generate ") +
+                           smart_tagging::thumbnailViewName(decision.nextView) + " thumbnail";
+            appendManualTaggerResultLog(modelId, modelName, resultEventName, result);
+            return result;
+        }
+        appendManualTaggerLog(std::string("thumbnail_complete model_id=") +
+                              std::to_string(modelId) + " name=\"" + modelName +
+                              "\" rendered_view=" +
+                              smart_tagging::thumbnailViewName(decision.nextView));
+
+        currentView = decision.nextView;
+    }
+
+    markManualUnclassifiable(result);
+    return result;
 }
 
 // Format the result message for workspace relocation.
@@ -115,6 +252,16 @@ void Application::wireImportPipeline() {
     m_uiManager->setImportCancelCallback([this]() {
         if (m_importQueue) m_importQueue->cancel();
     });
+    if (m_backgroundTagger) {
+        m_uiManager->setTaggerProgress(&m_backgroundTagger->progress());
+        m_uiManager->setTaggerCancelCallback([this]() {
+            if (m_backgroundTagger && m_backgroundTagger->isActive()) {
+                m_backgroundTagger->stop();
+                ToastManager::instance().show(
+                    ToastType::Info, "AI Tagging", "Stopping after the current model");
+            }
+        });
+    }
     m_importQueue->setOnBatchComplete([this](const ImportBatchSummary& summary) {
         m_mainThreadQueue->enqueue([this, summary]() {
             if (Config::instance().getShowImportErrorToasts()) {
@@ -132,7 +279,8 @@ void Application::wireImportPipeline() {
             if (m_importQueue->queueForTagging() && m_backgroundTagger &&
                 !m_backgroundTagger->isActive()) {
                 auto apiKey = Config::instance().getGeminiApiKey();
-                if (!apiKey.empty()) m_backgroundTagger->start(apiKey);
+                if (!apiKey.empty())
+                    m_backgroundTagger->start(apiKey, BackgroundTaggerMode::ImportSinglePass);
             }
         });
     });
@@ -167,6 +315,10 @@ void Application::wireStartPage() {
     sp->setOnOpenProject([this, hideStart]() { m_fileIOManager->openProject(hideStart); });
     sp->setOnImportModel([this]() {
         m_fileIOManager->importModel();
+        m_uiManager->showStartPage() = false;
+    });
+    sp->setOnImportFolder([this]() {
+        m_fileIOManager->importFolder();
         m_uiManager->showStartPage() = false;
     });
     sp->setOnOpenRecentProject([this, hideStart](const Path& path) {
@@ -381,6 +533,7 @@ void Application::wireMenuActions() {
     m_uiManager->setOnOpenProject([this, hideStart]() { m_fileIOManager->openProject(hideStart); });
     m_uiManager->setOnSaveProject([this]() { m_fileIOManager->saveProject(); });
     m_uiManager->setOnImportModel([this]() { m_fileIOManager->importModel(); });
+    m_uiManager->setOnImportFolder([this]() { m_fileIOManager->importFolder(); });
     m_uiManager->setOnExportModel([this]() { m_fileIOManager->exportModel(); });
     m_uiManager->setOnImportProjectArchive(
         [this, hideStart]() { m_fileIOManager->importProjectArchive(hideStart); });
@@ -514,8 +667,21 @@ void Application::wireTagDialog() {
         auto* svc = m_descriptorService.get();
         auto* mtq = m_mainThreadQueue.get();
         std::string thumbPath = record->thumbnailPath.string();
-        std::thread([svc, mtq, tagDlg, thumbPath, apiKey]() {
-            auto result = svc->describe(thumbPath, apiKey);
+        std::string modelName = record->name;
+        appendManualTaggerLog("manual_request model_id=" + std::to_string(modelId) +
+                              " name=\"" + modelName + "\" view=unknown thumbnail=\"" +
+                              thumbPath + "\"");
+        std::thread([this, svc, mtq, tagDlg, modelId, modelName, thumbPath, apiKey]() {
+            auto result = runSmartTagLoop(
+                modelId,
+                modelName,
+                thumbPath,
+                apiKey,
+                svc,
+                [this, modelId](ThumbnailView view) {
+                    return regenerateSmartTagThumbnail(modelId, view);
+                },
+                "manual_result");
             mtq->enqueue([tagDlg, result]() { tagDlg->setResult(result); });
         }).detach();
     });
@@ -563,10 +729,22 @@ void Application::handleTagImage(const std::vector<int64_t>& modelIds) {
         if (!record || record->thumbnailPath.empty()) continue;
         std::string thumbPath = record->thumbnailPath.string();
         std::string modelName = record->name;
-        std::thread([svc, libMgr, mtq, libPanel, modelId, modelName, thumbPath, apiKey]() {
-            auto result = svc->describe(thumbPath, apiKey);
+        appendManualTaggerLog("batch_request model_id=" + std::to_string(modelId) +
+                              " name=\"" + modelName + "\" view=unknown thumbnail=\"" +
+                              thumbPath + "\"");
+        std::thread([this, svc, libMgr, mtq, libPanel, modelId, modelName, thumbPath, apiKey]() {
+            auto result = runSmartTagLoop(
+                modelId,
+                modelName,
+                thumbPath,
+                apiKey,
+                svc,
+                [this, modelId](ThumbnailView view) {
+                    return regenerateSmartTagThumbnail(modelId, view);
+                },
+                "batch_result");
             mtq->enqueue([libMgr, libPanel, modelId, modelName, result]() {
-                if (result.success) {
+                if (result.success && result.status != TagClassificationStatus::Unclassifiable) {
                     persistTagResults(libMgr, modelId, result);
                     libPanel->refresh();
                     libPanel->invalidateThumbnail(modelId);
@@ -574,6 +752,9 @@ void Application::handleTagImage(const std::vector<int64_t>& modelIds) {
                     log::infof("App", "Tagged %s as: %s",
                                modelName.c_str(), result.title.c_str());
                 } else {
+                    libMgr->updateTagStatus(
+                        modelId,
+                        result.status == TagClassificationStatus::Unclassifiable ? 4 : 3);
                     log::warningf("App", "Descriptor failed for %s: %s",
                                   modelName.c_str(), result.error.c_str());
                 }
@@ -588,6 +769,34 @@ void Application::wireToolsMenu() {
     m_uiManager->setOnLibraryMaintenance([this]() {
         if (m_uiManager->maintenanceDialog())
             m_uiManager->maintenanceDialog()->open();
+    });
+    m_uiManager->setOnStartBackgroundTagging([this]() {
+        if (!m_backgroundTagger)
+            return;
+        if (m_backgroundTagger->isActive()) {
+            ToastManager::instance().show(
+                ToastType::Info, "AI Tagging", "Background tagging is already running");
+            return;
+        }
+        std::string apiKey = Config::instance().getGeminiApiKey();
+        if (apiKey.empty()) {
+            ToastManager::instance().show(
+                ToastType::Warning, "AI Tagging", "Gemini API key not configured");
+            return;
+        }
+        m_backgroundTagger->start(apiKey, BackgroundTaggerMode::SmartRetag);
+        ToastManager::instance().show(
+            ToastType::Info, "AI Tagging", "Background tagging started");
+    });
+    m_uiManager->setOnStopBackgroundTagging([this]() {
+        if (!m_backgroundTagger || !m_backgroundTagger->isActive()) {
+            ToastManager::instance().show(
+                ToastType::Info, "AI Tagging", "Background tagging is not running");
+            return;
+        }
+        m_backgroundTagger->stop();
+        ToastManager::instance().show(
+            ToastType::Info, "AI Tagging", "Stopping after the current model");
     });
     if (m_uiManager->maintenanceDialog()) {
         m_uiManager->maintenanceDialog()->setOnRun([this]() -> MaintenanceReport {

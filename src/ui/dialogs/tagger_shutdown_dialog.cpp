@@ -11,7 +11,7 @@ TaggerShutdownDialog::TaggerShutdownDialog() : Dialog("Tagging In Progress") {}
 void TaggerShutdownDialog::open(const TaggerProgress* progress) {
     m_progress = progress;
     m_open = true;
-    ImGui::OpenPopup(m_title.c_str());
+    m_pendingOpen = true;
 }
 
 void TaggerShutdownDialog::setOnQuit(std::function<void()> callback) {
@@ -21,6 +21,11 @@ void TaggerShutdownDialog::setOnQuit(std::function<void()> callback) {
 void TaggerShutdownDialog::render() {
     if (!m_open)
         return;
+
+    if (m_pendingOpen) {
+        ImGui::OpenPopup(m_title.c_str());
+        m_pendingOpen = false;
+    }
 
     // Auto-close if tagger finished
     if (m_progress && !m_progress->active.load()) {
@@ -50,6 +55,8 @@ void TaggerShutdownDialog::render() {
                     const_cast<std::mutex&>(m_progress->nameMutex));
                 if (m_progress->currentModel[0] != '\0')
                     ImGui::TextWrapped("Current: %s", m_progress->currentModel);
+                if (m_progress->statusMessage[0] != '\0')
+                    ImGui::TextWrapped("Status: %s", m_progress->statusMessage);
             }
 
             // Progress bar

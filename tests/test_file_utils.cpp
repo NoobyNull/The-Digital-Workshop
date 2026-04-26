@@ -69,6 +69,23 @@ TEST(FileUtils, WriteAndReadText) {
     EXPECT_EQ(result.value(), "hello world");
 }
 
+TEST(FileUtils, TouchCreatesMissingFileAndPreservesExistingContent) {
+    auto tmp = std::filesystem::temp_directory_path() / "dw_file_utils_touch";
+    std::filesystem::remove_all(tmp);
+    auto path = tmp / "nested" / "log.txt";
+
+    ASSERT_TRUE(dw::file::touch(path));
+    EXPECT_TRUE(dw::file::exists(path));
+
+    ASSERT_TRUE(dw::file::writeText(path, "existing log\n"));
+    ASSERT_TRUE(dw::file::touch(path));
+    auto content = dw::file::readText(path);
+    ASSERT_TRUE(content.has_value());
+    EXPECT_EQ(*content, "existing log\n");
+
+    std::filesystem::remove_all(tmp);
+}
+
 TEST(FileUtils, ReadText_NonExistent) {
     auto result = dw::file::readText("/nonexistent/path/file.txt");
     EXPECT_FALSE(result.has_value());

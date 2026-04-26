@@ -50,6 +50,9 @@ class LibraryManager {
     // Search models by name
     std::vector<ModelRecord> searchModels(const std::string& query);
 
+    // Filter models by AI tagging status
+    std::vector<ModelRecord> filterByTagStatus(int status);
+
     // Get a single model record
     std::optional<ModelRecord> getModel(i64 modelId);
 
@@ -63,6 +66,7 @@ class LibraryManager {
     // Update model metadata
     bool updateModel(const ModelRecord& record);
     bool updateTags(i64 modelId, const std::vector<std::string>& tags);
+    bool updateTagStatus(i64 modelId, int status);
 
     // Remove model from library
     bool removeModel(i64 modelId);

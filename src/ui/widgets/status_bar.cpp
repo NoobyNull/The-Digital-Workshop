@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <mutex>
 
 #include <imgui.h>
 
+#include "core/import/background_tagger.h"
 #include "core/import/import_task.h"
 #include "core/threading/loading_state.h"
 #include "ui/tool_library_access.h"
@@ -32,13 +34,14 @@ void StatusBar::render(const LoadingState* loadingState) {
     if (ImGui::Begin("##StatusBar", nullptr, flags)) {
         bool loadingActive = loadingState && loadingState->active.load();
         bool importActive = m_progress && m_progress->active.load();
+        bool taggerActive = m_taggerProgress && m_taggerProgress->active.load();
 
         // Left side: loading status or "Ready"
         if (loadingActive) {
             int dots = (static_cast<int>(ImGui::GetTime() * 3.0) % 3) + 1;
             std::string dotsStr(static_cast<size_t>(dots), '.');
             ImGui::Text("Loading %s%s", loadingState->getName().c_str(), dotsStr.c_str());
-        } else if (!importActive) {
+        } else if (!importActive && !taggerActive) {
             ImGui::TextDisabled("Ready");
             if (m_onOpenToolLibrary &&
                 toolLibraryStatusButtonVisible(loadingActive, importActive)) {
@@ -100,6 +103,62 @@ void StatusBar::render(const LoadingState* loadingState) {
             if (failed > 0 && ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%d files failed", failed);
             }
+        } else if (taggerActive) {
+            int completed = m_taggerProgress->completed.load();
+            int failed = m_taggerProgress->failed.load();
+            int total = m_taggerProgress->totalUntagged.load();
+            int processed = completed + failed;
+
+            std::string currentModel;
+            std::string statusMessage;
+            {
+                std::lock_guard<std::mutex> lock(
+                    const_cast<std::mutex&>(m_taggerProgress->nameMutex));
+                currentModel = m_taggerProgress->currentModel;
+                statusMessage = m_taggerProgress->statusMessage;
+            }
+
+            if (!currentModel.empty()) {
+                if (!statusMessage.empty())
+                    ImGui::Text("AI tagging: %s - %s",
+                                currentModel.c_str(),
+                                statusMessage.c_str());
+                else
+                    ImGui::Text("AI tagging: %s", currentModel.c_str());
+            } else {
+                ImGui::TextUnformatted("AI tagging");
+            }
+
+            float progressBarWidth = std::max(ImGui::GetContentRegionAvail().x * 0.15f,
+                                              ImGui::GetFontSize() * 9.0f);
+            float cancelButtonWidth = ImGui::CalcTextSize("X").x +
+                                      ImGui::GetStyle().FramePadding.x * 2;
+            float itemSpacing = ImGui::GetStyle().ItemSpacing.x * 2;
+            float totalWidth = progressBarWidth + cancelButtonWidth + itemSpacing;
+            float windowWidth = ImGui::GetWindowWidth();
+            float minContentWidth = totalWidth + windowWidth * 0.1f;
+            if (windowWidth > minContentWidth) {
+                ImGui::SameLine(windowWidth - totalWidth - ImGui::GetStyle().WindowPadding.x);
+            } else {
+                ImGui::SameLine();
+            }
+
+            float fraction = total > 0 ? static_cast<float>(processed) / static_cast<float>(total)
+                                       : 0.0f;
+            char overlay[64];
+            std::snprintf(overlay, sizeof(overlay), "%d/%d", processed, total);
+            ImGui::ProgressBar(fraction, ImVec2(progressBarWidth, 0), overlay);
+
+            ImGui::SameLine();
+            if (ImGui::SmallButton("X") && m_onCancelTagging) {
+                m_onCancelTagging();
+            }
+            if (ImGui::IsItemHovered()) {
+                if (failed > 0)
+                    ImGui::SetTooltip("Stop background AI tagging (%d needs review/failed)", failed);
+                else
+                    ImGui::SetTooltip("Stop background AI tagging");
+            }
         }
     }
     ImGui::End();
@@ -139,6 +198,10 @@ void StatusBar::setImportProgress(const ImportProgress* progress) {
 
 void StatusBar::clearImportProgress() {
     m_progress = nullptr;
+}
+
+void StatusBar::setTaggerProgress(const TaggerProgress* progress) {
+    m_taggerProgress = progress;
 }
 
 } // namespace dw

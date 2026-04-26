@@ -152,8 +152,10 @@ void UIManager::renderFileMenu() {
     if (ImGui::MenuItem("Save Project", "Ctrl+S") && m_onSaveProject)
         m_onSaveProject();
     ImGui::Separator();
-    if (ImGui::MenuItem("Import Model", "Ctrl+I") && m_onImportModel)
+    if (ImGui::MenuItem("Import Models...", "Ctrl+I") && m_onImportModel)
         m_onImportModel();
+    if (ImGui::MenuItem("Import Folder...") && m_onImportFolder)
+        m_onImportFolder();
     if (ImGui::MenuItem("Export Model", "Ctrl+E") && m_onExportModel)
         m_onExportModel();
     ImGui::Separator();
@@ -219,6 +221,8 @@ void UIManager::renderViewMenu() {
     if (ImGui::MenuItem("Add Group Panel"))
         addGroupPanel();
     ImGui::Separator();
+    if (ImGui::MenuItem("Log Viewer", "Ctrl+Alt+Shift+L", isWindowVisible("log_viewer")))
+        toggleWindow("log_viewer");
     if (ImGui::MenuItem("Lighting Settings", "Ctrl+L", isWindowVisible("lighting_settings")))
         toggleWindow("lighting_settings");
     ImGui::EndMenu();
@@ -305,6 +309,10 @@ void UIManager::renderToolsMenu() {
     ImGui::Separator();
     if (ImGui::MenuItem("Library Maintenance...") && m_onLibraryMaintenance)
         m_onLibraryMaintenance();
+    if (ImGui::MenuItem("Start Background AI Tagging") && m_onStartBackgroundTagging)
+        m_onStartBackgroundTagging();
+    if (ImGui::MenuItem("Stop Background AI Tagging") && m_onStopBackgroundTagging)
+        m_onStopBackgroundTagging();
     if (ImGui::MenuItem("Relocate Workspace...") && m_onRelocateWorkspace)
         m_onRelocateWorkspace();
     if (ImGui::MenuItem("Locate Missing Files...") && m_onLocateMissingFiles)
@@ -435,7 +443,12 @@ void UIManager::handleKeyboardShortcuts() {
         }
     }
 
-    if (ImGui::IsKeyPressed(ImGuiKey_L))
+    if (io.KeyAlt && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_L)) {
+        toggleWindow("log_viewer");
+        return;
+    }
+
+    if (!io.KeyAlt && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_L))
         openWindow("lighting_settings");
 
     if (ImGui::IsKeyPressed(ImGuiKey_1) && !m_cncStreaming)

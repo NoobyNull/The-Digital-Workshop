@@ -21,6 +21,21 @@
 
 namespace dw {
 
+namespace {
+
+constexpr int kNeedsRetagStatus = 4;
+
+void retainTagStatus(std::vector<ModelRecord>& models, int status) {
+    models.erase(std::remove_if(models.begin(),
+                                models.end(),
+                                [status](const ModelRecord& model) {
+                                    return model.tagStatus != status;
+                                }),
+                 models.end());
+}
+
+} // namespace
+
 LibraryPanel::LibraryPanel(LibraryManager* library) : Panel("Library"), m_library(library) {
     m_thumbnailSize = Config::instance().getLibraryThumbSize();
     refresh();
@@ -188,7 +203,7 @@ void LibraryPanel::render() {
 
         // Fit sidebar to widest category name
         const auto& style = ImGui::GetStyle();
-        float sidebarW = ImGui::CalcTextSize("All Models").x;
+        float sidebarW = ImGui::CalcTextSize("Needs Retag").x;
         float indent = style.IndentSpacing;
         for (const auto& cat : m_categories) {
             float w = ImGui::CalcTextSize(cat.name.c_str()).x;
@@ -269,12 +284,21 @@ void LibraryPanel::refresh() {
         }
     } else if (m_selectedCategoryId > 0) {
         m_models = m_library->filterByCategory(m_selectedCategoryId);
+    } else if (m_tagReviewFilter == TagReviewFilter::NeedsRetag) {
+        m_models = m_library->filterByTagStatus(kNeedsRetagStatus);
     } else {
         m_models = m_library->getAllModels();
     }
 
-    // G-code files are not affected by category filter
-    if (!m_searchQuery.empty()) {
+    if (m_tagReviewFilter == TagReviewFilter::NeedsRetag) {
+        retainTagStatus(m_models, kNeedsRetagStatus);
+    }
+
+    // G-code files are not affected by category filter, but tag review filters
+    // apply only to models and should hide G-code noise.
+    if (m_tagReviewFilter == TagReviewFilter::NeedsRetag) {
+        m_gcodeFiles.clear();
+    } else if (!m_searchQuery.empty()) {
         m_gcodeFiles = m_library->searchGCodeFiles(m_searchQuery);
     } else {
         m_gcodeFiles = m_library->getAllGCodeFiles();
@@ -383,11 +407,24 @@ void LibraryPanel::renderCategoryFilter() {
     bool needsRefresh = false;
 
     // "All Models" button to clear filter
-    bool allSelected = (m_selectedCategoryId == -1);
+    bool allSelected =
+        (m_selectedCategoryId == -1 && m_tagReviewFilter == TagReviewFilter::All);
     if (ImGui::Selectable("All Models", allSelected)) {
         m_selectedCategoryId = -1;
         m_selectedCategoryName.clear();
+        m_tagReviewFilter = TagReviewFilter::All;
         needsRefresh = true;
+    }
+
+    bool needsRetagSelected = (m_tagReviewFilter == TagReviewFilter::NeedsRetag);
+    if (ImGui::Selectable("Needs Retag", needsRetagSelected)) {
+        m_tagReviewFilter = needsRetagSelected ? TagReviewFilter::All
+                                               : TagReviewFilter::NeedsRetag;
+        m_activeTab = ViewTab::Models;
+        needsRefresh = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Show models that need manual AI retagging");
     }
 
     ImGui::Separator();
@@ -440,17 +477,30 @@ void LibraryPanel::renderCategoryFilter() {
 }
 
 void LibraryPanel::renderCategoryBreadcrumb() {
-    if (m_selectedCategoryId <= 0)
+    if (m_selectedCategoryId <= 0 && m_tagReviewFilter == TagReviewFilter::All)
         return;
 
-    ImGui::TextColored(colors::kInfo,
-                       "Category: %s",
-                       m_selectedCategoryName.c_str());
-    ImGui::SameLine();
-    if (ImGui::SmallButton("x##clearCat")) {
-        m_selectedCategoryId = -1;
-        m_selectedCategoryName.clear();
-        refresh();
+    if (m_selectedCategoryId > 0) {
+        ImGui::TextColored(colors::kInfo,
+                           "Category: %s",
+                           m_selectedCategoryName.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x##clearCat")) {
+            m_selectedCategoryId = -1;
+            m_selectedCategoryName.clear();
+            refresh();
+        }
+    }
+
+    if (m_tagReviewFilter == TagReviewFilter::NeedsRetag) {
+        if (m_selectedCategoryId > 0)
+            ImGui::SameLine();
+        ImGui::TextColored(colors::kWarning, "Filter: Needs Retag");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x##clearRetag")) {
+            m_tagReviewFilter = TagReviewFilter::All;
+            refresh();
+        }
     }
     ImGui::Separator();
 }
