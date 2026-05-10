@@ -3,8 +3,26 @@
 #include "../config/config.h"
 #include "app_paths.h"
 
+#include <string>
+
 namespace dw {
 namespace PathResolver {
+
+namespace {
+
+Path remapStaleKioFuseSmbPath(const Path& path) {
+    std::string raw = path.string();
+    constexpr std::string_view marker = "/smb/synology.local/STL/";
+    auto pos = raw.find(marker);
+    if (pos == std::string::npos || raw.rfind("/run/user/", 0) != 0) {
+        return path;
+    }
+
+    std::string relative = raw.substr(pos + marker.size());
+    return Path("/mnt/synology-stl") / relative;
+}
+
+} // namespace
 
 Path categoryRoot(PathCategory cat) {
     auto& cfg = Config::instance();
@@ -28,6 +46,9 @@ Path resolve(const Path& storedPath, PathCategory cat) {
         return storedPath;
     }
     if (storedPath.is_absolute()) {
+        if (!std::filesystem::exists(storedPath)) {
+            return remapStaleKioFuseSmbPath(storedPath);
+        }
         return storedPath;
     }
     Path resolved = categoryRoot(cat) / storedPath;

@@ -58,6 +58,20 @@ TEST(SmartTagger, MarksGenericFallbackAsUnclassifiable) {
     EXPECT_EQ(decision.action, dw::smart_tagging::TagDecisionAction::Unclassifiable);
 }
 
+TEST(SmartTagger, AcceptsUsableFinalTagAfterIsometricFallback) {
+    dw::DescriptorResult result;
+    result.success = true;
+    result.status = dw::TagClassificationStatus::FinalTag;
+    result.confidence = 0.8f;
+    result.title = "Decorative Floral Relief Panel";
+    result.description = "A carved floral relief panel with a central medallion.";
+
+    auto decision = dw::smart_tagging::decideNextStep(
+        result, {dw::ThumbnailView::Unknown, dw::ThumbnailView::Isometric}, 0);
+
+    EXPECT_EQ(decision.action, dw::smart_tagging::TagDecisionAction::Accept);
+}
+
 TEST(SmartTagger, NamesDecisionActionsForLogs) {
     EXPECT_STREQ(dw::smart_tagging::tagDecisionActionName(
                      dw::smart_tagging::TagDecisionAction::RetryView),
@@ -78,4 +92,13 @@ TEST(SmartTagger, ConvertsNamedViewsToCameraAngles) {
     EXPECT_FLOAT_EQ(top.pitchDeg, 89.0f);
     EXPECT_FLOAT_EQ(iso.yawDeg, 45.0f);
     EXPECT_FLOAT_EQ(iso.pitchDeg, 35.0f);
+}
+
+TEST(SmartTagger, ConvertsClockwiseImageRotationToModelOrientationCorrection) {
+    auto correction = dw::smart_tagging::orientationCorrectionMatrix(270);
+    auto x = correction * dw::Vec4{1.0f, 0.0f, 0.0f, 1.0f};
+
+    EXPECT_NEAR(x.x, 0.0f, 0.0001f);
+    EXPECT_NEAR(x.y, 1.0f, 0.0001f);
+    EXPECT_NEAR(x.z, 0.0f, 0.0001f);
 }

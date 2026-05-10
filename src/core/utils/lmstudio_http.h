@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace dw::gemini {
+namespace dw::lmstudio {
 
 // POST JSON to a URL, return response body. Empty string on failure.
 std::string curlPost(const std::string& url, const std::string& body);
@@ -21,4 +21,4 @@ namespace detail {
 size_t writeCallback(char* ptr, size_t size, size_t nmemb, void* userdata);
 } // namespace detail
 
-} // namespace dw::gemini
+} // namespace dw::lmstudio

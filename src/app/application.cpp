@@ -43,8 +43,8 @@
 #include "core/import/import_queue.h"
 #include "core/library/library_manager.h"
 #include "core/loaders/texture_loader.h"
-#include "core/materials/gemini_descriptor_service.h"
-#include "core/materials/gemini_material_service.h"
+#include "core/materials/lmstudio_descriptor_service.h"
+#include "core/materials/lmstudio_material_service.h"
 #include "core/materials/material_manager.h"
 #include "core/paths/app_paths.h"
 #include "core/project/project.h"
@@ -324,8 +324,8 @@ bool Application::init(bool diagnosticMode) {
         m_cutListFile->setDirectory(paths::getDataDir() / "cutlists");
         m_costRepo = std::make_unique<CostRepository>(*m_database);
         m_rateCatRepo = std::make_unique<RateCategoryRepository>(*m_database);
-        m_geminiService = std::make_unique<GeminiMaterialService>();
-        m_descriptorService = std::make_unique<GeminiDescriptorService>();
+        m_lmStudioService = std::make_unique<LMStudioMaterialService>();
+        m_descriptorService = std::make_unique<LMStudioDescriptorService>();
         m_workspace = std::make_unique<Workspace>();
 
         m_thumbnailGenerator = std::make_unique<ThumbnailGenerator>();
@@ -689,7 +689,7 @@ void Application::shutdown() {
     m_toolDatabase.reset();
     m_cncController.reset();
     m_descriptorService.reset();
-    m_geminiService.reset();
+    m_lmStudioService.reset();
     m_costRepo.reset();
     m_rateCatRepo.reset();
     m_cutPlanRepo.reset();

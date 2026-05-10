@@ -166,7 +166,7 @@ const char* settingsCategoryDescription(SettingsCategory cat) {
     case SettingsCategory::RecentFiles:
         return "Recently opened projects and G-code files";
     case SettingsCategory::ApiKeys:
-        return "Gemini API key and other service credentials";
+        return "LM Studio endpoint and other service credentials";
     default:
         return "";
     }

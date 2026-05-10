@@ -52,7 +52,7 @@ struct ModelRecord {
     // Camera state (NULL = never saved, use fit-to-bounds default)
     std::optional<CameraState> cameraState;
 
-    // AI descriptor fields (populated by GeminiDescriptorService)
+    // AI descriptor fields (populated by LMStudioDescriptorService)
     std::string descriptorTitle;       // AI-generated short title
     std::string descriptorDescription; // Detailed AI classification
     std::string descriptorHover;       // One-line hover text
@@ -87,13 +87,16 @@ class ModelRepository {
                           const std::string& title,
                           const std::string& description,
                           const std::string& hover);
+    bool clearAiClassification(i64 id);
     bool updateTagStatus(i64 id, int status);
     int resetTagStatus(int fromStatus, int toStatus);
     int recoverInterruptedTagStatuses();
 
     // Tag status queries
     std::optional<ModelRecord> findNextUntagged();
+    std::optional<ModelRecord> findNextAiTagCandidate(i64 afterId = 0);
     int countByTagStatus(int status);
+    int countAiTagCandidates();
 
     // Delete
     bool remove(i64 id);

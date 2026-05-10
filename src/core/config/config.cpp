@@ -315,8 +315,8 @@ void Config::loadMaterials(const std::string& key, const std::string& value) {
 }
 
 void Config::loadApi(const std::string& key, const std::string& value) {
-    if (key == "gemini_key") {
-        m_geminiApiKey = value;
+    if (key == "lmstudio_endpoint") {
+        m_lmStudioEndpoint = value;
     }
 }
 
@@ -728,8 +728,8 @@ void Config::saveMaterials(std::ostringstream& ss) const {
 
 void Config::saveApi(std::ostringstream& ss) const {
     ss << "[api]\n";
-    if (!m_geminiApiKey.empty()) {
-        ss << "gemini_key=" << m_geminiApiKey << "\n";
+    if (!m_lmStudioEndpoint.empty()) {
+        ss << "lmstudio_endpoint=" << m_lmStudioEndpoint << "\n";
     }
     ss << "\n";
 }

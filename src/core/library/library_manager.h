@@ -133,6 +133,7 @@ class LibraryManager {
                           const std::string& title,
                           const std::string& description,
                           const std::string& hover);
+    bool clearAiClassification(i64 modelId);
     bool resolveAndAssignCategories(i64 modelId, const std::vector<std::string>& categoryChain);
 
     // Run all library maintenance operations (split compounds, prune empties, etc.)

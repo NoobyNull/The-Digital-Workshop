@@ -351,6 +351,10 @@ void FileIOManager::processCompletedImports(ViewportPanel* viewport,
             properties->setMesh(task.mesh, task.record.name);
         }
     }
+    if (m_pendingCompletions.empty() && m_importQueue && !m_importQueue->isActive() &&
+        m_importPostProcessingCallback) {
+        m_importPostProcessingCallback();
+    }
 }
 
 void FileIOManager::newProject(std::function<void(bool)> setShowStartPage) {

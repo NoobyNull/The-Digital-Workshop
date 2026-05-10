@@ -16,20 +16,17 @@ struct GenerateResult {
     MaterialRecord record; // parsed properties
 };
 
-// Generates materials via Gemini API (texture image + CNC properties).
+// Generates materials via LM Studio (texture image + CNC properties).
 // All methods are blocking — call from a worker thread.
-class GeminiMaterialService {
+class LMStudioMaterialService {
   public:
-    GenerateResult generate(const std::string& prompt, const std::string& apiKey);
+    GenerateResult generate(const std::string& prompt, const std::string& endpoint);
 
   private:
-    // Fetch CNC properties JSON from Gemini
-    std::string fetchProperties(const std::string& prompt, const std::string& apiKey);
+    // Fetch CNC properties JSON from LM Studio
+    std::string fetchProperties(const std::string& prompt, const std::string& endpoint);
 
-    // Fetch texture PNG bytes from Gemini
-    std::vector<uint8_t> fetchTexture(const std::string& prompt, const std::string& apiKey);
-
-    // Parse Gemini JSON response into a MaterialRecord
+    // Parse LM Studio JSON response into a MaterialRecord
     MaterialRecord parseProperties(const std::string& json, const std::string& name);
 };
 

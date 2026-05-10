@@ -1,5 +1,5 @@
 // Digital Workshop - Background Tagger Tests
-// Tests tag_status transitions in the database without requiring Gemini API.
+// Tests tag_status transitions in the database without requiring LM Studio.
 
 #include <gtest/gtest.h>
 
@@ -92,6 +92,42 @@ TEST_F(TagStatusTest, FindNextUntagged_ReturnsNulloptWhenAllTagged) {
     EXPECT_FALSE(next.has_value());
 }
 
+TEST_F(TagStatusTest, FindNextAiTagCandidate_RetriesFailedAndManualReviewRows) {
+    auto tagged = insertTestModel("tagged", "hash1");
+    auto failed = insertTestModel("failed", "hash2");
+    auto manualReview = insertTestModel("manual_review", "hash3");
+    auto failedWithoutThumbnail = insertTestModel("failed_no_thumb", "hash4", false);
+
+    ASSERT_TRUE(m_repo.updateTagStatus(tagged, 2));
+    ASSERT_TRUE(m_repo.updateTagStatus(failed, 3));
+    ASSERT_TRUE(m_repo.updateTagStatus(manualReview, 4));
+    ASSERT_TRUE(m_repo.updateTagStatus(failedWithoutThumbnail, 3));
+
+    EXPECT_EQ(m_repo.countAiTagCandidates(), 2);
+
+    auto next = m_repo.findNextAiTagCandidate();
+    ASSERT_TRUE(next.has_value());
+    EXPECT_EQ(next->name, "failed");
+}
+
+TEST_F(TagStatusTest, FindNextAiTagCandidate_AfterIdSkipsAlreadyTriedRows) {
+    auto firstFailed = insertTestModel("first_failed", "hash1");
+    auto secondFailed = insertTestModel("second_failed", "hash2");
+
+    ASSERT_TRUE(m_repo.updateTagStatus(firstFailed, 3));
+    ASSERT_TRUE(m_repo.updateTagStatus(secondFailed, 3));
+
+    auto first = m_repo.findNextAiTagCandidate();
+    ASSERT_TRUE(first.has_value());
+    ASSERT_EQ(first->id, firstFailed);
+
+    ASSERT_TRUE(m_repo.updateTagStatus(firstFailed, 3));
+
+    auto second = m_repo.findNextAiTagCandidate(firstFailed);
+    ASSERT_TRUE(second.has_value());
+    EXPECT_EQ(second->id, secondFailed);
+}
+
 TEST_F(TagStatusTest, CountByTagStatus) {
     auto id1 = insertTestModel("a", "hash1");
     auto id2 = insertTestModel("b", "hash2");
@@ -107,6 +143,27 @@ TEST_F(TagStatusTest, CountByTagStatus) {
     EXPECT_EQ(m_repo.countByTagStatus(0), 1);
     EXPECT_EQ(m_repo.countByTagStatus(2), 1);
     EXPECT_EQ(m_repo.countByTagStatus(3), 1);
+}
+
+TEST_F(TagStatusTest, ClearAiClassificationRemovesDescriptorTagsCategoriesAndResetsStatus) {
+    auto id = insertTestModel("tagged", "hash1");
+    auto cat = m_repo.createCategory("Decor");
+    ASSERT_TRUE(cat.has_value());
+    ASSERT_TRUE(m_repo.updateDescriptor(id, "Old Title", "Old description", "Old hover"));
+    ASSERT_TRUE(m_repo.updateTags(id, {"old", "tag"}));
+    ASSERT_TRUE(m_repo.assignCategory(id, *cat));
+    ASSERT_TRUE(m_repo.updateTagStatus(id, 2));
+
+    ASSERT_TRUE(m_repo.clearAiClassification(id));
+
+    auto model = m_repo.findById(id);
+    ASSERT_TRUE(model.has_value());
+    EXPECT_TRUE(model->descriptorTitle.empty());
+    EXPECT_TRUE(model->descriptorDescription.empty());
+    EXPECT_TRUE(model->descriptorHover.empty());
+    EXPECT_TRUE(model->tags.empty());
+    EXPECT_EQ(model->tagStatus, 0);
+    EXPECT_TRUE(m_repo.findByCategory(*cat).empty());
 }
 
 TEST_F(TagStatusTest, ResetTagStatus_RecoversQueuedRows) {

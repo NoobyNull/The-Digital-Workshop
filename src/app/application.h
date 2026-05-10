@@ -35,8 +35,8 @@ class GraphManager;
 class ModelRepository;
 class GCodeRepository;
 class CutPlanRepository;
-class GeminiMaterialService;
-class GeminiDescriptorService;
+class LMStudioMaterialService;
+class LMStudioDescriptorService;
 class ProjectExportManager;
 class CutListFile;
 class CncController;
@@ -123,6 +123,7 @@ class Application {
     bool generateMaterialThumbnail(int64_t modelId, Mesh& mesh);
     bool generateMaterialThumbnail(int64_t modelId, Mesh& mesh, ThumbnailView view);
     bool regenerateSmartTagThumbnail(int64_t modelId, ThumbnailView view);
+    bool applyAiOrientationCorrection(int64_t modelId, int clockwiseDegrees);
 
     SDL_Window* m_window = nullptr;
     void* m_glContext = nullptr;
@@ -140,6 +141,7 @@ class Application {
     std::unique_ptr<ImportQueue> m_importQueue;
     std::unique_ptr<ImportLog> m_importLog;
     std::unique_ptr<BackgroundTagger> m_backgroundTagger;
+    bool m_startAiTaggingAfterImportPostProcessing = false;
     std::unique_ptr<StorageManager> m_storageManager;
 
     // UI Manager - owns all panels, dialogs, visibility state
@@ -171,11 +173,11 @@ class Application {
     // Graph query engine (Cypher via GraphQLite extension)
     std::unique_ptr<GraphManager> m_graphManager;
 
-    // Gemini AI material generation service
-    std::unique_ptr<GeminiMaterialService> m_geminiService;
+    // LM Studio AI material generation service
+    std::unique_ptr<LMStudioMaterialService> m_lmStudioService;
 
-    // Gemini AI model descriptor (thumbnail classification)
-    std::unique_ptr<GeminiDescriptorService> m_descriptorService;
+    // LM Studio AI model descriptor (thumbnail classification)
+    std::unique_ptr<LMStudioDescriptorService> m_descriptorService;
 
     // Project export/import (.dwproj archives)
     std::unique_ptr<ProjectExportManager> m_projectExportManager;

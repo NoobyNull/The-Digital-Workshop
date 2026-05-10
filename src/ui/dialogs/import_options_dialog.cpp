@@ -138,14 +138,14 @@ void ImportOptionsDialog::render() {
 
         // AI tagging checkbox
         ImGui::Spacing();
-        bool hasApiKey = !Config::instance().getGeminiApiKey().empty();
-        if (!hasApiKey)
+        bool hasEndpoint = !Config::instance().getLMStudioEndpoint().empty();
+        if (!hasEndpoint)
             ImGui::BeginDisabled();
         ImGui::Checkbox("Tag with AI after import", &m_queueForTagging);
-        if (!hasApiKey) {
+        if (!hasEndpoint) {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextDisabled("(set API key in Settings)");
+            ImGui::TextDisabled("(set LM Studio endpoint in Settings)");
         }
 
         ImGui::Spacing();

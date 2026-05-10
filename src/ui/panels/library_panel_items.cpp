@@ -333,7 +333,7 @@ void LibraryPanel::registerContextMenuEntries() {
             } // enabled
         },
         {"Assign Category" + countSuffix, [this]() { m_showCategoryAssignDialog = true; }},
-        {"Tag Image" + countSuffix,
+        {"AI Retag" + countSuffix,
          [this]() {
              if (m_onTagImage && !m_selectedModelIds.empty()) {
                  std::vector<int64_t> ids(m_selectedModelIds.begin(), m_selectedModelIds.end());

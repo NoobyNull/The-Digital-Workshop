@@ -258,7 +258,19 @@ void LibraryPanel::refresh() {
         return;
 
     // Refresh category cache
-    m_categories = m_library->getAllCategories();
+    auto allCategories = m_library->getAllCategories();
+    m_categories.clear();
+    for (const auto& cat : allCategories) {
+        if (!m_library->filterByCategory(cat.id).empty())
+            m_categories.push_back(cat);
+    }
+    if (m_selectedCategoryId > 0 &&
+        std::none_of(m_categories.begin(), m_categories.end(), [this](const CategoryRecord& cat) {
+            return cat.id == m_selectedCategoryId;
+        })) {
+        m_selectedCategoryId = -1;
+        m_selectedCategoryName.clear();
+    }
 
     // Determine model list based on search + category filter
     if (!m_searchQuery.empty()) {

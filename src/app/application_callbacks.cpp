@@ -27,6 +27,7 @@
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/properties_panel.h"
 #include "ui/panels/viewport_panel.h"
+#include "ui/widgets/toast.h"
 
 namespace dw {
 
@@ -80,7 +81,23 @@ void Application::onModelSelected(int64_t modelId) {
     m_loadThread = std::thread(
         [this, filePath, name, gen, modelId, storedOrientYaw, storedOrientMatrix, storedCamera]() {
             auto loadResult = LoaderFactory::load(filePath);
-            if (!loadResult) { m_loadingState.reset(); return; }
+            if (!loadResult) {
+                log::errorf("Application",
+                            "Failed to open library model '%s' from '%s': %s",
+                            name.c_str(),
+                            filePath.string().c_str(),
+                            loadResult.error.c_str());
+                m_mainThreadQueue->enqueue([this, name, error = loadResult.error, gen]() {
+                    if (gen == m_loadingState.generation.load()) {
+                        m_loadingState.reset();
+                    }
+                    ToastManager::instance().show(
+                        ToastType::Error,
+                        "Model Open Failed",
+                        name + ": " + (error.empty() ? "failed to load file" : error));
+                });
+                return;
+            }
             loadResult.mesh->setName(name);
             f32 orientYaw = 0.0f;
             if (Config::instance().getAutoOrient()) {
@@ -300,6 +317,46 @@ bool Application::regenerateSmartTagThumbnail(int64_t modelId, ThumbnailView vie
         return false;
     }
     return future.get();
+}
+
+bool Application::applyAiOrientationCorrection(int64_t modelId, int clockwiseDegrees) {
+    if (!m_connectionPool)
+        return false;
+
+    ScopedConnection conn(*m_connectionPool);
+    ModelRepository repo(*conn);
+    auto record = repo.findById(modelId);
+    if (!record)
+        return false;
+
+    auto loadResult =
+        LoaderFactory::load(PathResolver::resolve(record->filePath, PathCategory::Support));
+    if (!loadResult) {
+        log::warningf("Orientation",
+                      "Failed to load model %lld for AI orientation correction: %s",
+                      static_cast<long long>(modelId),
+                      loadResult.error.c_str());
+        return false;
+    }
+
+    f32 orientYaw = record->orientYaw.value_or(0.0f);
+    Mat4 baseMatrix(1.0f);
+    if (record->orientMatrix) {
+        baseMatrix = *record->orientMatrix;
+    } else {
+        orientYaw = loadResult.mesh->autoOrient();
+        baseMatrix = loadResult.mesh->getOrientMatrix();
+    }
+
+    Mat4 corrected =
+        smart_tagging::orientationCorrectionMatrix(clockwiseDegrees) * baseMatrix;
+    bool ok = repo.updateOrient(modelId, orientYaw, corrected);
+    log::infof("Orientation",
+               "AI orientation correction model=%lld clockwise=%d result=%s",
+               static_cast<long long>(modelId),
+               clockwiseDegrees,
+               ok ? "ok" : "failed");
+    return ok;
 }
 
 } // namespace dw

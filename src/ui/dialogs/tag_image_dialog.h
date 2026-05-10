@@ -6,7 +6,7 @@
 #include <glad/gl.h>
 
 #include "core/database/model_repository.h"
-#include "core/materials/gemini_descriptor_service.h"
+#include "core/materials/lmstudio_descriptor_service.h"
 #include "ui/dialogs/dialog.h"
 
 namespace dw {
@@ -44,6 +44,7 @@ class TagImageDialog : public Dialog {
     char m_keywords[512] = {};
     char m_associations[512] = {};
     char m_categories[512] = {};
+    std::string m_orientationSuggestion;
 
     // Error message (shown if API fails)
     std::string m_error;

@@ -67,7 +67,7 @@ set(DW_TEST_SOURCES
     test_import_log.cpp
     test_background_tagger.cpp
     test_smart_tagger.cpp
-    test_gemini_descriptor_parser.cpp
+    test_lmstudio_descriptor_parser.cpp
     # CNC Controller (multi-firmware support)
     test_serial_port.cpp
     test_tcp_socket.cpp
@@ -137,8 +137,8 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/loaders/gcode_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/loaders/loader_factory.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/smart_tagger.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/materials/gemini_descriptor_service.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/utils/gemini_http.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/materials/lmstudio_descriptor_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/utils/lmstudio_http.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_analyzer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_modal_scanner.cpp

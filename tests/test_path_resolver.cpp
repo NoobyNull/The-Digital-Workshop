@@ -19,6 +19,15 @@ TEST(PathResolver, AbsolutePathPassesThrough) {
     EXPECT_EQ(result, kAbsTestPath);
 }
 
+#ifndef _WIN32
+TEST(PathResolver, StaleSynologyKioFusePathFallsBackToStableMount) {
+    Path stored(
+        "/run/user/1000/kio-fuse-vOVnSN/smb/synology.local/STL/NTS/All/example.stl");
+    Path result = PathResolver::resolve(stored, PathCategory::Support);
+    EXPECT_EQ(result, Path("/mnt/synology-stl/NTS/All/example.stl"));
+}
+#endif
+
 TEST(PathResolver, RelativePathGetsResolved) {
     Path rel("ab/cd/abcd1234.stl");
     Path result = PathResolver::resolve(rel, PathCategory::Support);

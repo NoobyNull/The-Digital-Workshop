@@ -87,8 +87,8 @@ class SettingsApp {
     char m_gcodeDir[512]{};
     char m_supportDir[512]{};
 
-    // API keys
-    char m_geminiApiKey[256]{};
+    // Local AI service
+    char m_lmStudioEndpoint[256]{};
 
     // Auto-sizing: render a few frames to let ImGui measure, then resize SDL window
     int m_framesToAutoSize = 3;

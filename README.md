@@ -41,7 +41,7 @@ It's also fully offline and open source. Your files stay on your machine, the da
 - Material properties: Janka hardness, feed rate, spindle speed, depth of cut, cost per board-foot, grain direction
 - Bundled materials can be hidden but not deleted; user materials are fully removable
 - `.dwmat` archive format for sharing materials between users
-- Optional AI-assisted material generation via Google Gemini API
+- Optional AI-assisted tagging and material profile generation via local LM Studio
 
 ### 2D Cut Optimization
 - First-Fit Decreasing and Guillotine packing algorithms

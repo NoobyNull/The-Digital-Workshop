@@ -604,6 +604,31 @@ bool ModelRepository::updateDescriptor(i64 id,
     return stmt.execute();
 }
 
+bool ModelRepository::clearAiClassification(i64 id) {
+    auto stmt = m_db.prepare(R"(
+        UPDATE models SET
+            descriptor_title = '',
+            descriptor_description = '',
+            descriptor_hover = '',
+            tags = '[]',
+            tag_status = 0
+        WHERE id = ?
+    )");
+    if (!stmt.isValid())
+        return false;
+    if (!stmt.bindInt(1, id))
+        return false;
+    if (!stmt.execute())
+        return false;
+
+    auto categories = m_db.prepare("DELETE FROM model_categories WHERE model_id = ?");
+    if (!categories.isValid())
+        return false;
+    if (!categories.bindInt(1, id))
+        return false;
+    return categories.execute();
+}
+
 bool ModelRepository::updateTagStatus(i64 id, int status) {
     auto stmt = m_db.prepare("UPDATE models SET tag_status = ? WHERE id = ?");
     if (!stmt.isValid())
@@ -676,11 +701,42 @@ std::optional<ModelRecord> ModelRepository::findNextUntagged() {
     return std::nullopt;
 }
 
+std::optional<ModelRecord> ModelRepository::findNextAiTagCandidate(i64 afterId) {
+    auto stmt = m_db.prepare(
+        "SELECT * FROM models "
+        "WHERE tag_status IN (0, 3, 4) "
+        "AND id > ? "
+        "AND thumbnail_path IS NOT NULL "
+        "AND thumbnail_path != '' "
+        "ORDER BY id ASC "
+        "LIMIT 1");
+    if (!stmt.isValid())
+        return std::nullopt;
+    if (!stmt.bindInt(1, afterId))
+        return std::nullopt;
+    if (stmt.step())
+        return rowToModel(stmt);
+    return std::nullopt;
+}
+
 int ModelRepository::countByTagStatus(int status) {
     auto stmt = m_db.prepare("SELECT COUNT(*) FROM models WHERE tag_status = ?");
     if (!stmt.isValid())
         return 0;
     if (!stmt.bindInt(1, static_cast<i64>(status)))
+        return 0;
+    if (stmt.step())
+        return static_cast<int>(stmt.getInt(0));
+    return 0;
+}
+
+int ModelRepository::countAiTagCandidates() {
+    auto stmt = m_db.prepare(
+        "SELECT COUNT(*) FROM models "
+        "WHERE tag_status IN (0, 3, 4) "
+        "AND thumbnail_path IS NOT NULL "
+        "AND thumbnail_path != ''");
+    if (!stmt.isValid())
         return 0;
     if (stmt.step())
         return static_cast<int>(stmt.getInt(0));

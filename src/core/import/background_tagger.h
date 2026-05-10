@@ -13,7 +13,7 @@ namespace dw {
 
 class ConnectionPool;
 class LibraryManager;
-class GeminiDescriptorService;
+class LMStudioDescriptorService;
 class ModelRepository;
 struct ModelRecord;
 
@@ -36,12 +36,12 @@ class BackgroundTagger {
   public:
     BackgroundTagger(ConnectionPool& pool,
                      LibraryManager* libraryMgr,
-                     GeminiDescriptorService* descriptorSvc);
+                     LMStudioDescriptorService* descriptorSvc);
     ~BackgroundTagger();
 
     using ThumbnailViewCallback = std::function<bool(int64_t modelId, ThumbnailView view)>;
 
-    void start(const std::string& apiKey,
+    void start(const std::string& endpoint,
                BackgroundTaggerMode mode = BackgroundTaggerMode::ImportSinglePass);
     void stop();
     void join();
@@ -55,6 +55,9 @@ class BackgroundTagger {
                                  int64_t modelId,
                                  const DescriptorResult& result);
     [[nodiscard]] ThumbnailView initialViewForModel(const ModelRecord& model) const;
+    [[nodiscard]] bool applyOrientationCorrection(ModelRepository& repo,
+                                                  const ModelRecord& model,
+                                                  int clockwiseDegrees) const;
     [[nodiscard]] DescriptorResult runImportTagAttempt(const ModelRecord& model);
     [[nodiscard]] DescriptorResult runSmartTagAttempt(ModelRepository& repo,
                                                       const ModelRecord& model);
@@ -63,12 +66,12 @@ class BackgroundTagger {
 
     ConnectionPool& m_pool;
     LibraryManager* m_libraryMgr;
-    GeminiDescriptorService* m_descriptorSvc;
+    LMStudioDescriptorService* m_descriptorSvc;
     ThumbnailViewCallback m_thumbnailViewCallback;
 
     std::thread m_thread;
     std::atomic<bool> m_stopRequested{false};
-    std::string m_apiKey;
+    std::string m_endpoint;
     BackgroundTaggerMode m_mode = BackgroundTaggerMode::ImportSinglePass;
     TaggerProgress m_progress;
 };

@@ -27,8 +27,8 @@
 #include "core/import/smart_tagger.h"
 #include "core/library/library_manager.h"
 #include "core/loaders/loader_factory.h"
-#include "core/materials/gemini_descriptor_service.h"
-#include "core/materials/gemini_material_service.h"
+#include "core/materials/lmstudio_descriptor_service.h"
+#include "core/materials/lmstudio_material_service.h"
 #include "core/materials/material_manager.h"
 #include "core/paths/path_recovery.h"
 #include "core/paths/path_resolver.h"
@@ -92,6 +92,11 @@ void persistTagResults(LibraryManager* libMgr, int64_t modelId, const Descriptor
     libMgr->updateTagStatus(modelId, 2);
 }
 
+void resetAiTagStateForRetag(LibraryManager* libMgr, int64_t modelId) {
+    if (libMgr)
+        libMgr->clearAiClassification(modelId);
+}
+
 std::string utcTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
@@ -137,7 +142,13 @@ void appendManualTaggerResultLog(int64_t modelId,
          << " needs_retag=" << (result.needsRetag ? "true" : "false")
          << " current_view=" << smart_tagging::thumbnailViewName(result.currentView)
          << " recommended_view=" << smart_tagging::thumbnailViewName(result.recommendedView)
+         << " orientation_needs_rotation="
+         << (result.orientation.needsRotation ? "true" : "false")
+         << " orientation_rotate_degrees=" << result.orientation.rotateDegrees
+         << " orientation_upright_view="
+         << smart_tagging::thumbnailViewName(result.orientation.uprightView)
          << " reason=\"" << result.viewReason << "\""
+         << " orientation_reason=\"" << result.orientation.reason << "\""
          << " title=\"" << result.title << "\""
          << " error=\"" << result.error << "\"";
     appendManualTaggerLog(line.str());
@@ -152,23 +163,58 @@ void markManualUnclassifiable(DescriptorResult& result) {
     result.keywords.clear();
     result.associations.clear();
     result.categories.clear();
+    result.orientation = OrientationSuggestion{};
 }
 
 DescriptorResult runSmartTagLoop(int64_t modelId,
                                  const std::string& modelName,
                                  const std::string& thumbnailPath,
-                                 const std::string& apiKey,
-                                 GeminiDescriptorService* svc,
+                                 const std::string& endpoint,
+                                 LMStudioDescriptorService* svc,
+                                 std::function<bool(int)> applyOrientationCorrection,
                                  std::function<bool(ThumbnailView)> regenerateThumbnail,
                                  const char* resultEventName) {
     ThumbnailView currentView = ThumbnailView::Unknown;
     std::vector<ThumbnailView> triedViews;
     DescriptorResult result;
+    bool orientationCorrectionTried = false;
 
     for (int attempt = 0; attempt < smart_tagging::kMaxPerpendicularRetries + 2; ++attempt) {
         triedViews.push_back(currentView);
-        result = svc->describe(thumbnailPath, apiKey, currentView);
+        result = svc->describe(thumbnailPath, endpoint, currentView);
         appendManualTaggerResultLog(modelId, modelName, resultEventName, result);
+
+        if (result.success && result.orientation.needsRotation &&
+            result.orientation.rotateDegrees != 0 && !orientationCorrectionTried &&
+            applyOrientationCorrection && applyOrientationCorrection(result.orientation.rotateDegrees)) {
+            orientationCorrectionTried = true;
+            ThumbnailView correctedView = result.orientation.uprightView;
+            if (correctedView == ThumbnailView::Unknown)
+                correctedView = currentView == ThumbnailView::Unknown ? ThumbnailView::Front
+                                                                      : currentView;
+            appendManualTaggerLog(std::string("orientation_correction model_id=") +
+                                  std::to_string(modelId) + " name=\"" + modelName +
+                                  "\" rotate_degrees=" +
+                                  std::to_string(result.orientation.rotateDegrees) +
+                                  " corrected_view=" +
+                                  smart_tagging::thumbnailViewName(correctedView));
+            appendManualTaggerLog(std::string("thumbnail_request model_id=") +
+                                  std::to_string(modelId) + " name=\"" + modelName +
+                                  "\" requested_view=" +
+                                  smart_tagging::thumbnailViewName(correctedView));
+            if (!regenerateThumbnail(correctedView)) {
+                result.success = false;
+                result.error = "Failed to generate orientation-corrected thumbnail";
+                appendManualTaggerResultLog(modelId, modelName, resultEventName, result);
+                return result;
+            }
+            appendManualTaggerLog(std::string("thumbnail_complete model_id=") +
+                                  std::to_string(modelId) + " name=\"" + modelName +
+                                  "\" rendered_view=" +
+                                  smart_tagging::thumbnailViewName(correctedView));
+            currentView = correctedView;
+            continue;
+        }
 
         auto decision = smart_tagging::decideNextStep(
             result,
@@ -276,13 +322,18 @@ void Application::wireImportPipeline() {
             }
             if (summary.duplicateCount > 0)
                 m_uiManager->showImportSummary(summary);
-            if (m_importQueue->queueForTagging() && m_backgroundTagger &&
-                !m_backgroundTagger->isActive()) {
-                auto apiKey = Config::instance().getGeminiApiKey();
-                if (!apiKey.empty())
-                    m_backgroundTagger->start(apiKey, BackgroundTaggerMode::ImportSinglePass);
-            }
+            m_startAiTaggingAfterImportPostProcessing = m_importQueue->queueForTagging();
         });
+    });
+    m_fileIOManager->setImportPostProcessingCallback([this]() {
+        if (!m_startAiTaggingAfterImportPostProcessing)
+            return;
+        m_startAiTaggingAfterImportPostProcessing = false;
+        if (!m_backgroundTagger || m_backgroundTagger->isActive())
+            return;
+        auto endpoint = Config::instance().getLMStudioEndpoint();
+        if (!endpoint.empty())
+            m_backgroundTagger->start(endpoint, BackgroundTaggerMode::SmartRetag);
     });
     m_fileIOManager->setImportOptionsDialog(m_uiManager->importOptionsDialog());
     if (m_uiManager->importOptionsDialog()) {
@@ -483,20 +534,20 @@ void Application::wireMaterialsPanel() {
         [this](int64_t materialId) { assignMaterialToCurrentModel(materialId); });
 
     m_uiManager->materialsPanel()->setOnGenerate([this](const std::string& prompt) {
-        std::string apiKey = Config::instance().getGeminiApiKey();
-        if (apiKey.empty()) {
+        std::string endpoint = Config::instance().getLMStudioEndpoint();
+        if (endpoint.empty()) {
             log::warning("Application",
-                         "Gemini API key not set. Configure it in Settings > General.");
+                         "LM Studio endpoint not set. Configure it in Settings > General.");
             ToastManager::instance().show(ToastType::Warning,
-                                          "API Key Missing",
-                                          "Set your Gemini API key in Settings.");
+                                          "LM Studio Missing",
+                                          "Set your LM Studio endpoint in Settings.");
             if (m_uiManager->materialsPanel())
                 m_uiManager->materialsPanel()->setGenerating(false);
             return;
         }
 
-        std::thread([this, prompt, apiKey]() {
-            auto result = m_geminiService->generate(prompt, apiKey);
+        std::thread([this, prompt, endpoint]() {
+            auto result = m_lmStudioService->generate(prompt, endpoint);
             m_mainThreadQueue->enqueue([this, result]() {
                 if (result.success) {
                     log::infof("Application",
@@ -649,11 +700,11 @@ void Application::wireTagDialog() {
 
     tagDlg->setOnRequest([this, tagDlg](int64_t modelId) {
         if (!m_descriptorService || !m_mainThreadQueue) return;
-        std::string apiKey = Config::instance().getGeminiApiKey();
-        if (apiKey.empty()) {
-            log::warning("App", "Gemini API key not configured");
+        std::string endpoint = Config::instance().getLMStudioEndpoint();
+        if (endpoint.empty()) {
+            log::warning("App", "LM Studio endpoint not configured");
             DescriptorResult err;
-            err.error = "Gemini API key not configured";
+            err.error = "LM Studio endpoint not configured";
             tagDlg->setResult(err);
             return;
         }
@@ -664,6 +715,7 @@ void Application::wireTagDialog() {
             tagDlg->setResult(err);
             return;
         }
+        resetAiTagStateForRetag(m_libraryManager.get(), modelId);
         auto* svc = m_descriptorService.get();
         auto* mtq = m_mainThreadQueue.get();
         std::string thumbPath = record->thumbnailPath.string();
@@ -671,13 +723,16 @@ void Application::wireTagDialog() {
         appendManualTaggerLog("manual_request model_id=" + std::to_string(modelId) +
                               " name=\"" + modelName + "\" view=unknown thumbnail=\"" +
                               thumbPath + "\"");
-        std::thread([this, svc, mtq, tagDlg, modelId, modelName, thumbPath, apiKey]() {
+        std::thread([this, svc, mtq, tagDlg, modelId, modelName, thumbPath, endpoint]() {
             auto result = runSmartTagLoop(
                 modelId,
                 modelName,
                 thumbPath,
-                apiKey,
+                endpoint,
                 svc,
+                [this, modelId](int rotateDegrees) {
+                    return applyAiOrientationCorrection(modelId, rotateDegrees);
+                },
                 [this, modelId](ThumbnailView view) {
                     return regenerateSmartTagThumbnail(modelId, view);
                 },
@@ -714,9 +769,9 @@ void Application::handleTagImage(const std::vector<int64_t>& modelIds) {
         tagDlg->open(*record, tex);
         return;
     }
-    std::string apiKey = Config::instance().getGeminiApiKey();
-    if (apiKey.empty()) {
-        log::warning("App", "Gemini API key not configured");
+    std::string endpoint = Config::instance().getLMStudioEndpoint();
+    if (endpoint.empty()) {
+        log::warning("App", "LM Studio endpoint not configured");
         return;
     }
     auto* svc = m_descriptorService.get();
@@ -727,18 +782,22 @@ void Application::handleTagImage(const std::vector<int64_t>& modelIds) {
     for (int64_t modelId : modelIds) {
         auto record = m_libraryManager->getModel(modelId);
         if (!record || record->thumbnailPath.empty()) continue;
+        resetAiTagStateForRetag(m_libraryManager.get(), modelId);
         std::string thumbPath = record->thumbnailPath.string();
         std::string modelName = record->name;
         appendManualTaggerLog("batch_request model_id=" + std::to_string(modelId) +
                               " name=\"" + modelName + "\" view=unknown thumbnail=\"" +
                               thumbPath + "\"");
-        std::thread([this, svc, libMgr, mtq, libPanel, modelId, modelName, thumbPath, apiKey]() {
+        std::thread([this, svc, libMgr, mtq, libPanel, modelId, modelName, thumbPath, endpoint]() {
             auto result = runSmartTagLoop(
                 modelId,
                 modelName,
                 thumbPath,
-                apiKey,
+                endpoint,
                 svc,
+                [this, modelId](int rotateDegrees) {
+                    return applyAiOrientationCorrection(modelId, rotateDegrees);
+                },
                 [this, modelId](ThumbnailView view) {
                     return regenerateSmartTagThumbnail(modelId, view);
                 },
@@ -778,13 +837,13 @@ void Application::wireToolsMenu() {
                 ToastType::Info, "AI Tagging", "Background tagging is already running");
             return;
         }
-        std::string apiKey = Config::instance().getGeminiApiKey();
-        if (apiKey.empty()) {
+        std::string endpoint = Config::instance().getLMStudioEndpoint();
+        if (endpoint.empty()) {
             ToastManager::instance().show(
-                ToastType::Warning, "AI Tagging", "Gemini API key not configured");
+                ToastType::Warning, "AI Tagging", "LM Studio endpoint not configured");
             return;
         }
-        m_backgroundTagger->start(apiKey, BackgroundTaggerMode::SmartRetag);
+        m_backgroundTagger->start(endpoint, BackgroundTaggerMode::SmartRetag);
         ToastManager::instance().show(
             ToastType::Info, "AI Tagging", "Background tagging started");
     });

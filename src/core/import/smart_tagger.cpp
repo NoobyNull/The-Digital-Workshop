@@ -78,6 +78,17 @@ ViewCamera cameraForView(ThumbnailView view, f32 currentYawDeg) {
     return {ThumbnailView::Unknown, 0.0f, 0.0f};
 }
 
+Mat4 orientationCorrectionMatrix(int clockwiseDegrees) {
+    int normalized = clockwiseDegrees % 360;
+    if (normalized < 0)
+        normalized += 360;
+    if (normalized != 90 && normalized != 180 && normalized != 270)
+        normalized = 0;
+
+    float counterClockwise = static_cast<float>((360 - normalized) % 360);
+    return glm::rotate(Mat4(1.0f), glm::radians(counterClockwise), Vec3{0.0f, 0.0f, 1.0f});
+}
+
 TagDecision decideNextStep(const DescriptorResult& result,
                            const std::vector<ThumbnailView>& triedViews,
                            int perpendicularRetries) {
@@ -113,8 +124,16 @@ TagDecision decideNextStep(const DescriptorResult& result,
         return {TagDecisionAction::Accept, ThumbnailView::Unknown};
     }
 
-    if (hasTriedView(triedViews, ThumbnailView::Isometric) ||
-        result.confidence < kMinimumUsefulConfidence) {
+    if (hasTriedView(triedViews, ThumbnailView::Isometric)) {
+        if (result.status == TagClassificationStatus::FinalTag &&
+            result.confidence >= kFallbackAcceptanceConfidence &&
+            !result.title.empty() && !result.description.empty()) {
+            return {TagDecisionAction::Accept, ThumbnailView::Unknown};
+        }
+        return {TagDecisionAction::Unclassifiable, ThumbnailView::Unknown};
+    }
+
+    if (result.confidence < kMinimumUsefulConfidence) {
         return {TagDecisionAction::Unclassifiable, ThumbnailView::Unknown};
     }
 

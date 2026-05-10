@@ -1,10 +1,10 @@
-#include "gemini_http.h"
+#include "lmstudio_http.h"
 
 #include <curl/curl.h>
 
 #include "log.h"
 
-namespace dw::gemini {
+namespace dw::lmstudio {
 
 namespace detail {
 
@@ -44,11 +44,11 @@ std::string curlPost(const std::string& url, const std::string& body) {
     curl_easy_cleanup(curl);
 
     if (res != CURLE_OK) {
-        log::errorf("GeminiHTTP", "curl error: %s", curl_easy_strerror(res));
+        log::errorf("LMStudioHTTP", "curl error: %s", curl_easy_strerror(res));
         return {};
     }
     if (httpCode != 200) {
-        log::errorf("GeminiHTTP", "HTTP %ld: %.500s", httpCode, response.c_str());
+        log::errorf("LMStudioHTTP", "HTTP %ld: %.500s", httpCode, response.c_str());
     }
     return response;
 }
@@ -112,4 +112,4 @@ std::string base64Encode(const std::vector<uint8_t>& data) {
     return base64Encode(data.data(), data.size());
 }
 
-} // namespace dw::gemini
+} // namespace dw::lmstudio

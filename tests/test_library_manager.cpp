@@ -221,3 +221,323 @@ TEST_F(LibraryManagerTest, ModelCount) {
     m_mgr->importModel(writeDifferentSTL("b"));
     EXPECT_EQ(m_mgr->modelCount(), 2);
 }
+
+TEST_F(LibraryManagerTest, MaintenanceRemovesNestedEmptyCategoriesOnly) {
+    auto path = writeMiniSTL("memorial");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    auto usedRoot = m_mgr->createCategory("Military");
+    ASSERT_TRUE(usedRoot.has_value());
+    auto usedChild = m_mgr->createCategory("Marines", usedRoot);
+    ASSERT_TRUE(usedChild.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(result.modelId, *usedChild));
+
+    auto emptyRoot = m_mgr->createCategory("CNC Art");
+    ASSERT_TRUE(emptyRoot.has_value());
+    auto emptyChild = m_mgr->createCategory("Empty Leaf", emptyRoot);
+    ASSERT_TRUE(emptyChild.has_value());
+
+    auto report = m_mgr->runMaintenance();
+
+    EXPECT_GE(report.categoriesRemoved, 2);
+    EXPECT_TRUE(m_mgr->filterByCategory(*usedRoot).size() == 1);
+    auto categories = m_mgr->getAllCategories();
+    EXPECT_EQ(std::count_if(categories.begin(), categories.end(), [](const dw::CategoryRecord& c) {
+                  return c.name == "CNC Art" || c.name == "Empty Leaf";
+              }),
+              0);
+}
+
+TEST_F(LibraryManagerTest, MaintenancePromotesChildrenOutOfWorkflowCategories) {
+    auto path = writeMiniSTL("badge");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    auto workflow = m_mgr->createCategory("3D Print");
+    ASSERT_TRUE(workflow.has_value());
+    auto badge = m_mgr->createCategory("Badge", workflow);
+    ASSERT_TRUE(badge.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(result.modelId, *badge));
+
+    auto report = m_mgr->runMaintenance();
+
+    EXPECT_GE(report.categoriesRemoved, 1);
+    auto categories = m_mgr->getAllCategories();
+    EXPECT_EQ(std::count_if(categories.begin(), categories.end(), [](const dw::CategoryRecord& c) {
+                  return c.name == "3D Print";
+              }),
+              0);
+
+    auto symbols = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Symbols" && !c.parentId.has_value();
+    });
+    ASSERT_NE(symbols, categories.end());
+    auto promoted = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Badges" && c.parentId == symbols->id;
+    });
+    ASSERT_NE(promoted, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(promoted->id).size(), 1u);
+}
+
+TEST_F(LibraryManagerTest, MaintenanceMapsCncDecorativeToDecor) {
+    auto path = writeMiniSTL("frame");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    auto workflow = m_mgr->createCategory("CNC Decorative");
+    ASSERT_TRUE(workflow.has_value());
+    auto frame = m_mgr->createCategory("Frame", workflow);
+    ASSERT_TRUE(frame.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(result.modelId, *frame));
+
+    auto report = m_mgr->runMaintenance();
+
+    EXPECT_GE(report.categoriesRemoved, 1);
+    auto categories = m_mgr->getAllCategories();
+    auto decor = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Decor" && !c.parentId.has_value();
+    });
+    ASSERT_NE(decor, categories.end());
+    auto decorFrame = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Frame" && c.parentId == decor->id;
+    });
+    ASSERT_NE(decorFrame, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(decorFrame->id).size(), 1u);
+}
+
+TEST_F(LibraryManagerTest, MaintenanceRemovesGenericCncLeafAssignments) {
+    auto path = writeMiniSTL("generic");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    auto workflow = m_mgr->createCategory("CNC Files");
+    ASSERT_TRUE(workflow.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(result.modelId, *workflow));
+
+    m_mgr->runMaintenance();
+
+    auto categories = m_mgr->getAllCategories();
+    EXPECT_EQ(std::count_if(categories.begin(), categories.end(), [](const dw::CategoryRecord& c) {
+                  return c.name == "CNC Files";
+              }),
+              0);
+}
+
+TEST_F(LibraryManagerTest, MaintenanceStripsWorkflowPrefixFromMeaningfulCategory) {
+    auto path = writeMiniSTL("panel");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    auto decorative = m_mgr->createCategory("Decorative");
+    ASSERT_TRUE(decorative.has_value());
+    auto workflow = m_mgr->createCategory("CNC Panel", decorative);
+    ASSERT_TRUE(workflow.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(result.modelId, *workflow));
+
+    m_mgr->runMaintenance();
+
+    auto categories = m_mgr->getAllCategories();
+    auto decor = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Decor" && !c.parentId.has_value();
+    });
+    ASSERT_NE(decor, categories.end());
+    auto panel = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Panel" && c.parentId == decor->id;
+    });
+    ASSERT_NE(panel, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(panel->id).size(), 1u);
+}
+
+TEST_F(LibraryManagerTest, MaintenanceMovesDecorativeRootUnderDecor) {
+    auto path = writeMiniSTL("ornament");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    auto decorative = m_mgr->createCategory("Decorative");
+    ASSERT_TRUE(decorative.has_value());
+    auto wallArt = m_mgr->createCategory("Wall Art", decorative);
+    ASSERT_TRUE(wallArt.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(result.modelId, *wallArt));
+
+    m_mgr->runMaintenance();
+
+    auto categories = m_mgr->getAllCategories();
+    EXPECT_EQ(std::count_if(categories.begin(), categories.end(), [](const dw::CategoryRecord& c) {
+                  return c.name == "Decorative" && !c.parentId.has_value();
+              }),
+              0);
+    auto decor = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Decor" && !c.parentId.has_value();
+    });
+    ASSERT_NE(decor, categories.end());
+    auto movedWallArt = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Wall Art" && c.parentId == decor->id;
+    });
+    ASSERT_NE(movedWallArt, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(movedWallArt->id).size(), 1u);
+}
+
+TEST_F(LibraryManagerTest, MaintenanceKeepsValidPrimaryDomainWithSameChildName) {
+    auto militaryModel = m_mgr->importModel(writeMiniSTL("marine_badge"));
+    ASSERT_TRUE(militaryModel.success) << militaryModel.error;
+    auto historyModel = m_mgr->importModel(writeDifferentSTL("historical_military"));
+    ASSERT_TRUE(historyModel.success) << historyModel.error;
+
+    auto military = m_mgr->createCategory("Military");
+    ASSERT_TRUE(military.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(militaryModel.modelId, *military));
+
+    auto historical = m_mgr->createCategory("Historical");
+    ASSERT_TRUE(historical.has_value());
+    auto childMilitary = m_mgr->createCategory("Military", historical);
+    ASSERT_TRUE(childMilitary.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(historyModel.modelId, *childMilitary));
+
+    m_mgr->runMaintenance();
+
+    auto categories = m_mgr->getAllCategories();
+    auto rootMilitary = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Military" && !c.parentId.has_value();
+    });
+    EXPECT_NE(rootMilitary, categories.end());
+    auto historicalMilitary =
+        std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+            return c.name == "Military" && c.parentId == historical;
+        });
+    EXPECT_NE(historicalMilitary, categories.end());
+}
+
+TEST_F(LibraryManagerTest, MaintenanceMovesBadgeRootUnderSymbols) {
+    auto path = writeMiniSTL("badge_model");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    auto badge = m_mgr->createCategory("Badge");
+    ASSERT_TRUE(badge.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(result.modelId, *badge));
+
+    m_mgr->runMaintenance();
+
+    auto categories = m_mgr->getAllCategories();
+    auto symbols = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Symbols" && !c.parentId.has_value();
+    });
+    ASSERT_NE(symbols, categories.end());
+    auto badges = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Badges" && c.parentId == symbols->id;
+    });
+    ASSERT_NE(badges, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(badges->id).size(), 1u);
+    EXPECT_EQ(std::count_if(categories.begin(), categories.end(), [](const dw::CategoryRecord& c) {
+                  return c.name == "Badge" && !c.parentId.has_value();
+              }),
+              0);
+}
+
+TEST_F(LibraryManagerTest, MaintenanceMovesSemanticModelRoots) {
+    auto animalModel = m_mgr->importModel(writeMiniSTL("animal_model"));
+    ASSERT_TRUE(animalModel.success) << animalModel.error;
+    auto homeDecorModel = m_mgr->importModel(writeDifferentSTL("home_decor"));
+    ASSERT_TRUE(homeDecorModel.success) << homeDecorModel.error;
+
+    auto animalRoot = m_mgr->createCategory("Animal Model");
+    ASSERT_TRUE(animalRoot.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(animalModel.modelId, *animalRoot));
+
+    auto homeDecorRoot = m_mgr->createCategory("Home Decor");
+    ASSERT_TRUE(homeDecorRoot.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(homeDecorModel.modelId, *homeDecorRoot));
+
+    m_mgr->runMaintenance();
+
+    auto categories = m_mgr->getAllCategories();
+    auto animals = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Animals" && !c.parentId.has_value();
+    });
+    ASSERT_NE(animals, categories.end());
+    auto decor = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Decor" && !c.parentId.has_value();
+    });
+    ASSERT_NE(decor, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(animals->id).size(), 1u);
+    EXPECT_EQ(m_mgr->filterByCategory(decor->id).size(), 1u);
+}
+
+TEST_F(LibraryManagerTest, MaintenanceMergesSpecificOneOffRoots) {
+    auto religiousModel = m_mgr->importModel(writeMiniSTL("religious"));
+    ASSERT_TRUE(religiousModel.success) << religiousModel.error;
+    auto wheelModel = m_mgr->importModel(writeDifferentSTL("wheel"));
+    ASSERT_TRUE(wheelModel.success) << wheelModel.error;
+
+    auto religious = m_mgr->createCategory("Religious");
+    ASSERT_TRUE(religious.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(religiousModel.modelId, *religious));
+    auto wheels = m_mgr->createCategory("Wheels");
+    ASSERT_TRUE(wheels.has_value());
+    ASSERT_TRUE(m_mgr->assignCategory(wheelModel.modelId, *wheels));
+
+    m_mgr->runMaintenance();
+
+    auto categories = m_mgr->getAllCategories();
+    auto religion = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Religion" && !c.parentId.has_value();
+    });
+    ASSERT_NE(religion, categories.end());
+    auto vehicles = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Vehicles" && !c.parentId.has_value();
+    });
+    ASSERT_NE(vehicles, categories.end());
+    auto vehicleWheels = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Wheels" && c.parentId == vehicles->id;
+    });
+    ASSERT_NE(vehicleWheels, categories.end());
+}
+
+TEST_F(LibraryManagerTest, ResolveAndAssignCategoriesCanonicalizesInitialAiTagRoots) {
+    auto path = writeMiniSTL("ai_tagged_badge");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    ASSERT_TRUE(m_mgr->resolveAndAssignCategories(
+        result.modelId, {"3D Print", "Badge", "Military"}));
+
+    auto categories = m_mgr->getAllCategories();
+    EXPECT_EQ(std::count_if(categories.begin(), categories.end(), [](const dw::CategoryRecord& c) {
+                  return c.name == "3D Print" && !c.parentId.has_value();
+              }),
+              0);
+    auto symbols = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Symbols" && !c.parentId.has_value();
+    });
+    ASSERT_NE(symbols, categories.end());
+    auto badges = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Badges" && c.parentId == symbols->id;
+    });
+    ASSERT_NE(badges, categories.end());
+    auto military = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Military" && c.parentId == badges->id;
+    });
+    ASSERT_NE(military, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(military->id).size(), 1u);
+}
+
+TEST_F(LibraryManagerTest, ResolveAndAssignCategoriesMapsDecorativeInitialAiTagRoot) {
+    auto path = writeMiniSTL("ai_tagged_panel");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    ASSERT_TRUE(m_mgr->resolveAndAssignCategories(
+        result.modelId, {"CNC Decorative", "Panel"}));
+
+    auto categories = m_mgr->getAllCategories();
+    auto decor = std::find_if(categories.begin(), categories.end(), [](const auto& c) {
+        return c.name == "Decor" && !c.parentId.has_value();
+    });
+    ASSERT_NE(decor, categories.end());
+    auto panel = std::find_if(categories.begin(), categories.end(), [&](const auto& c) {
+        return c.name == "Panel" && c.parentId == decor->id;
+    });
+    ASSERT_NE(panel, categories.end());
+    EXPECT_EQ(m_mgr->filterByCategory(panel->id).size(), 1u);
+}

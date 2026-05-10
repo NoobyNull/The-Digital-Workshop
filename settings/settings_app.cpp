@@ -91,9 +91,9 @@ bool SettingsApp::init() {
     copyDir(m_gcodeDir, sizeof(m_gcodeDir), cfg.getGCodeDir());
     copyDir(m_supportDir, sizeof(m_supportDir), cfg.getSupportDir());
 
-    // API keys
-    std::strncpy(m_geminiApiKey, cfg.getGeminiApiKey().c_str(), sizeof(m_geminiApiKey) - 1);
-    m_geminiApiKey[sizeof(m_geminiApiKey) - 1] = '\0';
+    // Local AI service
+    std::strncpy(m_lmStudioEndpoint, cfg.getLMStudioEndpoint().c_str(), sizeof(m_lmStudioEndpoint) - 1);
+    m_lmStudioEndpoint[sizeof(m_lmStudioEndpoint) - 1] = '\0';
 
     // Initialize SDL2
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -349,13 +349,12 @@ void SettingsApp::renderGeneralTab() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    ImGui::Text("API Keys");
+    ImGui::Text("Local AI");
     ImGui::Indent();
     ImGui::SetNextItemWidth(-1);
-    if (ImGui::InputText("Gemini API Key", m_geminiApiKey, sizeof(m_geminiApiKey),
-                         ImGuiInputTextFlags_Password))
+    if (ImGui::InputText("LM Studio Endpoint", m_lmStudioEndpoint, sizeof(m_lmStudioEndpoint)))
         m_dirty = true;
-    ImGui::TextDisabled("Used for AI material generation (Gemini API).");
+    ImGui::TextDisabled("Default: http://127.0.0.1:1234/v1/chat/completions");
     ImGui::Unindent();
 
     ImGui::Spacing();
@@ -765,8 +764,8 @@ void SettingsApp::applySettings() {
     cfg.setGCodeDir(Path(m_gcodeDir));
     cfg.setSupportDir(Path(m_supportDir));
 
-    // API keys
-    cfg.setGeminiApiKey(m_geminiApiKey);
+    // Local AI service
+    cfg.setLMStudioEndpoint(m_lmStudioEndpoint);
 
     cfg.save();
     m_dirty = false;

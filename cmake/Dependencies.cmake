@@ -181,7 +181,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
-# libcurl - HTTP client (needed for Gemini API)
+# libcurl - HTTP client (needed for LM Studio)
 find_package(CURL QUIET)
 if(NOT CURL_FOUND)
     message(STATUS "CURL not found, fetching from GitHub...")

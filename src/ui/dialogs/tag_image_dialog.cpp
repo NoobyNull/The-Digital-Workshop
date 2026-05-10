@@ -28,6 +28,20 @@ void renderLabeledMultiline(const char* label,
     ImGui::InputTextMultiline(inputId.c_str(), buffer, bufferSize, size);
 }
 
+const char* thumbnailViewLabel(ThumbnailView view) {
+    switch (view) {
+    case ThumbnailView::Front: return "front";
+    case ThumbnailView::Back: return "back";
+    case ThumbnailView::Left: return "left";
+    case ThumbnailView::Right: return "right";
+    case ThumbnailView::Top: return "top";
+    case ThumbnailView::Bottom: return "bottom";
+    case ThumbnailView::Isometric: return "isometric";
+    case ThumbnailView::Unknown: return "unknown";
+    }
+    return "unknown";
+}
+
 } // namespace
 
 TagImageDialog::TagImageDialog() : Dialog("Tag Image") {}
@@ -44,6 +58,7 @@ void TagImageDialog::open(const ModelRecord& record, GLuint thumbnailTexture) {
     clearBuffer(m_keywords);
     clearBuffer(m_associations);
     clearBuffer(m_categories);
+    m_orientationSuggestion.clear();
 
     m_state = State::Loading;
     m_open = true;
@@ -82,6 +97,20 @@ void TagImageDialog::setResult(const DescriptorResult& result) {
     fillBuffer(m_keywords, join(result.keywords));
     fillBuffer(m_associations, join(result.associations));
     fillBuffer(m_categories, join(result.categories));
+
+    if (result.orientation.needsRotation) {
+        std::ostringstream suggestion;
+        suggestion << "AI suggests rotating " << result.orientation.rotateDegrees
+                   << " degrees clockwise";
+        if (result.orientation.uprightView != ThumbnailView::Unknown)
+            suggestion << " for " << thumbnailViewLabel(result.orientation.uprightView)
+                       << " upright view";
+        if (!result.orientation.reason.empty())
+            suggestion << ": " << result.orientation.reason;
+        m_orientationSuggestion = suggestion.str();
+    } else {
+        m_orientationSuggestion.clear();
+    }
 
     m_state = State::Ready;
 }
@@ -204,6 +233,11 @@ void TagImageDialog::render() {
                        m_categories,
                        sizeof(m_categories),
                        fieldWidth);
+
+    if (!m_orientationSuggestion.empty()) {
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", m_orientationSuggestion.c_str());
+    }
 
     if (isLoading) {
         ImGui::EndDisabled();

@@ -19,7 +19,7 @@ enum class SettingsCategory {
     ImportSettings,     // Import pipeline preferences
     ToolDatabase,       // tools.vtdb file
     RecentFiles,        // Recent projects and G-code files
-    ApiKeys,            // API keys (Gemini, etc.)
+    ApiKeys,            // API keys (LM Studio, etc.)
 
     Count
 };

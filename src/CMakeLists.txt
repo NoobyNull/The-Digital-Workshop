@@ -25,7 +25,7 @@ set(DW_SOURCES
     core/utils/log.cpp
     core/utils/file_utils.cpp
     core/utils/string_utils.cpp
-    core/utils/gemini_http.cpp
+    core/utils/lmstudio_http.cpp
     core/utils/unit_conversion.cpp
     core/utils/board_foot.cpp
 
@@ -168,8 +168,8 @@ set(DW_SOURCES
 
     # Materials
     core/materials/default_materials.cpp
-    core/materials/gemini_material_service.cpp
-    core/materials/gemini_descriptor_service.cpp
+    core/materials/lmstudio_material_service.cpp
+    core/materials/lmstudio_descriptor_service.cpp
     core/materials/material_archive.cpp
     core/materials/material_manager.cpp
 

@@ -49,6 +49,10 @@ class FileIOManager {
     // Signature: (modelId, mesh) -> bool. When set, replaces default thumbnail generation.
     using ThumbnailCallback = std::function<bool(int64_t modelId, Mesh& mesh)>;
     void setThumbnailCallback(ThumbnailCallback cb) { m_thumbnailCallback = std::move(cb); }
+    using ImportPostProcessingCallback = std::function<void()>;
+    void setImportPostProcessingCallback(ImportPostProcessingCallback cb) {
+        m_importPostProcessingCallback = std::move(cb);
+    }
 
     // Callback for G-code files — routes to G-code panel instead of import pipeline
     using GCodeCallback = std::function<void(const std::string& path)>;
@@ -95,6 +99,7 @@ class FileIOManager {
 
     // Optional material-aware thumbnail callback
     ThumbnailCallback m_thumbnailCallback;
+    ImportPostProcessingCallback m_importPostProcessingCallback;
 
     // G-code file callback (routes to G-code panel)
     GCodeCallback m_gcodeCallback;

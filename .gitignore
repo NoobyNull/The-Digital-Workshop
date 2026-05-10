@@ -21,6 +21,8 @@ out/
 *.dylib
 *.dll
 *.exe
+__pycache__/
+*.pyc
 
 # CMake generated
 CMakeCache.txt

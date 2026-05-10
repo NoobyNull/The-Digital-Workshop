@@ -240,9 +240,9 @@ class Config {
     i64 getDefaultMaterialId() const { return m_defaultMaterialId; }
     void setDefaultMaterialId(i64 id) { m_defaultMaterialId = id; }
 
-    // API keys
-    const std::string& getGeminiApiKey() const { return m_geminiApiKey; }
-    void setGeminiApiKey(const std::string& key) { m_geminiApiKey = key; }
+    // Local AI service
+    const std::string& getLMStudioEndpoint() const { return m_lmStudioEndpoint; }
+    void setLMStudioEndpoint(const std::string& endpoint) { m_lmStudioEndpoint = endpoint; }
 
     // Display units (true=mm, false=inches) — display-only, commands always use mm
     bool getDisplayUnitsMetric() const { return m_displayUnitsMetric; }
@@ -496,8 +496,8 @@ class Config {
     // Default material
     i64 m_defaultMaterialId = -1;
 
-    // API keys
-    std::string m_geminiApiKey;
+    // Local AI service
+    std::string m_lmStudioEndpoint = "http://127.0.0.1:1234/v1/chat/completions";
 
     // Display units
     bool m_displayUnitsMetric = true;

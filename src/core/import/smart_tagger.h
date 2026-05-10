@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "../materials/gemini_descriptor_service.h"
+#include "../materials/lmstudio_descriptor_service.h"
 #include "../types.h"
 
 namespace dw::smart_tagging {
@@ -10,6 +10,7 @@ namespace dw::smart_tagging {
 constexpr int kMaxPerpendicularRetries = 2;
 constexpr float kHighConfidenceThreshold = 0.95f;
 constexpr float kMinimumUsefulConfidence = 0.75f;
+constexpr float kFallbackAcceptanceConfidence = 0.8f;
 
 enum class TagDecisionAction {
     Accept,
@@ -36,6 +37,7 @@ struct TagDecision {
 [[nodiscard]] bool isPerpendicularView(ThumbnailView view);
 [[nodiscard]] bool hasTriedView(const std::vector<ThumbnailView>& triedViews, ThumbnailView view);
 [[nodiscard]] ViewCamera cameraForView(ThumbnailView view, f32 currentYawDeg);
+[[nodiscard]] Mat4 orientationCorrectionMatrix(int clockwiseDegrees);
 [[nodiscard]] TagDecision decideNextStep(const DescriptorResult& result,
                                          const std::vector<ThumbnailView>& triedViews,
                                          int perpendicularRetries);

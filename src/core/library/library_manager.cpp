@@ -9,6 +9,13 @@
 #include "../utils/file_utils.h"
 #include "../utils/log.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <optional>
+#include <sstream>
+#include <unordered_set>
+
 namespace dw {
 
 LibraryManager::LibraryManager(Database& db) : m_db(db), m_modelRepo(db), m_gcodeRepo(db) {}
@@ -430,6 +437,10 @@ bool LibraryManager::updateDescriptor(i64 modelId,
     return m_modelRepo.updateDescriptor(modelId, title, description, hover);
 }
 
+bool LibraryManager::clearAiClassification(i64 modelId) {
+    return m_modelRepo.clearAiClassification(modelId);
+}
+
 // Split a category name on " & ", " and ", " / " into individual names, trimmed.
 static std::vector<std::string> splitCompoundCategory(const std::string& name) {
     std::vector<std::string> parts;
@@ -461,6 +472,261 @@ static std::vector<std::string> splitCompoundCategory(const std::string& name) {
         }
     }
     return result;
+}
+
+static std::string lowerCategoryName(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+static std::string trimCategoryName(const std::string& value) {
+    size_t start = value.find_first_not_of(" \t");
+    size_t end = value.find_last_not_of(" \t");
+    if (start == std::string::npos || end == std::string::npos)
+        return {};
+    return value.substr(start, end - start + 1);
+}
+
+static std::string titleCategoryName(const std::string& value) {
+    std::istringstream in(value);
+    std::string word;
+    std::string out;
+    while (in >> word) {
+        if (!out.empty())
+            out += ' ';
+        word[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(word[0])));
+        for (size_t i = 1; i < word.size(); ++i)
+            word[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(word[i])));
+        out += word;
+    }
+    return out;
+}
+
+static std::optional<std::string> workflowCategoryReplacement(const std::string& name) {
+    static const std::unordered_set<std::string> kDrop = {
+        "cnc",
+        "cnc model",
+        "cnc models",
+        "3d model",
+        "3d models",
+        "3d print",
+        "3d print model",
+        "3d printing",
+        "3d printable models",
+    };
+    const auto lower = lowerCategoryName(name);
+    if (kDrop.count(lower) > 0)
+        return "";
+    if (lower == "cnc art")
+        return "Art";
+    if (lower == "cnc decorative")
+        return "Decor";
+    if (lower == "cnc parts")
+        return "Functional";
+    if (lower.find("cnc") != std::string::npos || lower.find("3d print") != std::string::npos ||
+        lower.find("3d printed") != std::string::npos ||
+        lower.find("3d printable") != std::string::npos || lower == "3d") {
+        std::string cleaned = lower;
+        for (const auto& token : {"cnc", "3d", "printed", "printable", "print", "prints",
+                                  "model", "models", "object", "objects", "file", "files",
+                                  "carving", "carvings", "carved", "design", "designs"}) {
+            size_t pos = 0;
+            while ((pos = cleaned.find(token, pos)) != std::string::npos)
+                cleaned.replace(pos, std::strlen(token), " ");
+        }
+        cleaned = trimCategoryName(cleaned);
+        if (cleaned.empty() || cleaned == "art")
+            return "";
+        if (cleaned == "decorative")
+            return "Decor";
+        return titleCategoryName(cleaned);
+    }
+    return std::nullopt;
+}
+
+static std::optional<std::vector<std::string>> nonPrimaryRootTargetPath(const std::string& name) {
+    const auto lower = lowerCategoryName(name);
+    if (lower == "decorative" || lower == "decor")
+        return std::vector<std::string>{"Decor"};
+    if (lower == "decorative elements")
+        return std::vector<std::string>{"Decor", "Decorative Elements"};
+    if (lower == "decorative hardware")
+        return std::vector<std::string>{"Decor", "Hardware"};
+    if (lower == "decorative panel" || lower == "decorative panels")
+        return std::vector<std::string>{"Decor", "Panels"};
+    if (lower == "decorative element")
+        return std::vector<std::string>{"Decor", "Decorative Elements"};
+    if (lower == "decorative object")
+        return std::vector<std::string>{"Decor", "Decorative Objects"};
+    if (lower == "wall art" || lower == "wall decor")
+        return std::vector<std::string>{"Decor", "Wall Art"};
+    if (lower == "relief")
+        return std::vector<std::string>{"Art", "Relief"};
+    if (lower == "relief panel")
+        return std::vector<std::string>{"Art", "Relief", "Panels"};
+    if (lower == "relief sculpture")
+        return std::vector<std::string>{"Art", "Relief", "Sculpture"};
+    if (lower == "sculpture")
+        return std::vector<std::string>{"Art", "Sculpture"};
+    if (lower == "statue")
+        return std::vector<std::string>{"Art", "Statue"};
+    if (lower == "ornamental")
+        return std::vector<std::string>{"Decor", "Ornamental"};
+    if (lower == "architectural")
+        return std::vector<std::string>{"Architecture"};
+    if (lower == "animal")
+        return std::vector<std::string>{"Animals"};
+    if (lower == "animal model")
+        return std::vector<std::string>{"Animals"};
+    if (lower == "abstract")
+        return std::vector<std::string>{"Art", "Abstract"};
+    if (lower == "badge" || lower == "badges")
+        return std::vector<std::string>{"Symbols", "Badges"};
+    if (lower == "character" || lower == "characters")
+        return std::vector<std::string>{"People", "Characters"};
+    if (lower == "character figurine")
+        return std::vector<std::string>{"People", "Characters", "Figurines"};
+    if (lower == "character masks")
+        return std::vector<std::string>{"People", "Characters", "Masks"};
+    if (lower == "character sculptures" || lower == "character statue")
+        return std::vector<std::string>{"People", "Characters", "Sculpture"};
+    if (lower == "coat of arms")
+        return std::vector<std::string>{"Symbols", "Coat of Arms"};
+    if (lower == "creature" || lower == "creatures" || lower == "fantasy creature")
+        return std::vector<std::string>{"Fantasy", "Creatures"};
+    if (lower == "fantasy creatures")
+        return std::vector<std::string>{"Fantasy", "Creatures"};
+    if (lower == "emblem")
+        return std::vector<std::string>{"Symbols", "Emblems"};
+    if (lower == "figures")
+        return std::vector<std::string>{"People", "Figures"};
+    if (lower == "figurine" || lower == "figurines")
+        return std::vector<std::string>{"People", "Figurines"};
+    if (lower == "hardware")
+        return std::vector<std::string>{"Functional", "Hardware"};
+    if (lower == "home decor")
+        return std::vector<std::string>{"Decor"};
+    if (lower == "humanoid figures" || lower == "human figures")
+        return std::vector<std::string>{"People", "Figures"};
+    if (lower == "leaf")
+        return std::vector<std::string>{"Nature", "Botanical", "Leaf"};
+    if (lower == "miniature")
+        return std::vector<std::string>{"Art", "Miniatures"};
+    if (lower == "miniatures")
+        return std::vector<std::string>{"Art", "Miniatures"};
+    if (lower == "mirror")
+        return std::vector<std::string>{"Decor", "Mirrors"};
+    if (lower == "monster")
+        return std::vector<std::string>{"Fantasy", "Monsters"};
+    if (lower == "mythological creatures")
+        return std::vector<std::string>{"Fantasy", "Mythological Creatures"};
+    if (lower == "parts" || lower == "utility")
+        return std::vector<std::string>{"Functional"};
+    if (lower == "furniture parts")
+        return std::vector<std::string>{"Furniture", "Parts"};
+    if (lower == "mechanical parts")
+        return std::vector<std::string>{"Mechanical", "Parts"};
+    if (lower == "model" || lower == "models" || lower == "model library")
+        return std::vector<std::string>{};
+    if (lower == "portrait")
+        return std::vector<std::string>{"People", "Portraits"};
+    if (lower == "religious art")
+        return std::vector<std::string>{"Religion", "Art"};
+    if (lower == "religious")
+        return std::vector<std::string>{"Religion"};
+    if (lower == "religious symbol" || lower == "religious symbols")
+        return std::vector<std::string>{"Religion", "Symbols"};
+    if (lower == "historical symbols")
+        return std::vector<std::string>{"Symbols", "Historical"};
+    if (lower == "law enforcement symbol")
+        return std::vector<std::string>{"Symbols", "Law Enforcement"};
+    if (lower == "logos")
+        return std::vector<std::string>{"Symbols", "Logos"};
+    if (lower == "military insignia")
+        return std::vector<std::string>{"Military", "Insignia"};
+    if (lower == "superhero")
+        return std::vector<std::string>{"Pop Culture", "Superheroes"};
+    if (lower == "vehicle")
+        return std::vector<std::string>{"Vehicles"};
+    if (lower == "video game")
+        return std::vector<std::string>{"Pop Culture", "Video Games"};
+    if (lower == "wall mounts")
+        return std::vector<std::string>{"Functional", "Wall Mounts"};
+    if (lower == "woodworking")
+        return std::vector<std::string>{"Functional", "Woodworking"};
+    if (lower == "fantasy")
+        return std::vector<std::string>{"Fantasy"};
+    if (lower == "police badges")
+        return std::vector<std::string>{"Symbols", "Badges", "Police"};
+    if (lower == "sculptures")
+        return std::vector<std::string>{"Art", "Sculpture"};
+    if (lower == "statues")
+        return std::vector<std::string>{"Art", "Statue"};
+    if (lower == "tools")
+        return std::vector<std::string>{"Functional", "Tools"};
+    if (lower == "transportation")
+        return std::vector<std::string>{"Vehicles"};
+    if (lower == "wheels")
+        return std::vector<std::string>{"Vehicles", "Wheels"};
+    if (lower == "kitchenware")
+        return std::vector<std::string>{"Kitchen"};
+    if (lower == "column")
+        return std::vector<std::string>{"Architecture", "Columns"};
+    if (lower == "head sculpture")
+        return std::vector<std::string>{"Art", "Sculpture", "Heads"};
+    if (lower == "butterfly")
+        return std::vector<std::string>{"Animals", "Insects", "Butterfly"};
+    if (lower == "sons of anarchy prop")
+        return std::vector<std::string>{"Pop Culture", "Sons of Anarchy"};
+    if (lower == "lethal company merchandise")
+        return std::vector<std::string>{"Pop Culture", "Lethal Company"};
+    if (lower == "back view")
+        return std::vector<std::string>{};
+    return std::nullopt;
+}
+
+static void appendCategoryPathPart(std::vector<std::string>& output, const std::string& value) {
+    std::string trimmed = trimCategoryName(value);
+    if (trimmed.empty())
+        return;
+    if (std::find(output.begin(), output.end(), trimmed) != output.end())
+        return;
+    output.push_back(trimmed);
+}
+
+static std::vector<std::string> canonicalizeAutoCategoryChain(
+    const std::vector<std::string>& input) {
+    constexpr size_t kMaxDepth = 4;
+    std::vector<std::string> output;
+    if (input.empty())
+        return output;
+
+    auto appendPath = [&](const std::vector<std::string>& path) {
+        for (const auto& part : path) {
+            appendCategoryPathPart(output, part);
+            if (output.size() >= kMaxDepth)
+                return;
+        }
+    };
+
+    for (size_t i = 0; i < input.size() && output.size() < kMaxDepth; ++i) {
+        auto workflowReplacement = workflowCategoryReplacement(input[i]);
+        if (workflowReplacement) {
+            if (!workflowReplacement->empty())
+                appendCategoryPathPart(output, *workflowReplacement);
+            continue;
+        }
+        auto targetPath = nonPrimaryRootTargetPath(input[i]);
+        if (targetPath) {
+            appendPath(*targetPath);
+            continue;
+        }
+        appendCategoryPathPart(output, input[i]);
+    }
+
+    return output;
 }
 
 // --- Library maintenance ---
@@ -504,7 +770,167 @@ MaintenanceReport LibraryManager::runMaintenance() {
         }
     }
 
-    // (b) Delete empty categories (leaf-first via recursive approach)
+    // (b) Remove library/file/workflow buckets from category hierarchy.
+    // These labels describe the whole library, not what a user would search for.
+    {
+        auto findOrCreateUnderParent = [&](const std::string& name,
+                                           std::optional<i64> parentId) -> std::optional<i64> {
+            auto existing = m_modelRepo.findCategoryByNameAndParent(name, parentId);
+            if (existing)
+                return existing;
+            return createCategory(name, parentId);
+        };
+
+        auto directModelIds = [&](i64 categoryId) {
+            std::vector<i64> ids;
+            auto stmt =
+                m_db.prepare("SELECT model_id FROM model_categories WHERE category_id = ?");
+            if (!stmt.isValid() || !stmt.bindInt(1, categoryId))
+                return ids;
+            while (stmt.step())
+                ids.push_back(stmt.getInt(0));
+            return ids;
+        };
+
+        auto reparentCategory = [&](i64 categoryId, std::optional<i64> parentId) {
+            auto stmt = parentId
+                            ? m_db.prepare("UPDATE categories SET parent_id = ? WHERE id = ?")
+                            : m_db.prepare("UPDATE categories SET parent_id = NULL WHERE id = ?");
+            if (!stmt.isValid())
+                return false;
+            if (parentId) {
+                if (!stmt.bindInt(1, *parentId) || !stmt.bindInt(2, categoryId))
+                    return false;
+            } else if (!stmt.bindInt(1, categoryId)) {
+                return false;
+            }
+            return stmt.execute();
+        };
+
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            auto allCats = getAllCategories();
+            for (const auto& cat : allCats) {
+                auto replacement = workflowCategoryReplacement(cat.name);
+                if (!replacement)
+                    continue;
+
+                std::optional<i64> targetParent = cat.parentId;
+                std::optional<i64> directAssignmentTarget;
+                if (!replacement->empty()) {
+                    auto replacementId = findOrCreateUnderParent(*replacement, cat.parentId);
+                    if (!replacementId)
+                        continue;
+                    targetParent = replacementId;
+                    directAssignmentTarget = replacementId;
+                }
+
+                if (directAssignmentTarget) {
+                    for (auto modelId : directModelIds(cat.id))
+                        assignCategory(modelId, *directAssignmentTarget);
+                }
+
+                for (const auto& child : m_modelRepo.getChildCategories(cat.id)) {
+                    auto existingSibling =
+                        m_modelRepo.findCategoryByNameAndParent(child.name, targetParent);
+                    if (existingSibling && *existingSibling != child.id) {
+                        for (const auto& model : m_modelRepo.findByCategory(child.id))
+                            assignCategory(model.id, *existingSibling);
+                        deleteCategory(child.id);
+                    } else {
+                        reparentCategory(child.id, targetParent);
+                    }
+                }
+
+                deleteCategory(cat.id);
+                report.categoriesRemoved++;
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    // (c) Move generic object/style roots under stable browse roots.
+    {
+        auto findOrCreateUnderParent = [&](const std::string& name,
+                                           std::optional<i64> parentId) -> std::optional<i64> {
+            auto existing = m_modelRepo.findCategoryByNameAndParent(name, parentId);
+            if (existing)
+                return existing;
+            return createCategory(name, parentId);
+        };
+
+        auto resolvePath = [&](const std::vector<std::string>& path) -> std::optional<i64> {
+            std::optional<i64> parentId = std::nullopt;
+            std::optional<i64> current;
+            for (const auto& name : path) {
+                current = findOrCreateUnderParent(name, parentId);
+                if (!current)
+                    return std::nullopt;
+                parentId = current;
+            }
+            return current;
+        };
+
+        auto directModelIds = [&](i64 categoryId) {
+            std::vector<i64> ids;
+            auto stmt =
+                m_db.prepare("SELECT model_id FROM model_categories WHERE category_id = ?");
+            if (!stmt.isValid() || !stmt.bindInt(1, categoryId))
+                return ids;
+            while (stmt.step())
+                ids.push_back(stmt.getInt(0));
+            return ids;
+        };
+
+        auto reparentCategory = [&](i64 categoryId, i64 parentId) {
+            auto stmt = m_db.prepare("UPDATE categories SET parent_id = ? WHERE id = ?");
+            if (!stmt.isValid())
+                return false;
+            if (!stmt.bindInt(1, parentId) || !stmt.bindInt(2, categoryId))
+                return false;
+            return stmt.execute();
+        };
+
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            auto allCats = getAllCategories();
+            for (const auto& cat : allCats) {
+                if (cat.parentId.has_value())
+                    continue;
+                auto targetPath = nonPrimaryRootTargetPath(cat.name);
+                if (!targetPath)
+                    continue;
+                auto targetId = resolvePath(*targetPath);
+                if (!targetId || *targetId == cat.id)
+                    continue;
+
+                for (auto modelId : directModelIds(cat.id))
+                    assignCategory(modelId, *targetId);
+
+                for (const auto& child : m_modelRepo.getChildCategories(cat.id)) {
+                    auto existingSibling =
+                        m_modelRepo.findCategoryByNameAndParent(child.name, *targetId);
+                    if (existingSibling && *existingSibling != child.id) {
+                        for (const auto& model : m_modelRepo.findByCategory(child.id))
+                            assignCategory(model.id, *existingSibling);
+                        deleteCategory(child.id);
+                    } else {
+                        reparentCategory(child.id, *targetId);
+                    }
+                }
+
+                deleteCategory(cat.id);
+                report.categoriesRemoved++;
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    // (d) Delete empty categories (leaf-first via recursive approach)
     {
         bool deleted = true;
         while (deleted) {
@@ -582,7 +1008,8 @@ MaintenanceReport LibraryManager::runMaintenance() {
 
 bool LibraryManager::resolveAndAssignCategories(i64 modelId,
                                                 const std::vector<std::string>& categoryChain) {
-    if (categoryChain.empty()) {
+    auto canonicalChain = canonicalizeAutoCategoryChain(categoryChain);
+    if (canonicalChain.empty()) {
         return true;
     }
 
@@ -594,7 +1021,7 @@ bool LibraryManager::resolveAndAssignCategories(i64 modelId,
 
     // Build list of expanded levels
     std::vector<std::vector<std::string>> levels;
-    for (const auto& catName : categoryChain) {
+    for (const auto& catName : canonicalChain) {
         levels.push_back(splitCompoundCategory(catName));
     }
 
