@@ -17,6 +17,7 @@
 #include "core/carve/gcode_export.h"
 #include "core/carve/material_blank_defaults.h"
 #include "core/carve/roughing_tool_selector.h"
+#include "core/carve/toolpath_advisor.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/tool_calculator.h"
 #include "core/config/config.h"
@@ -53,6 +54,18 @@ static constexpr auto& kBright = colors::kInfo;
 // Return tool diameter in mm regardless of stored units.
 static f64 diameterMm(const VtdbToolGeometry& g) {
     return (g.units == VtdbUnits::Imperial) ? g.diameter * 25.4 : g.diameter;
+}
+
+static f64 tipDiameterMm(const VtdbToolGeometry& g) {
+    f64 diameter = 0.0;
+    if (g.flat_diameter > 0.0) {
+        diameter = g.flat_diameter;
+    } else if (g.tip_radius > 0.0) {
+        diameter = g.tip_radius * 2.0;
+    } else {
+        diameter = g.diameter;
+    }
+    return (g.units == VtdbUnits::Imperial) ? diameter * 25.4 : diameter;
 }
 
 namespace {
@@ -316,6 +329,8 @@ void DirectCarvePanel::markToolpathSettingsChanged()
     ++m_settingsVersion;
     m_autoRoughingTool.reset();
     m_autoRoughingWarning.clear();
+    m_surfaceToolpathPending = false;
+    m_surfaceToolpathPendingVersion = -1;
     clearFinalConfirmation();
 }
 
@@ -341,6 +356,95 @@ void DirectCarvePanel::syncToolpathRapidRateFromProfile()
     }
 }
 
+void DirectCarvePanel::applyMachineToolpathDefaults(bool updateAppliedKey)
+{
+    const auto& profile = Config::instance().getActiveMachineProfile();
+    bool changed = false;
+
+    auto assignIfValid = [&changed](f32& target, f32 value) {
+        if (value <= 0.0f || std::abs(target - value) < 0.001f) {
+            return;
+        }
+        target = value;
+        changed = true;
+    };
+
+    assignIfValid(m_toolpathConfig.rapidRateMmMin, profile.rapidRate);
+    assignIfValid(m_toolpathConfig.feedRateMmMin, profile.defaultFeedRate);
+    assignIfValid(m_toolpathConfig.plungeRateMmMin, profile.defaultPlungeRate);
+    assignIfValid(m_toolpathConfig.stepdownMm, profile.defaultStepdown);
+
+    m_toolpathConfig.feedRateMmMin =
+        std::clamp(m_toolpathConfig.feedRateMmMin, 10.0f, 20000.0f);
+    m_toolpathConfig.plungeRateMmMin =
+        std::clamp(m_toolpathConfig.plungeRateMmMin, 5.0f, 5000.0f);
+    m_toolpathConfig.stepdownMm =
+        std::clamp(m_toolpathConfig.stepdownMm, 0.1f, 50.0f);
+
+    if (updateAppliedKey) {
+        std::ostringstream key;
+        key << profile.name << '|'
+            << profile.rapidRate << '|'
+            << profile.defaultFeedRate << '|'
+            << profile.defaultPlungeRate << '|'
+            << profile.defaultStepdown;
+        m_machineToolpathDefaultsKey = key.str();
+        m_machineToolpathDefaultsApplied = true;
+    }
+
+    if (changed) {
+        markToolpathSettingsChanged();
+    }
+}
+
+void DirectCarvePanel::applyMaterialToolpathRecommendation(const MaterialRecord& material)
+{
+    CalcInput ci;
+    ci.diameter = m_finishTool.diameter;
+    if (ci.diameter <= 0.0)
+        ci.diameter = 3.175; // 1/8" fallback
+    ci.num_flutes = m_finishTool.num_flutes;
+    ci.tool_type = m_finishTool.tool_type;
+    ci.units = m_finishTool.units;
+    ci.janka_hardness = static_cast<f64>(material.jankaHardness);
+    ci.material_name = material.name;
+
+    const auto& mp = Config::instance().getActiveMachineProfile();
+    ci.spindle_power_watts = static_cast<f64>(mp.spindlePower);
+    ci.max_rpm = static_cast<int>(mp.spindleMaxRPM);
+    switch (mp.driveSystem) {
+    case gcode::DriveSystem::Belt:      ci.drive_type = DriveType::Belt; break;
+    case gcode::DriveSystem::BallScrew: ci.drive_type = DriveType::BallScrew; break;
+    default:                            ci.drive_type = DriveType::LeadScrew; break;
+    }
+
+    auto result = ToolCalculator::calculate(ci);
+
+    f64 feedMm = result.feed_rate;
+    f64 plungeMm = result.plunge_rate;
+    f64 stepdownMm = result.stepdown;
+    if (ci.units == VtdbUnits::Imperial) {
+        feedMm *= 25.4;
+        plungeMm *= 25.4;
+        stepdownMm *= 25.4;
+    }
+
+    m_toolpathConfig.feedRateMmMin =
+        std::round(static_cast<f32>(feedMm) / 50.0f) * 50.0f;
+    m_toolpathConfig.plungeRateMmMin =
+        std::round(static_cast<f32>(plungeMm) / 50.0f) * 50.0f;
+    m_toolpathConfig.stepdownMm = static_cast<f32>(stepdownMm);
+
+    m_toolpathConfig.feedRateMmMin =
+        std::clamp(m_toolpathConfig.feedRateMmMin, 100.0f, 10000.0f);
+    m_toolpathConfig.plungeRateMmMin =
+        std::clamp(m_toolpathConfig.plungeRateMmMin, 50.0f, 5000.0f);
+    m_toolpathConfig.stepdownMm =
+        std::clamp(m_toolpathConfig.stepdownMm, 0.1f, 50.0f);
+
+    markToolpathSettingsChanged();
+}
+
 void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
                                       const std::vector<u32>& indices,
                                       const Vec3& boundsMin,
@@ -348,8 +452,8 @@ void DirectCarvePanel::onModelLoaded(const std::vector<Vertex>& vertices,
                                       const std::string& modelName,
                                       const Path& modelSourcePath,
                                       u32 thumbnailTexture) {
-    (void)vertices;
-    (void)indices;
+    m_modelVertices = vertices;
+    m_modelIndices = indices;
     m_modelLoaded = true;
     m_modelBoundsMin = boundsMin;
     m_modelBoundsMax = boundsMax;
@@ -615,6 +719,8 @@ std::optional<i64> DirectCarvePanel::syncOperationOpenItem() {
             {"max_travel_z_mm", profile.maxTravelZ},
             {"rapid_rate_mm_min", profile.rapidRate},
             {"default_feed_rate_mm_min", profile.defaultFeedRate},
+            {"default_plunge_rate_mm_min", profile.defaultPlungeRate},
+            {"default_stepdown_mm", profile.defaultStepdown},
             {"spindle_max_rpm", profile.spindleMaxRPM},
             {"spindle_power_w", profile.spindlePower},
         }},
@@ -1677,6 +1783,18 @@ void DirectCarvePanel::renderManualToolEntry() {
 
 void DirectCarvePanel::renderMaterialSetup() {
     syncToolpathRapidRateFromProfile();
+    {
+        const auto& profile = Config::instance().getActiveMachineProfile();
+        std::ostringstream key;
+        key << profile.name << '|'
+            << profile.rapidRate << '|'
+            << profile.defaultFeedRate << '|'
+            << profile.defaultPlungeRate << '|'
+            << profile.defaultStepdown;
+        if (!m_machineToolpathDefaultsApplied || m_machineToolpathDefaultsKey != key.str()) {
+            applyMachineToolpathDefaults();
+        }
+    }
 
     ImGui::TextUnformatted("Material & Feeds");
     ImGui::Spacing();
@@ -1719,55 +1837,7 @@ void DirectCarvePanel::renderMaterialSetup() {
                         m_selectedMaterialIdx = i;
                         m_materialName = mat.name;
                         m_materialSelected = true;
-
-                        // Auto-calculate feed rates using ToolCalculator
-                        {
-                            CalcInput ci;
-                            ci.diameter = m_finishTool.diameter;
-                            if (ci.diameter <= 0.0)
-                                ci.diameter = 3.175; // 1/8" fallback
-                            ci.num_flutes = m_finishTool.num_flutes;
-                            ci.tool_type = m_finishTool.tool_type;
-                            ci.units = m_finishTool.units;
-                            ci.janka_hardness = static_cast<f64>(mat.jankaHardness);
-                            ci.material_name = mat.name;
-
-                            // Pull machine params from active Config profile
-                            const auto& mp = Config::instance().getActiveMachineProfile();
-                            ci.spindle_power_watts = static_cast<f64>(mp.spindlePower);
-                            ci.max_rpm = static_cast<int>(mp.spindleMaxRPM);
-                            switch (mp.driveSystem) {
-                            case gcode::DriveSystem::Belt:      ci.drive_type = DriveType::Belt; break;
-                            case gcode::DriveSystem::BallScrew: ci.drive_type = DriveType::BallScrew; break;
-                            default:                            ci.drive_type = DriveType::LeadScrew; break;
-                            }
-
-                            auto result = ToolCalculator::calculate(ci);
-
-                            // Result is in native units; convert to millimeters.
-                            f64 feedMm = result.feed_rate;
-                            f64 plungeMm = result.plunge_rate;
-                            f64 stepdownMm = result.stepdown;
-                            if (ci.units == VtdbUnits::Imperial) {
-                                feedMm *= 25.4;
-                                plungeMm *= 25.4;
-                                stepdownMm *= 25.4;
-                            }
-
-                            // Round to nearest 50
-                            m_toolpathConfig.feedRateMmMin =
-                                std::round(static_cast<f32>(feedMm) / 50.0f) * 50.0f;
-                            m_toolpathConfig.plungeRateMmMin =
-                                std::round(static_cast<f32>(plungeMm) / 50.0f) * 50.0f;
-                            m_toolpathConfig.stepdownMm = static_cast<f32>(stepdownMm);
-
-                            m_toolpathConfig.feedRateMmMin =
-                                std::clamp(m_toolpathConfig.feedRateMmMin, 100.0f, 10000.0f);
-                            m_toolpathConfig.plungeRateMmMin =
-                                std::clamp(m_toolpathConfig.plungeRateMmMin, 50.0f, 5000.0f);
-                            m_toolpathConfig.stepdownMm =
-                                std::clamp(m_toolpathConfig.stepdownMm, 0.1f, 50.0f);
-                        }
+                        applyMachineToolpathDefaults();
                         markToolpathSettingsChanged();
                     }
                     if (selected) ImGui::SetItemDefaultFocus();
@@ -1802,12 +1872,31 @@ void DirectCarvePanel::renderMaterialSetup() {
                             mp.driveSystem == gcode::DriveSystem::Belt ? "Belt" :
                             mp.driveSystem == gcode::DriveSystem::BallScrew ? "Ball Screw" :
                             mp.driveSystem == gcode::DriveSystem::Acme ? "Acme" : "Lead Screw");
-        ImGui::TextDisabled("Rapid estimate: %.0f mm/min",
-                            static_cast<double>(m_toolpathConfig.rapidRateMmMin));
+        ImGui::TextDisabled("Machine defaults: feed %.0f, plunge %.0f, stepdown %.2f, rapid %.0f",
+                            static_cast<double>(mp.defaultFeedRate),
+                            static_cast<double>(mp.defaultPlungeRate),
+                            static_cast<double>(mp.defaultStepdown),
+                            static_cast<double>(mp.rapidRate));
     }
 
     ImGui::Spacing();
     ImGui::SeparatorText("Feed Rates");
+
+    if (ImGui::Button("Use Machine Defaults")) {
+        applyMachineToolpathDefaults();
+    }
+    ImGui::SameLine();
+    const bool canCalculate = m_selectedMaterialIdx >= 0;
+    if (!canCalculate) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Calculate from Tool/Material")) {
+        const auto& mat = m_materialList[static_cast<size_t>(m_selectedMaterialIdx)];
+        applyMaterialToolpathRecommendation(mat);
+    }
+    if (!canCalculate) {
+        ImGui::EndDisabled();
+    }
 
     // --- Feed rate inputs (wider, typeable) ---
     ImGui::SetNextItemWidth(iw);
@@ -1850,8 +1939,8 @@ void DirectCarvePanel::renderMaterialSetup() {
                             0.2f, 10.0f, "%.2f"))
         markToolpathSettingsChanged();
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Point spacing along each scan line.\n"
-                          "Lower = more preview and G-code points.");
+        ImGui::SetTooltip("Maximum point spacing along each scan line.\n"
+                          "Actual spacing is capped by tool tip diameter and stepover.");
 
     ImGui::Spacing();
     ImGui::SeparatorText("Cut Area");
@@ -1959,6 +2048,32 @@ void DirectCarvePanel::renderPreview() {
 
     bool toolpathStale = m_toolpathGenerated
                          && (m_generatedAtVersion != m_settingsVersion);
+    const bool surfaceModelToolpath =
+        m_toolpathConfig.cutExtents == carve::CutExtents::Model;
+    if (m_surfaceToolpathPending) {
+        if (m_carveJob->state() == carve::CarveJobState::Computing) {
+            ImGui::TextColored(kYellow, "Building model surface map... %.0f%%",
+                               static_cast<double>(m_carveJob->progress() * 100.0f));
+        } else if (m_carveJob->state() == carve::CarveJobState::Ready) {
+            m_carveJob->analyzeHeightmap(static_cast<f32>(m_finishTool.included_angle));
+            m_carveJob->generateToolpath(
+                m_toolpathConfig, m_finishTool,
+                m_autoRoughingTool ? &*m_autoRoughingTool : nullptr);
+            m_toolpathGenerated = true;
+            m_generatedAtVersion = m_surfaceToolpathPendingVersion;
+            m_surfaceToolpathPending = false;
+            m_surfaceToolpathPendingVersion = -1;
+        } else if (m_carveJob->state() == carve::CarveJobState::Error) {
+            m_toolpathGenerated = false;
+            m_generatedAtVersion = -1;
+            m_surfaceToolpathPending = false;
+            m_surfaceToolpathPendingVersion = -1;
+            ToastManager::instance().show(
+                ToastType::Error,
+                "Surface Map Failed",
+                m_carveJob->errorMessage());
+        }
+    }
     {
         ImVec4 tpColor = kDimmed;
         const char* tpLabel = "Toolpath: Not generated";
@@ -1983,20 +2098,46 @@ void DirectCarvePanel::renderPreview() {
             if (ImGui::Button(btnLabel, ImVec2(bw, 0))) {
                 m_autoRoughingTool = roughingSelection.tool;
                 m_autoRoughingWarning = roughingSelection.warning;
-                m_carveJob->generateFixedDepthToolpath(
-                    stockMin, stockMax, fit.modelMin, fit.modelMax, depthMm,
-                    m_toolpathConfig, m_finishTool,
-                    m_autoRoughingTool ? &*m_autoRoughingTool : nullptr);
-                if (m_carveJob->state() == carve::CarveJobState::Ready) {
-                    m_toolpathGenerated = true;
-                    m_generatedAtVersion = m_settingsVersion;
+
+                if (surfaceModelToolpath) {
+                    if (m_modelVertices.empty() || m_modelIndices.empty()) {
+                        ToastManager::instance().show(
+                            ToastType::Error,
+                            "Toolpath Failed",
+                            "Model geometry is not available for surface carving.");
+                        m_toolpathGenerated = false;
+                        m_generatedAtVersion = -1;
+                    } else {
+                        carve::HeightmapConfig hmCfg;
+                        hmCfg.resolutionMm = carve::effectiveScanResolutionMm(
+                            m_toolpathConfig,
+                            static_cast<f32>(tipDiameterMm(m_finishTool)),
+                            1.0f);
+                        hmCfg.defaultZ = fit.modelMin.z;
+                        m_carveJob->startHeightmap(
+                            m_modelVertices, m_modelIndices, fitter,
+                            m_fitParams, hmCfg);
+                        m_surfaceToolpathPending = true;
+                        m_surfaceToolpathPendingVersion = m_settingsVersion;
+                        m_toolpathGenerated = false;
+                        m_generatedAtVersion = -1;
+                    }
                 } else {
-                    m_toolpathGenerated = false;
-                    m_generatedAtVersion = -1;
-                    ToastManager::instance().show(
-                        ToastType::Error,
-                        "Toolpath Failed",
-                        m_carveJob->errorMessage());
+                    m_carveJob->generateFixedDepthToolpath(
+                        stockMin, stockMax, fit.modelMin, fit.modelMax, depthMm,
+                        m_toolpathConfig, m_finishTool,
+                        m_autoRoughingTool ? &*m_autoRoughingTool : nullptr);
+                    if (m_carveJob->state() == carve::CarveJobState::Ready) {
+                        m_toolpathGenerated = true;
+                        m_generatedAtVersion = m_settingsVersion;
+                    } else {
+                        m_toolpathGenerated = false;
+                        m_generatedAtVersion = -1;
+                        ToastManager::instance().show(
+                            ToastType::Error,
+                            "Toolpath Failed",
+                            m_carveJob->errorMessage());
+                    }
                 }
             }
         }
@@ -2082,6 +2223,27 @@ void DirectCarvePanel::renderPreview() {
                 static_cast<double>(tp.finishing.totalDistanceMm));
     ImGui::TextDisabled("  G-code lines: %d", tp.finishing.lineCount);
     ImGui::Text("Total estimated time: %s", formatTime(tp.totalTimeSec).c_str());
+    if (auto advice = carve::adviseToolpathRuntime(
+            m_toolpathConfig, tp.totalTimeSec, tp.totalLineCount)) {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, kYellow);
+        ImGui::TextWrapped(
+            "Long carve warning: this program is %s and %d lines. "
+            "Past about 12 hours, ultra-dense rastering usually has diminishing returns. "
+            "Try %s (%.0f%%): roughly %s and %d lines.",
+            formatTime(tp.totalTimeSec).c_str(),
+            tp.totalLineCount,
+            carve::stepoverPresetShortLabel(advice->suggestedPreset),
+            static_cast<double>(advice->suggestedPercent),
+            formatTime(advice->estimatedSeconds).c_str(),
+            advice->estimatedLines);
+        if (!advice->reachesTarget) {
+            ImGui::TextWrapped(
+                "Even the coarsest preset is still over the target; use a larger tip/tool "
+                "or reduce the carved area/depth for a practical runtime.");
+        }
+        ImGui::PopStyleColor();
+    }
 
     // Controls
     ImGui::Spacing();

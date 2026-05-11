@@ -20,6 +20,22 @@ f64 diameterMm(const VtdbToolGeometry& tool)
     return diameter;
 }
 
+f64 tipDiameterMm(const VtdbToolGeometry& tool)
+{
+    f64 diameter = 0.0;
+    if (tool.flat_diameter > 0.0) {
+        diameter = tool.flat_diameter;
+    } else if (tool.tip_radius > 0.0) {
+        diameter = tool.tip_radius * 2.0;
+    } else {
+        diameter = tool.diameter;
+    }
+    if (tool.units == VtdbUnits::Imperial) {
+        diameter *= 25.4;
+    }
+    return diameter;
+}
+
 bool sameTool(const VtdbToolGeometry& a, const VtdbToolGeometry& b)
 {
     if (!a.id.empty() && !b.id.empty()) {
@@ -59,22 +75,32 @@ void CarveJob::startHeightmap(const std::vector<Vertex>& vertices,
     m_cancelled.store(false, std::memory_order_release);
     m_error.clear();
 
-    // Transform vertices using ModelFitter
+    // Transform vertices using ModelFitter. ModelFitter works in stock space
+    // where material top is stock.thickness; G-code uses WCS space where
+    // material top is Z0 and cuts go negative. Normalize here so every
+    // downstream heightmap/toolpath/export path uses the machine work frame.
+    FitResult fitResult = fitter.fit(fitParams);
+    const f32 zOrigin = fitResult.modelMax.z;
     std::vector<Vertex> transformed;
     transformed.reserve(vertices.size());
     for (const auto& v : vertices) {
         Vertex tv = v;
         tv.position = fitter.transform(v.position, fitParams);
+        tv.position.z -= zOrigin;
         transformed.push_back(tv);
     }
 
     // Compute transformed bounds
-    FitResult fitResult = fitter.fit(fitParams);
+    fitResult.modelMin.z -= zOrigin;
+    fitResult.modelMax.z -= zOrigin;
+
+    HeightmapConfig normalizedConfig = hmConfig;
+    normalizedConfig.defaultZ -= zOrigin;
 
     // Capture copies for the async lambda
     auto capturedVerts = std::move(transformed);
     auto capturedIndices = indices;
-    auto capturedConfig = hmConfig;
+    auto capturedConfig = normalizedConfig;
     Vec3 boundsMin = fitResult.modelMin;
     Vec3 boundsMax = fitResult.modelMax;
 
@@ -178,11 +204,7 @@ void CarveJob::generateToolpath(const ToolpathConfig& config,
     m_toolpathConfig = config;
     ToolpathGenerator gen;
 
-    // Use flat_diameter when available (end mills); fall back to full diameter
-    // for V-bits and ball noses where flat_diameter is 0
-    const f32 tipDia = (finishTool.flat_diameter > 0.0)
-        ? static_cast<f32>(finishTool.flat_diameter)
-        : static_cast<f32>(finishTool.diameter);
+    const f32 tipDia = static_cast<f32>(tipDiameterMm(finishTool));
 
     m_toolpath.finishing = gen.generateFinishing(
         m_heightmap, config, tipDia, finishTool);
@@ -222,7 +244,7 @@ void CarveJob::generateFixedDepthToolpath(const Vec3& stockMin,
     m_cancelled.store(false, std::memory_order_release);
 
     ToolpathGenerator gen;
-    const f64 finishDia = diameterMm(finishTool);
+    const f64 finishDia = tipDiameterMm(finishTool);
 
     m_toolpath.clearing = Toolpath{};
     m_toolpath.requiresToolChange = false;

@@ -31,6 +31,7 @@ set(DW_TEST_SOURCES
     # Tier 1 — core logic
     test_types.cpp
     test_gcode_analyzer.cpp
+    test_gcode_viewport_sampling.cpp
     test_gcode_project_context.cpp
     test_schema.cpp
     test_camera.cpp
@@ -97,6 +98,7 @@ set(DW_TEST_SOURCES
     test_heightmap_preview.cpp
     test_roughing_tool_selector.cpp
     test_tool_recommender.cpp
+    test_toolpath_advisor.cpp
     test_toolpath_generator.cpp
     test_gcode_export.cpp
     test_carve_streamer.cpp

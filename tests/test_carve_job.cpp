@@ -73,6 +73,73 @@ TEST(CarveJob, ComputeSimpleMesh) {
     EXPECT_TRUE(job.errorMessage().empty());
 }
 
+TEST(CarveJob, HeightmapToolpathUsesWorkZeroAtMaterialTop) {
+    CarveJob job;
+
+    std::vector<Vertex> verts;
+    std::vector<u32> indices;
+    makeFlatMesh(10.0f, 5.0f, verts, indices);
+
+    ModelFitter fitter;
+    fitter.setModelBounds(Vec3{0.0f, 0.0f, 0.0f}, Vec3{10.0f, 10.0f, 5.0f});
+
+    StockDimensions stock;
+    stock.width = 40.0f;
+    stock.height = 40.0f;
+    stock.thickness = 19.0f;
+    fitter.setStock(stock);
+
+    FitParams fp;
+    fp.scale = 1.0f;
+    fp.depthMm = 7.0f;
+
+    HeightmapConfig hcfg;
+    hcfg.resolutionMm = 1.0f;
+
+    job.startHeightmap(verts, indices, fitter, fp, hcfg);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (job.state() == CarveJobState::Computing) {
+        if (std::chrono::steady_clock::now() > deadline) {
+            FAIL() << "CarveJob timed out";
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    ASSERT_EQ(job.state(), CarveJobState::Ready);
+    ASSERT_FALSE(job.heightmap().empty());
+    EXPECT_NEAR(job.heightmap().boundsMax().z, 0.0f, 0.001f);
+    EXPECT_NEAR(job.heightmap().boundsMin().z, -7.0f, 0.001f);
+    EXPECT_NEAR(job.heightmap().atMm(5.0f, 5.0f), 0.0f, 0.001f);
+
+    VtdbToolGeometry finishTool;
+    finishTool.tool_type = VtdbToolType::VBit;
+    finishTool.units = VtdbUnits::Metric;
+    finishTool.diameter = 3.175;
+    finishTool.included_angle = 90.0;
+
+    job.analyzeHeightmap(static_cast<f32>(finishTool.included_angle));
+
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Climb;
+    cfg.customStepoverPct = 100.0f;
+    cfg.scanResolutionMm = 5.0f;
+    cfg.safeZMm = 5.0f;
+
+    job.generateToolpath(cfg, finishTool, nullptr);
+
+    const auto& finishing = job.toolpath().finishing;
+    ASSERT_FALSE(finishing.points.empty());
+    for (const auto& pt : finishing.points) {
+        if (pt.rapid) {
+            EXPECT_NEAR(pt.position.z, cfg.safeZMm, 0.001f);
+        } else {
+            EXPECT_LE(pt.position.z, 0.001f);
+        }
+    }
+}
+
 TEST(CarveJob, CancelMidCompute) {
     CarveJob job;
 

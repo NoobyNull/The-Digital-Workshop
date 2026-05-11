@@ -52,6 +52,7 @@ class ToolpathGenerator {
                            const Heightmap& heightmap,
                            const ToolpathConfig& config,
                            f32 stepoverMm,
+                           f32 scanResolutionMm,
                            bool primaryAxis);  // true=X, false=Y
     void generateFixedDepthScanLines(Toolpath& path,
                                      const Vec3& boundsMin,

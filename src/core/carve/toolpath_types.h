@@ -78,6 +78,10 @@ struct MultiPassToolpath {
 
 // Convert preset to percentage
 f32 stepoverPercent(StepoverPreset preset);
+f32 stepoverMmForTool(const ToolpathConfig& config, f32 toolTipDiameterMm);
+f32 effectiveScanResolutionMm(const ToolpathConfig& config,
+                              f32 toolTipDiameterMm,
+                              f32 fallbackResolutionMm);
 
 inline bool isPlungeFeedMove(const Vec3& previous,
                              bool previousRapid,

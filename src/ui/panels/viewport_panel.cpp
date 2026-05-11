@@ -14,6 +14,7 @@
 #include "../../core/config/config.h"
 #include "../../core/config/input_binding.h"
 #include "../../core/coordinate_utils.h"
+#include "../../core/gcode/gcode_viewport_sampling.h"
 #include "../../core/mesh/mesh.h"
 #include "../../core/mesh/mesh_repair.h"
 #include "../../core/viewport/view_cube_orientation.h"
@@ -196,7 +197,8 @@ void ViewportPanel::setFitParams(const carve::FitParams& params,
 
     f32 tx = params.offsetX - modelBoundsMin.x * sx;
     f32 ty = params.offsetY - modelBoundsMin.y * sy;
-    f32 tz = (stock.thickness - depth) - modelBoundsMin.z * sz;
+    (void)stock;
+    f32 tz = -depth - modelBoundsMin.z * sz;
 
     // Build transform in G-code space (Z-up)
     Mat4 fitMat(1.0f);
@@ -1271,13 +1273,20 @@ void ViewportPanel::buildGCodeGeometry() {
     };
 
     std::vector<f32> allVerts;
+    const std::size_t segmentCount = m_gcodeProgram.path.size();
+    const std::size_t viewportStride =
+        gcode::viewportSegmentStride(segmentCount);
 
     if (m_colorByTool) {
         // Color-by-tool mode: group by tool number
         std::vector<f32> rapidVerts;
         std::map<int, std::vector<f32>> toolVerts;
 
-        for (const auto& seg : m_gcodeProgram.path) {
+        for (std::size_t i = 0; i < segmentCount; ++i) {
+            if (!gcode::shouldIncludeViewportSegment(i, segmentCount, viewportStride)) {
+                continue;
+            }
+            const auto& seg = m_gcodeProgram.path[i];
             if (seg.end.z > m_zClipMax) continue;
 
             if (seg.isRapid) {
@@ -1323,7 +1332,11 @@ void ViewportPanel::buildGCodeGeometry() {
         std::vector<f32> plungeVerts;
         std::vector<f32> retractVerts;
 
-        for (const auto& seg : m_gcodeProgram.path) {
+        for (std::size_t i = 0; i < segmentCount; ++i) {
+            if (!gcode::shouldIncludeViewportSegment(i, segmentCount, viewportStride)) {
+                continue;
+            }
+            const auto& seg = m_gcodeProgram.path[i];
             if (seg.end.z > m_zClipMax) continue;
 
             if (seg.isRapid) {

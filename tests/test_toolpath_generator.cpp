@@ -1046,6 +1046,78 @@ TEST(ToolpathGen, ScanResolutionReducesPoints)
     }
 }
 
+TEST(ToolpathGen, FinishingDetailDoesNotExceedStepoverSpacing)
+{
+    Heightmap hm = makeFlatHeightmap(-1.0f, 1.0f, 1.0f, 0.1f);
+
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Climb;
+    cfg.stepoverPreset = StepoverPreset::Fine;  // 8% of 0.25mm = 0.02mm
+    cfg.scanResolutionMm = 1.0f;                // User value must not coarsen detail
+
+    ToolpathGenerator gen;
+    Toolpath path = gen.generateFinishing(hm, cfg, 0.25f, defaultTool());
+
+    ASSERT_FALSE(path.points.empty());
+
+    const f32 maxSpacing = 0.25f * 0.08f + 0.001f;
+    bool checkedSpacing = false;
+    bool havePreviousCut = false;
+    Vec3 previousCut{0.0f};
+    for (const auto& pt : path.points) {
+        if (pt.rapid) {
+            havePreviousCut = false;
+            continue;
+        }
+        if (havePreviousCut && std::abs(pt.position.y - previousCut.y) < 0.001f) {
+            EXPECT_LE(std::abs(pt.position.x - previousCut.x), maxSpacing);
+            checkedSpacing = true;
+        }
+        previousCut = pt.position;
+        havePreviousCut = true;
+    }
+    EXPECT_TRUE(checkedSpacing);
+}
+
+TEST(ToolpathGen, FixedDepthDetailDoesNotExceedStepoverSpacing)
+{
+    ToolpathConfig cfg;
+    cfg.axis = ScanAxis::XOnly;
+    cfg.direction = MillDirection::Climb;
+    cfg.stepoverPreset = StepoverPreset::Fine;  // 8% of 0.25mm = 0.02mm
+    cfg.scanResolutionMm = 1.0f;
+    cfg.stepdownMm = 1.0f;
+
+    ToolpathGenerator gen;
+    Toolpath path = gen.generateFixedDepthRaster(
+        Vec3{0.0f, 0.0f, 0.0f},
+        Vec3{1.0f, 1.0f, 0.0f},
+        cfg,
+        0.25f,
+        1.0f);
+
+    ASSERT_FALSE(path.points.empty());
+
+    const f32 maxSpacing = 0.25f * 0.08f + 0.001f;
+    bool checkedSpacing = false;
+    bool havePreviousCut = false;
+    Vec3 previousCut{0.0f};
+    for (const auto& pt : path.points) {
+        if (pt.rapid) {
+            havePreviousCut = false;
+            continue;
+        }
+        if (havePreviousCut && std::abs(pt.position.y - previousCut.y) < 0.001f) {
+            EXPECT_LE(std::abs(pt.position.x - previousCut.x), maxSpacing);
+            checkedSpacing = true;
+        }
+        previousCut = pt.position;
+        havePreviousCut = true;
+    }
+    EXPECT_TRUE(checkedSpacing);
+}
+
 // ---------------------------------------------------------------------------
 // ScanLineCount: Tracks actual scan passes
 // ---------------------------------------------------------------------------

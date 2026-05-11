@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 
 #include <imgui.h>
 
@@ -11,6 +12,7 @@
 #include "../../core/cnc/cnc_controller.h"
 #include "../../core/cnc/preflight_check.h"
 #include "../../core/gcode/gcode_modal_scanner.h"
+#include "../../core/gcode/gcode_viewport_sampling.h"
 #include "../../core/mesh/hash.h"
 #include "../../core/paths/path_resolver.h"
 #include "../../core/project/gcode_project_context.h"
@@ -59,6 +61,80 @@ struct LongPressButton {
 };
 
 static LongPressButton s_startLongPress;
+
+constexpr std::size_t kMaxVisibleGCodeRows = 250000;
+constexpr int kLongRuntimeWarningMinutes = 12 * 60;
+constexpr int kLargeProgramWarningLines = 1000000;
+
+std::size_t visibleGCodeRowCount(std::size_t commandCount, std::size_t stride)
+{
+    if (commandCount == 0) return 0;
+    if (stride <= 1) return commandCount;
+    std::size_t rows = (commandCount + stride - 1) / stride;
+    if ((commandCount - 1) % stride != 0) {
+        ++rows;
+    }
+    return rows;
+}
+
+std::size_t commandIndexForVisibleRow(std::size_t row,
+                                      std::size_t commandCount,
+                                      std::size_t stride)
+{
+    if (commandCount == 0) return 0;
+    if (stride <= 1) return std::min(row, commandCount - 1);
+
+    const std::size_t regularRows = (commandCount + stride - 1) / stride;
+    if (row >= regularRows) {
+        return commandCount - 1;
+    }
+    return std::min(row * stride, commandCount - 1);
+}
+
+void renderGCodeListingRows(const gcode::Program& program,
+                            bool cncConnected,
+                            int lastAckedLine,
+                            int& scrollToLine)
+{
+    const std::size_t commandCount = program.commands.size();
+    const std::size_t stride =
+        gcode::viewportSegmentStride(commandCount, kMaxVisibleGCodeRows);
+    const std::size_t visibleRows = visibleGCodeRowCount(commandCount, stride);
+
+    if (stride > 1) {
+        ImGui::TextDisabled("Large file preview: showing every %zu lines (%zu of %zu). Sender uses all lines.",
+                            stride, visibleRows, commandCount);
+        ImGui::Separator();
+    }
+
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(std::min<std::size_t>(
+        visibleRows, static_cast<std::size_t>(std::numeric_limits<int>::max()))));
+    while (clipper.Step()) {
+        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+            const std::size_t cmdIndex = commandIndexForVisibleRow(
+                static_cast<std::size_t>(row), commandCount, stride);
+            const auto& cmd = program.commands[cmdIndex];
+            const bool isAcked = cncConnected && lastAckedLine >= 0 &&
+                                 cmdIndex <= static_cast<std::size_t>(lastAckedLine);
+            if (isAcked) {
+                ImGui::TextColored(colors::kSuccess, "%6zu  %s",
+                                   cmdIndex + 1, cmd.raw.c_str());
+            } else {
+                ImGui::Text("%6zu  %s", cmdIndex + 1, cmd.raw.c_str());
+            }
+        }
+    }
+
+    if (scrollToLine >= 0 && scrollToLine < static_cast<int>(commandCount)) {
+        const std::size_t targetRow = stride <= 1
+            ? static_cast<std::size_t>(scrollToLine)
+            : static_cast<std::size_t>(scrollToLine) / stride;
+        float lineH = ImGui::GetTextLineHeightWithSpacing();
+        ImGui::SetScrollY(static_cast<float>(targetRow) * lineH);
+        scrollToLine = -1;
+    }
+}
 } // namespace
 
 GCodePanel::GCodePanel() : Panel("G-code") {
@@ -150,24 +226,8 @@ void GCodePanel::render() {
 
                 ImGui::BeginChild("GCodeListing", ImVec2(0, 0), true);
                 if (hasGCode()) {
-                    ImGuiListClipper clipper;
-                    clipper.Begin(static_cast<int>(m_program.commands.size()));
-                    while (clipper.Step()) {
-                        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-                            const auto& cmd = m_program.commands[static_cast<size_t>(i)];
-                            bool isAcked = m_cncConnected && i <= m_lastAckedLine;
-                            if (isAcked) {
-                                ImGui::TextColored(colors::kSuccess, "%6d  %s", i + 1, cmd.raw.c_str());
-                            } else {
-                                ImGui::Text("%6d  %s", i + 1, cmd.raw.c_str());
-                            }
-                        }
-                    }
-                    if (m_scrollToLine >= 0 && m_scrollToLine < static_cast<int>(m_program.commands.size())) {
-                        float lineH = ImGui::GetTextLineHeightWithSpacing();
-                        ImGui::SetScrollY(static_cast<float>(m_scrollToLine) * lineH);
-                        m_scrollToLine = -1;
-                    }
+                    renderGCodeListingRows(m_program, m_cncConnected,
+                                           m_lastAckedLine, m_scrollToLine);
                 }
                 ImGui::EndChild();
             } else {
@@ -188,24 +248,8 @@ void GCodePanel::render() {
 
                 ImGui::BeginChild("GCodeListing", ImVec2(availWidth - statsWidth - spacing, 0), true);
                 if (hasGCode()) {
-                    ImGuiListClipper clipper;
-                    clipper.Begin(static_cast<int>(m_program.commands.size()));
-                    while (clipper.Step()) {
-                        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-                            const auto& cmd = m_program.commands[static_cast<size_t>(i)];
-                            bool isAcked = m_cncConnected && i <= m_lastAckedLine;
-                            if (isAcked) {
-                                ImGui::TextColored(colors::kSuccess, "%6d  %s", i + 1, cmd.raw.c_str());
-                            } else {
-                                ImGui::Text("%6d  %s", i + 1, cmd.raw.c_str());
-                            }
-                        }
-                    }
-                    if (m_scrollToLine >= 0 && m_scrollToLine < static_cast<int>(m_program.commands.size())) {
-                        float lineH = ImGui::GetTextLineHeightWithSpacing();
-                        ImGui::SetScrollY(static_cast<float>(m_scrollToLine) * lineH);
-                        m_scrollToLine = -1;
-                    }
+                    renderGCodeListingRows(m_program, m_cncConnected,
+                                           m_lastAckedLine, m_scrollToLine);
                 }
                 ImGui::EndChild();
             }
@@ -428,6 +472,17 @@ void GCodePanel::renderStatistics() {
         else
             ImGui::Text("Estimated: %dm", mins);
         ImGui::Unindent();
+    }
+
+    if (m_stats.estimatedTime >= kLongRuntimeWarningMinutes ||
+        m_stats.lineCount >= kLargeProgramWarningLines) {
+        ImGui::PushStyleColor(ImGuiCol_Text, colors::kWarning);
+        ImGui::TextWrapped(
+            "Large program warning: this file is long enough that extra density is likely "
+            "past the useful quality return. Regenerate with a coarser Direct Carve stepover "
+            "such as Fine (8%%), Basic (12%%), or Rough (25%%), or use a larger tip/tool to "
+            "reduce runtime and file size.");
+        ImGui::PopStyleColor();
     }
 
     if (ImGui::CollapsingHeader("Distance", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1135,8 +1190,7 @@ void GCodePanel::renderSearchBar() {
 void GCodePanel::findNext() {
     if (m_searchBuf[0] == '\0') return;
 
-    auto lines = getRawLines();
-    int total = static_cast<int>(lines.size());
+    int total = static_cast<int>(m_program.commands.size());
     if (total == 0) return;
 
     std::string needle(m_searchBuf);
@@ -1146,7 +1200,7 @@ void GCodePanel::findNext() {
 
     for (int i = 0; i < total; ++i) {
         int idx = (startLine + i) % total;
-        std::string upper = lines[static_cast<size_t>(idx)];
+        std::string upper = m_program.commands[static_cast<size_t>(idx)].raw;
         for (auto& c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
         if (upper.find(needle) != std::string::npos) {
             m_searchResultLine = idx;
@@ -1158,9 +1212,8 @@ void GCodePanel::findNext() {
 }
 
 void GCodePanel::gotoLineNumber(int lineNum) {
-    auto lines = getRawLines();
     int idx = lineNum - 1;
-    if (idx >= 0 && idx < static_cast<int>(lines.size())) {
+    if (idx >= 0 && idx < static_cast<int>(m_program.commands.size())) {
         m_scrollToLine = idx;
         m_searchResultLine = idx;
     }

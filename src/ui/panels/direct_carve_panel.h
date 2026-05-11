@@ -126,6 +126,8 @@ class DirectCarvePanel : public Panel {
     void renderManualToolEntry();
     void applyOperationSetup(const carve::DirectCarveOperationSetup& setup);
     void syncToolpathRapidRateFromProfile();
+    void applyMachineToolpathDefaults(bool updateAppliedKey = true);
+    void applyMaterialToolpathRecommendation(const MaterialRecord& material);
     std::optional<i64> syncZeroingOpenItem(i64 operationItemId,
                                            const std::string& operationSourceKey);
     carve::DirectCarveZeroingSetup currentZeroingSetup() const;
@@ -174,6 +176,8 @@ class DirectCarvePanel : public Panel {
 
     // Model data (set via onModelLoaded)
     bool m_modelLoaded = false;
+    std::vector<Vertex> m_modelVertices;
+    std::vector<u32> m_modelIndices;
     Vec3 m_modelBoundsMin{0.0f};
     Vec3 m_modelBoundsMax{0.0f};
 
@@ -208,6 +212,8 @@ class DirectCarvePanel : public Panel {
     bool m_materialListLoaded = false;
     int m_selectedMaterialIdx = -1;
     bool m_materialSelected = false;
+    bool m_machineToolpathDefaultsApplied = false;
+    std::string m_machineToolpathDefaultsKey;
 
     // Preview state
     bool m_toolpathGenerated = false;
@@ -218,6 +224,8 @@ class DirectCarvePanel : public Panel {
     bool m_showFinishing = true;
     std::optional<VtdbToolGeometry> m_autoRoughingTool;
     std::string m_autoRoughingWarning;
+    bool m_surfaceToolpathPending = false;
+    int m_surfaceToolpathPendingVersion = -1;
 
     // Outline test state
     bool m_outlineCompleted = false;

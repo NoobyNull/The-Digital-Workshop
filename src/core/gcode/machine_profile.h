@@ -39,6 +39,8 @@ struct MachineProfile {
     // Default rates (mm/min)
     f32 rapidRate = 5000.0f;
     f32 defaultFeedRate = 1000.0f;
+    f32 defaultPlungeRate = 500.0f;
+    f32 defaultStepdown = 1.0f;
 
     // Connection preferences
     ConnectionType connectionType = ConnectionType::Auto;

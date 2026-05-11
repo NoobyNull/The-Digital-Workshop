@@ -86,6 +86,8 @@ void MachineProfileDialog::render() {
             ImGui::InputFloat("Max Z##feed", &m_editProfile.maxFeedRateZ, 100.0f, 500.0f, "%.0f");
             ImGui::InputFloat("Rapid", &m_editProfile.rapidRate, 100.0f, 500.0f, "%.0f");
             ImGui::InputFloat("Default Feed", &m_editProfile.defaultFeedRate, 100.0f, 500.0f, "%.0f");
+            ImGui::InputFloat("Default Plunge", &m_editProfile.defaultPlungeRate, 10.0f, 50.0f, "%.0f");
+            ImGui::InputFloat("Default Stepdown", &m_editProfile.defaultStepdown, 0.1f, 0.5f, "%.2f");
             ImGui::Unindent();
         }
 

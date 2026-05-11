@@ -179,6 +179,8 @@ TEST(MotionPlanner, DifferentProfilesGiveDifferentTimes) {
 
 TEST(MachineProfile, JsonRoundTrip) {
     auto original = MachineProfile::shapeoko4();
+    original.defaultPlungeRate = 725.0f;
+    original.defaultStepdown = 2.25f;
     std::string jsonStr = original.toJsonString();
     auto restored = MachineProfile::fromJsonString(jsonStr);
 
@@ -195,6 +197,8 @@ TEST(MachineProfile, JsonRoundTrip) {
     EXPECT_FLOAT_EQ(restored.junctionDeviation, original.junctionDeviation);
     EXPECT_FLOAT_EQ(restored.rapidRate, original.rapidRate);
     EXPECT_FLOAT_EQ(restored.defaultFeedRate, original.defaultFeedRate);
+    EXPECT_FLOAT_EQ(restored.defaultPlungeRate, original.defaultPlungeRate);
+    EXPECT_FLOAT_EQ(restored.defaultStepdown, original.defaultStepdown);
 
     // builtIn is NOT serialized — it's a runtime-only flag
     EXPECT_FALSE(restored.builtIn);
@@ -212,6 +216,9 @@ TEST(MachineProfile, JsonMissingFields) {
     EXPECT_FLOAT_EQ(p.maxFeedRateX, def.maxFeedRateX);
     EXPECT_FLOAT_EQ(p.maxFeedRateY, def.maxFeedRateY);
     EXPECT_FLOAT_EQ(p.rapidRate, def.rapidRate);
+    EXPECT_FLOAT_EQ(p.defaultFeedRate, def.defaultFeedRate);
+    EXPECT_FLOAT_EQ(p.defaultPlungeRate, def.defaultPlungeRate);
+    EXPECT_FLOAT_EQ(p.defaultStepdown, def.defaultStepdown);
 }
 
 TEST(MachineProfile, JsonInvalidString) {

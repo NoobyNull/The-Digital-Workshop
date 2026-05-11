@@ -19,6 +19,30 @@ f32 stepoverPercent(StepoverPreset preset)
     return 12.0f;
 }
 
+f32 stepoverMmForTool(const ToolpathConfig& config, f32 toolTipDiameterMm)
+{
+    if (toolTipDiameterMm <= 0.0f) return 0.0f;
+
+    const f32 pct = (config.customStepoverPct > 0.0f)
+                        ? config.customStepoverPct
+                        : stepoverPercent(config.stepoverPreset);
+    return toolTipDiameterMm * pct / 100.0f;
+}
+
+f32 effectiveScanResolutionMm(const ToolpathConfig& config,
+                              f32 toolTipDiameterMm,
+                              f32 fallbackResolutionMm)
+{
+    const f32 stepoverMm = stepoverMmForTool(config, toolTipDiameterMm);
+    if (stepoverMm <= 0.0f) return 0.0f;
+
+    const f32 requested = (config.scanResolutionMm > 0.0f)
+                              ? config.scanResolutionMm
+                              : fallbackResolutionMm;
+    if (requested <= 0.0f) return stepoverMm;
+    return std::min(requested, stepoverMm);
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -31,26 +55,32 @@ Toolpath ToolpathGenerator::generateFinishing(const Heightmap& heightmap,
     Toolpath path;
     if (heightmap.empty() || toolTipDiameter <= 0.0f) return path;
 
-    f32 pct = (config.customStepoverPct > 0.0f)
-                  ? config.customStepoverPct
-                  : stepoverPercent(config.stepoverPreset);
-    f32 stepoverMm = toolTipDiameter * pct / 100.0f;
+    f32 stepoverMm = stepoverMmForTool(config, toolTipDiameter);
     if (stepoverMm <= 0.0f) return path;
+    const f32 scanResolutionMm = effectiveScanResolutionMm(
+        config, toolTipDiameter, heightmap.resolution());
+    if (scanResolutionMm <= 0.0f) return path;
 
     switch (config.axis) {
         case ScanAxis::XOnly:
-            generateScanLines(path, heightmap, config, stepoverMm, true);
+            generateScanLines(path, heightmap, config, stepoverMm,
+                              scanResolutionMm, true);
             break;
         case ScanAxis::YOnly:
-            generateScanLines(path, heightmap, config, stepoverMm, false);
+            generateScanLines(path, heightmap, config, stepoverMm,
+                              scanResolutionMm, false);
             break;
         case ScanAxis::XThenY:
-            generateScanLines(path, heightmap, config, stepoverMm, true);
-            generateScanLines(path, heightmap, config, stepoverMm, false);
+            generateScanLines(path, heightmap, config, stepoverMm,
+                              scanResolutionMm, true);
+            generateScanLines(path, heightmap, config, stepoverMm,
+                              scanResolutionMm, false);
             break;
         case ScanAxis::YThenX:
-            generateScanLines(path, heightmap, config, stepoverMm, false);
-            generateScanLines(path, heightmap, config, stepoverMm, true);
+            generateScanLines(path, heightmap, config, stepoverMm,
+                              scanResolutionMm, false);
+            generateScanLines(path, heightmap, config, stepoverMm,
+                              scanResolutionMm, true);
             break;
     }
 
@@ -110,10 +140,7 @@ Toolpath ToolpathGenerator::generateFixedDepthRaster(const Vec3& boundsMin,
     };
     if (bmax.x <= bmin.x || bmax.y <= bmin.y) return path;
 
-    const f32 pct = (config.customStepoverPct > 0.0f)
-                        ? config.customStepoverPct
-                        : stepoverPercent(config.stepoverPreset);
-    const f32 stepoverMm = toolDiameter * pct / 100.0f;
+    const f32 stepoverMm = stepoverMmForTool(config, toolDiameter);
     if (stepoverMm <= 0.0f) return path;
 
     const f32 stepdownMm = (config.stepdownMm > 0.0f)
@@ -190,10 +217,7 @@ Toolpath ToolpathGenerator::generateFixedDepthClearingAroundModel(
     };
     if (mmax.x <= mmin.x || mmax.y <= mmin.y) return path;
 
-    const f32 pct = (config.customStepoverPct > 0.0f)
-                        ? config.customStepoverPct
-                        : stepoverPercent(config.stepoverPreset);
-    const f32 stepoverMm = toolDiameter * pct / 100.0f;
+    const f32 stepoverMm = stepoverMmForTool(config, toolDiameter);
     if (stepoverMm <= 0.0f) return path;
 
     const f32 toolRadius = toolDiameter * 0.5f;
@@ -360,14 +384,12 @@ void ToolpathGenerator::generateScanLines(Toolpath& path,
                                            const Heightmap& heightmap,
                                            const ToolpathConfig& config,
                                            f32 stepoverMm,
+                                           f32 scanResolutionMm,
                                            bool primaryAxis)
 {
     const Vec3 bmin = heightmap.boundsMin();
     const Vec3 bmax = heightmap.boundsMax();
-    const f32 hmRes = heightmap.resolution();
-    const f32 res = (config.scanResolutionMm > 0.0f)
-                        ? config.scanResolutionMm
-                        : hmRes;
+    const f32 res = scanResolutionMm;
 
     // Axis mapping:
     //   primaryAxis==true  -> scan along X, step along Y
@@ -378,7 +400,7 @@ void ToolpathGenerator::generateScanLines(Toolpath& path,
     const f32 stepMax  = primaryAxis ? bmax.y : bmax.x;
 
     const f32 stepExtent = stepMax - stepMin;
-    if (stepExtent <= 0.0f || stepoverMm <= 0.0f) return;
+    if (stepExtent <= 0.0f || stepoverMm <= 0.0f || res <= 0.0f) return;
 
     const int numLines = std::max(1, static_cast<int>(stepExtent / stepoverMm) + 1);
     path.scanLineCount += numLines;
@@ -439,9 +461,11 @@ void ToolpathGenerator::generateFixedDepthScanLines(Toolpath& path,
                                                      f32 cutZ,
                                                      bool primaryAxis)
 {
-    const f32 res = (config.scanResolutionMm > 0.0f)
-                        ? config.scanResolutionMm
-                        : std::max(0.25f, stepoverMm);
+    const f32 res = std::min(
+        (config.scanResolutionMm > 0.0f)
+            ? config.scanResolutionMm
+            : std::max(0.25f, stepoverMm),
+        stepoverMm);
 
     const f32 scanMin = primaryAxis ? boundsMin.x : boundsMin.y;
     const f32 scanMax = primaryAxis ? boundsMax.x : boundsMax.y;
@@ -511,9 +535,11 @@ void ToolpathGenerator::generateFixedDepthClearingScanLines(
     f32 cutZ,
     bool primaryAxis)
 {
-    const f32 res = (config.scanResolutionMm > 0.0f)
-                        ? config.scanResolutionMm
-                        : std::max(0.25f, stepoverMm);
+    const f32 res = std::min(
+        (config.scanResolutionMm > 0.0f)
+            ? config.scanResolutionMm
+            : std::max(0.25f, stepoverMm),
+        stepoverMm);
 
     const f32 scanMin = primaryAxis ? stockMin.x : stockMin.y;
     const f32 scanMax = primaryAxis ? stockMax.x : stockMax.y;

@@ -86,6 +86,8 @@ std::string MachineProfile::toJsonString() const {
         {"junctionDeviation", junctionDeviation},
         {"rapidRate", rapidRate},
         {"defaultFeedRate", defaultFeedRate},
+        {"defaultPlungeRate", defaultPlungeRate},
+        {"defaultStepdown", defaultStepdown},
         // Connection
         {"connectionType", connectionTypeToString(connectionType)},
         {"preferredFirmware", firmwareTypeToString(preferredFirmware)},
@@ -130,6 +132,8 @@ MachineProfile MachineProfile::fromJsonString(const std::string& jsonStr) {
     if (j.contains("junctionDeviation")) p.junctionDeviation = j["junctionDeviation"].get<f32>();
     if (j.contains("rapidRate")) p.rapidRate = j["rapidRate"].get<f32>();
     if (j.contains("defaultFeedRate")) p.defaultFeedRate = j["defaultFeedRate"].get<f32>();
+    if (j.contains("defaultPlungeRate")) p.defaultPlungeRate = j["defaultPlungeRate"].get<f32>();
+    if (j.contains("defaultStepdown")) p.defaultStepdown = j["defaultStepdown"].get<f32>();
     // Connection
     if (j.contains("connectionType")) p.connectionType = connectionTypeFromString(j["connectionType"].get<std::string>());
     if (j.contains("preferredFirmware")) p.preferredFirmware = firmwareTypeFromString(j["preferredFirmware"].get<std::string>());
