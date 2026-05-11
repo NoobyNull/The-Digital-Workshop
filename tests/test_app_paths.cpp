@@ -64,3 +64,34 @@ TEST(AppPaths, EnsureDirectoriesExist) {
     EXPECT_TRUE(std::filesystem::is_directory(dw::paths::getConfigDir()));
     EXPECT_TRUE(std::filesystem::is_directory(dw::paths::getDataDir()));
 }
+
+#ifdef __linux__
+TEST(AppPaths, BundledResourceDirFallsBackToPrefixShareLayout) {
+    auto tmp = std::filesystem::temp_directory_path() / "dw_app_paths_prefix_share";
+    std::filesystem::remove_all(tmp);
+    auto exeDir = tmp / "prefix" / "bin";
+    auto shareIcons = tmp / "prefix" / "share" / "digitalworkshop" / "resources" / "icons";
+    std::filesystem::create_directories(exeDir);
+    std::filesystem::create_directories(shareIcons);
+
+    auto resolved = dw::paths::findBundledResourceDirForExe(exeDir, "icons");
+    EXPECT_EQ(resolved, shareIcons);
+
+    std::filesystem::remove_all(tmp);
+}
+
+TEST(AppPaths, BundledResourceDirPrefersExecutableRelativeLayout) {
+    auto tmp = std::filesystem::temp_directory_path() / "dw_app_paths_exe_relative";
+    std::filesystem::remove_all(tmp);
+    auto exeDir = tmp / "prefix" / "bin";
+    auto exeIcons = exeDir / "resources" / "icons";
+    auto shareIcons = tmp / "prefix" / "share" / "digitalworkshop" / "resources" / "icons";
+    std::filesystem::create_directories(exeIcons);
+    std::filesystem::create_directories(shareIcons);
+
+    auto resolved = dw::paths::findBundledResourceDirForExe(exeDir, "icons");
+    EXPECT_EQ(resolved, exeIcons);
+
+    std::filesystem::remove_all(tmp);
+}
+#endif

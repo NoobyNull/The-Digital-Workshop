@@ -2,6 +2,8 @@
 
 #include "../types.h"
 
+#include <string_view>
+
 namespace dw {
 namespace paths {
 
@@ -62,6 +64,9 @@ Path getBundledMaterialsDir();
 // Bundled icons directory (shipped icons next to the executable)
 // Returns <exe_dir>/resources/icons/
 Path getBundledIconsDir();
+
+// Resolve bundled resources for both build-tree and installed Linux layouts.
+Path findBundledResourceDirForExe(const Path& exeDir, std::string_view leafDir);
 
 // Ensure all application directories exist
 bool ensureDirectoriesExist();

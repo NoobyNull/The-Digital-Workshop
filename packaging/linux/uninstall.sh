@@ -17,6 +17,7 @@ if [ "$1" = "--system" ]; then
 fi
 
 BIN_DIR="$PREFIX/bin"
+RESOURCE_DIR="$PREFIX/share/digitalworkshop/resources"
 DESKTOP_DIR="$HOME/.local/share/applications"
 if [ "$1" = "--system" ]; then
     DESKTOP_DIR="/usr/share/applications"
@@ -32,6 +33,7 @@ echo "Uninstalling $APP_NAME from $PREFIX..."
 # Remove binaries
 rm -f "$BIN_DIR/$BIN_NAME"
 rm -f "$BIN_DIR/$SETTINGS_BIN"
+rm -rf "$RESOURCE_DIR"
 
 # Remove desktop entry
 rm -f "$DESKTOP_DIR/$DESKTOP_ID.desktop"

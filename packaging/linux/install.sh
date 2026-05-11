@@ -17,6 +17,7 @@ if [ "$1" = "--system" ]; then
 fi
 
 BIN_DIR="$PREFIX/bin"
+RESOURCE_DIR="$PREFIX/share/digitalworkshop/resources"
 DESKTOP_DIR="$HOME/.local/share/applications"
 if [ "$1" = "--system" ]; then
     DESKTOP_DIR="/usr/share/applications"
@@ -34,8 +35,17 @@ mkdir -p "$BIN_DIR"
 install -m 755 bin/$BIN_NAME "$BIN_DIR/$BIN_NAME"
 install -m 755 bin/$SETTINGS_BIN "$BIN_DIR/$SETTINGS_BIN"
 
-# Install icons
+# Install app-owned resources. Runtime also supports this prefix/share layout,
+# so no host-level symlinks or environment changes are required.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCE_SRC="$SCRIPT_DIR/resources"
+if [ -d "$RESOURCE_SRC" ]; then
+    rm -rf "$RESOURCE_DIR"
+    mkdir -p "$(dirname "$RESOURCE_DIR")"
+    cp -R "$RESOURCE_SRC" "$RESOURCE_DIR"
+fi
+
+# Install icons
 ICON_SRC="$SCRIPT_DIR/resources/icons"
 if [ ! -d "$ICON_SRC" ]; then
     ICON_SRC="$(dirname "$SCRIPT_DIR")/resources/icons"

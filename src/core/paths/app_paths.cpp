@@ -1,6 +1,7 @@
 #include "app_paths.h"
 
 #include <cstdlib>
+#include <string_view>
 
 #include "../config/config.h"
 #include "../utils/file_utils.h"
@@ -184,12 +185,29 @@ Path getMaterialsDir() {
     return getDataDir() / "materials";
 }
 
+Path findBundledResourceDirForExe(const Path& exeDir, std::string_view leafDir) {
+    Path exeRelative = exeDir / "resources" / std::string(leafDir);
+    if (file::isDirectory(exeRelative)) {
+        return exeRelative;
+    }
+
+#ifdef __linux__
+    Path prefix = exeDir.parent_path();
+    Path prefixShare = prefix / "share" / APP_NAME / "resources" / std::string(leafDir);
+    if (file::isDirectory(prefixShare)) {
+        return prefixShare;
+    }
+#endif
+
+    return exeRelative;
+}
+
 Path getBundledMaterialsDir() {
-    return getExeDir() / "resources" / "materials";
+    return findBundledResourceDirForExe(getExeDir(), "materials");
 }
 
 Path getBundledIconsDir() {
-    return getExeDir() / "resources" / "icons";
+    return findBundledResourceDirForExe(getExeDir(), "icons");
 }
 
 Path getUserRoot() {
