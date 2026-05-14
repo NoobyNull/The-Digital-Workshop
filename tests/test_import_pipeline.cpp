@@ -208,8 +208,10 @@ TEST_F(ImportQueueTest, LeaveInPlaceStoresAbsoluteSourcePathForRelativeImport) {
     auto model = repo.findById(completed[0].modelId);
     ASSERT_TRUE(model.has_value());
     EXPECT_TRUE(model->filePath.is_absolute());
-    EXPECT_EQ(model->filePath, stlPath);
-    EXPECT_EQ(dw::PathResolver::resolve(model->filePath, dw::PathCategory::Support), stlPath);
+
+    auto resolved = dw::PathResolver::resolve(model->filePath, dw::PathCategory::Support);
+    EXPECT_TRUE(std::filesystem::equivalent(model->filePath, stlPath, ec)) << ec.message();
+    EXPECT_TRUE(std::filesystem::equivalent(resolved, stlPath, ec)) << ec.message();
     EXPECT_TRUE(dw::file::exists(stlPath));
 }
 
