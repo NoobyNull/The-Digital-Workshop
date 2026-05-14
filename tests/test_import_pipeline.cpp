@@ -9,11 +9,13 @@
 #include "core/import/file_handler.h"
 #include "core/import/import_queue.h"
 #include "core/import/import_task.h"
+#include "core/paths/path_resolver.h"
 #include "core/utils/file_utils.h"
 
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <system_error>
 #include <thread>
 
 // --- ImportProgress pure function tests ---
@@ -172,6 +174,43 @@ TEST_F(ImportQueueTest, QueuedForTaggingRemainsDiscoverableByBackgroundTagger) {
     auto model = repo.findById(completed[0].modelId);
     ASSERT_TRUE(model.has_value());
     EXPECT_EQ(model->tagStatus, 0);
+}
+
+TEST_F(ImportQueueTest, LeaveInPlaceStoresAbsoluteSourcePathForRelativeImport) {
+    auto nestedDir = m_tmpDir / "Animals";
+    std::filesystem::create_directories(nestedDir);
+    auto stlPath = writeMiniSTL("Animals/animals7");
+
+    std::error_code ec;
+    auto oldCwd = std::filesystem::current_path(ec);
+    ASSERT_FALSE(ec);
+    std::filesystem::current_path(m_tmpDir, ec);
+    ASSERT_FALSE(ec);
+
+    dw::ImportQueue queue(*m_pool);
+    queue.enqueue(std::vector<dw::Path>{dw::Path("Animals/animals7.stl")},
+                  dw::FileHandlingMode::LeaveInPlace);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (queue.isActive() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    std::filesystem::current_path(oldCwd, ec);
+    ASSERT_FALSE(ec);
+    ASSERT_FALSE(queue.isActive()) << "Queue did not finish in time";
+
+    auto completed = queue.pollCompleted();
+    ASSERT_EQ(completed.size(), 1u);
+
+    dw::ScopedConnection conn(*m_pool);
+    dw::ModelRepository repo(*conn);
+    auto model = repo.findById(completed[0].modelId);
+    ASSERT_TRUE(model.has_value());
+    EXPECT_TRUE(model->filePath.is_absolute());
+    EXPECT_EQ(model->filePath, stlPath);
+    EXPECT_EQ(dw::PathResolver::resolve(model->filePath, dw::PathCategory::Support), stlPath);
+    EXPECT_TRUE(dw::file::exists(stlPath));
 }
 
 TEST_F(ImportQueueTest, DuplicateRejected) {

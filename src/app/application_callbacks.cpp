@@ -90,6 +90,13 @@ void Application::onModelSelected(int64_t modelId) {
                 m_mainThreadQueue->enqueue([this, name, error = loadResult.error, gen]() {
                     if (gen == m_loadingState.generation.load()) {
                         m_loadingState.reset();
+                        m_workspace->clearFocusedMesh();
+                        if (m_uiManager->viewportPanel())
+                            m_uiManager->viewportPanel()->setMesh(nullptr);
+                        if (m_uiManager->propertiesPanel())
+                            m_uiManager->propertiesPanel()->clearMesh();
+                        if (m_uiManager->materialsPanel())
+                            m_uiManager->materialsPanel()->setModelLoaded(false);
                     }
                     ToastManager::instance().show(
                         ToastType::Error,

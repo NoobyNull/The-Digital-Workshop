@@ -17,6 +17,19 @@
 #include "import_log.h"
 
 namespace dw {
+namespace {
+
+Path absoluteImportPath(const Path& path) {
+    if (path.empty() || path.is_absolute()) {
+        return path;
+    }
+
+    std::error_code ec;
+    Path absolute = fs::absolute(path, ec);
+    return ec ? path : absolute;
+}
+
+} // namespace
 
 ImportQueue::ImportQueue(ConnectionPool& pool,
                          LibraryManager* libraryManager,
@@ -99,7 +112,7 @@ void ImportQueue::enqueueBatch(const std::vector<Path>& paths,
     // Enqueue each file as a task
     for (const auto& path : paths) {
         ImportTask task;
-        task.sourcePath = path;
+        task.sourcePath = absoluteImportPath(path);
         task.extension = file::getExtension(path);
         task.importType = importTypeFromExtension(task.extension);
         task.fileHandlingMode = mode;
@@ -446,7 +459,7 @@ bool ImportQueue::stageInsertMesh(ImportTask& task, TaskContext& ctx, u64 fileSi
         record.filePath = PathResolver::makeStorable(
             m_storageManager->blobPath(task.fileHash, task.extension), PathCategory::Support);
     } else {
-        record.filePath = PathResolver::makeStorable(task.sourcePath, PathCategory::Models);
+        record.filePath = PathResolver::makeStorable(task.sourcePath, PathCategory::Support);
     }
     record.fileFormat = task.extension;
     record.fileSize = fileSize;

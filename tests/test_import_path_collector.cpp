@@ -4,6 +4,7 @@
 #include "core/utils/file_utils.h"
 
 #include <filesystem>
+#include <system_error>
 
 namespace {
 
@@ -66,6 +67,27 @@ TEST(ImportPathCollector, SupportsSingleFileInputs) {
 
     ASSERT_EQ(paths.size(), 1u);
     EXPECT_EQ(paths[0].filename(), "single.stl");
+}
+
+TEST(ImportPathCollector, ReturnsAbsolutePathsForRelativeInputs) {
+    TempDir tmp;
+    writeFile(tmp / "Animals" / "animals7.stl");
+
+    std::error_code ec;
+    auto oldCwd = std::filesystem::current_path(ec);
+    ASSERT_FALSE(ec);
+    std::filesystem::current_path(tmp.path(), ec);
+    ASSERT_FALSE(ec);
+
+    auto paths = dw::import_paths::collectSupportedModelFiles(dw::Path("Animals"));
+
+    std::filesystem::current_path(oldCwd, ec);
+    ASSERT_FALSE(ec);
+
+    ASSERT_EQ(paths.size(), 1u);
+    EXPECT_TRUE(paths[0].is_absolute());
+    EXPECT_EQ(paths[0].filename(), "animals7.stl");
+    EXPECT_EQ(paths[0].parent_path().filename(), "Animals");
 }
 
 TEST(ImportPathCollector, ReportsProgressWhileScanningDirectories) {

@@ -12,6 +12,16 @@ bool isSupportedModelExtension(const std::string& extension) {
     return extension == "stl" || extension == "obj" || extension == "3mf";
 }
 
+Path absoluteImportPath(const Path& path) {
+    if (path.empty() || path.is_absolute()) {
+        return path;
+    }
+
+    std::error_code ec;
+    Path absolute = fs::absolute(path, ec);
+    return ec ? path : absolute;
+}
+
 bool reportProgress(const ScanProgressCallback& callback, const ScanProgress& progress) {
     return !callback || callback(progress);
 }
@@ -61,7 +71,7 @@ bool collectFromDirectory(const Path& directory,
             return false;
         }
         if (supported) {
-            outPaths.push_back(file);
+            outPaths.push_back(absoluteImportPath(file));
         }
     }
 
@@ -96,7 +106,7 @@ std::vector<Path> collectSupportedModelFiles(const Path& root,
             return {};
         }
         if (isSupportedModelFile(root)) {
-            paths.push_back(root);
+            paths.push_back(absoluteImportPath(root));
         }
         return paths;
     }
