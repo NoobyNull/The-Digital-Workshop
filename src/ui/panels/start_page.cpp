@@ -5,6 +5,7 @@
 #include <fstream>
 
 #include <imgui.h>
+#include <nfd.h>
 #include <nlohmann/json.hpp>
 
 #include "../../core/config/config.h"
@@ -85,13 +86,46 @@ void StartPage::render() {
     ImGui::End();
 }
 
+void StartPage::setWorkspaceRoot(const Path& path) {
+    const std::string value = path.string();
+    std::strncpy(m_workspaceRoot, value.c_str(), sizeof(m_workspaceRoot) - 1);
+    m_workspaceRoot[sizeof(m_workspaceRoot) - 1] = '\0';
+
+    Config::instance().setWorkspaceRoot(path);
+    Config::instance().save();
+}
+
+void StartPage::browseWorkspaceRoot() {
+    Path startPath(m_workspaceRoot);
+    if (startPath.empty() || !std::filesystem::is_directory(startPath)) {
+        startPath = paths::getUserRoot().parent_path();
+    }
+    if (startPath.empty() || !std::filesystem::is_directory(startPath)) {
+        startPath = std::filesystem::current_path();
+    }
+
+    NFD_Init();
+    nfdchar_t* outPath = nullptr;
+    nfdresult_t result = NFD_PickFolder(&outPath, startPath.string().c_str());
+    if (result == NFD_OKAY && outPath) {
+        setWorkspaceRoot(Path(outPath));
+        NFD_FreePath(outPath);
+    } else if (result == NFD_ERROR) {
+        std::fprintf(stderr, "Native folder dialog error: %s\n", NFD_GetError());
+    }
+    NFD_Quit();
+}
+
 void StartPage::renderSetup() {
     ImGui::Text("Setup");
     ImGui::Spacing();
 
     // Workspace root
     ImGui::TextDisabled("Workspace Root");
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    const float browseWidth =
+        ImGui::CalcTextSize("Browse...").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth -
+                            ImGui::GetStyle().ItemSpacing.x);
     if (ImGui::InputText("##WorkspaceRoot", m_workspaceRoot, sizeof(m_workspaceRoot))) {
         Config::instance().setWorkspaceRoot(Path(m_workspaceRoot));
         Config::instance().save();
@@ -99,6 +133,13 @@ void StartPage::renderSetup() {
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Base directory for all project files.\nLeave empty for default: %s",
                           paths::getUserRoot().string().c_str());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Browse...")) {
+        browseWorkspaceRoot();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Choose the workspace root with the system folder picker.");
     }
 
     // Show validation

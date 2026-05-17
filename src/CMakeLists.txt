@@ -22,6 +22,7 @@ set(DW_SOURCES
     core/types.cpp
 
     # Core utilities
+    core/ai/ollama_runtime.cpp
     core/utils/log.cpp
     core/utils/file_utils.cpp
     core/utils/string_utils.cpp
@@ -68,6 +69,7 @@ set(DW_SOURCES
 
     # Mesh
     core/mesh/mesh.cpp
+    core/mesh/mesh_preview.cpp
     core/mesh/mesh_repair.cpp
     core/mesh/hash.cpp
 

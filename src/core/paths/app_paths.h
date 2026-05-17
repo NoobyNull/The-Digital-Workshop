@@ -2,10 +2,18 @@
 
 #include "../types.h"
 
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace dw {
 namespace paths {
+
+struct FactoryResetResult {
+    bool success = true;
+    std::vector<Path> removedPaths;
+    std::string error;
+};
 
 // Platform-specific application directories
 // Linux:   ~/.config/digitalworkshop/, ~/.local/share/digitalworkshop/
@@ -70,6 +78,13 @@ Path findBundledResourceDirForExe(const Path& exeDir, std::string_view leafDir);
 
 // Ensure all application directories exist
 bool ensureDirectoriesExist();
+
+// Directories removed by "Reset to Defaults".
+// This intentionally returns only app-owned state and the default workspace root.
+std::vector<Path> getFactoryResetTargets();
+
+// Delete all user-created Digital Workshop state so the next launch recreates defaults.
+FactoryResetResult resetUserStateToDefaults();
 
 // Get application name (used in paths)
 const char* getAppName();

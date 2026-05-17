@@ -14,6 +14,7 @@ set(DW_TEST_SOURCES
     test_string_utils.cpp
     test_file_utils.cpp
     test_mesh.cpp
+    test_mesh_preview.cpp
     test_mesh_repair.cpp
     test_database.cpp
     test_model_repository.cpp
@@ -69,6 +70,7 @@ set(DW_TEST_SOURCES
     test_background_tagger.cpp
     test_smart_tagger.cpp
     test_lmstudio_descriptor_parser.cpp
+    test_ollama_runtime.cpp
     # CNC Controller (multi-firmware support)
     test_serial_port.cpp
     test_tcp_socket.cpp
@@ -131,6 +133,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/utils/unit_conversion.cpp
     ${CMAKE_SOURCE_DIR}/src/core/utils/board_foot.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh_repair.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/hash.cpp
     ${CMAKE_SOURCE_DIR}/src/core/loaders/stl_loader.cpp
@@ -139,6 +142,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/loaders/gcode_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/core/loaders/loader_factory.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/smart_tagger.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/ai/ollama_runtime.cpp
     ${CMAKE_SOURCE_DIR}/src/core/materials/lmstudio_descriptor_service.cpp
     ${CMAKE_SOURCE_DIR}/src/core/utils/lmstudio_http.cpp
     ${CMAKE_SOURCE_DIR}/src/core/gcode/gcode_parser.cpp

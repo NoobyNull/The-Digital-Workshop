@@ -91,6 +91,7 @@ using ActionCallback = std::function<void()>;
 using ModelIdCallback = std::function<void(int64_t)>;
 using PathCallback = std::function<void(const Path&)>;
 using PathsCallback = std::function<void(const std::vector<std::string>&)>;
+using ResetToDefaultsCallback = std::function<std::string()>;
 
 class UIManager {
   public:
@@ -122,6 +123,7 @@ class UIManager {
     void renderMenuBar();
     void renderPanels();
     void renderAboutDialog();
+    void renderResetToDefaultsDialog();
     void renderRestartPopup(const ActionCallback& onRelaunch);
     void setupDefaultDockLayout(ImGuiID dockspaceId);
     void handleKeyboardShortcuts();
@@ -232,6 +234,9 @@ class UIManager {
     void setOnLocateMissingFiles(ActionCallback cb) { m_onLocateMissingFiles = std::move(cb); }
     void setOnExportSettings(ActionCallback cb) { m_onExportSettings = std::move(cb); }
     void setOnImportSettings(ActionCallback cb) { m_onImportSettings = std::move(cb); }
+    void setOnResetToDefaults(ResetToDefaultsCallback cb) {
+        m_onResetToDefaults = std::move(cb);
+    }
 
     // Settings import dialog
     SettingsImportDialog* settingsImportDialog() const;
@@ -371,6 +376,8 @@ class UIManager {
 
     // Restart popup state
     bool m_showRestartPopup = false;
+    bool m_showResetToDefaultsPopup = false;
+    std::string m_resetToDefaultsError;
 
     // First frame flag for dock layout
     bool m_firstFrame = true;
@@ -405,6 +412,7 @@ class UIManager {
     ActionCallback m_onLocateMissingFiles;
     ActionCallback m_onExportSettings;
     ActionCallback m_onImportSettings;
+    ResetToDefaultsCallback m_onResetToDefaults;
     std::vector<ActionCallback> m_onMachineProfileChanged;
 
     // CNC menu bar callbacks

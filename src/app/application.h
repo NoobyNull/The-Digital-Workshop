@@ -49,6 +49,7 @@ class BackgroundTagger;
 class ImportLog;
 class Mesh;
 class Texture;
+class OllamaRuntime;
 enum class ThumbnailView;
 
 namespace carve { class CarveJob; }
@@ -117,6 +118,8 @@ class Application {
     void handleTagImage(const std::vector<int64_t>& modelIds);
     void handleRelocateWorkspace();
     void handleLocateMissingFiles();
+    std::string handleResetToDefaults();
+    bool prepareAiTagging(std::string& endpoint, std::string& model);
     void onModelSelected(int64_t modelId);
     void assignMaterialToCurrentModel(int64_t materialId);
     void loadMaterialTextureForModel(int64_t modelId);
@@ -129,6 +132,7 @@ class Application {
     void* m_glContext = nullptr;
     bool m_running = false;
     bool m_initialized = false;
+    bool m_skipWorkspaceSaveOnShutdown = false;
 
     // Core systems
     std::unique_ptr<MainThreadQueue> m_mainThreadQueue;
@@ -178,6 +182,9 @@ class Application {
 
     // LM Studio AI model descriptor (thumbnail classification)
     std::unique_ptr<LMStudioDescriptorService> m_descriptorService;
+
+    // App-owned Ollama runner for private local AI tagging
+    std::unique_ptr<OllamaRuntime> m_ollamaRuntime;
 
     // Project export/import (.dwproj archives)
     std::unique_ptr<ProjectExportManager> m_projectExportManager;

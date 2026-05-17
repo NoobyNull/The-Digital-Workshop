@@ -64,6 +64,7 @@ class LMStudioDescriptorService {
   public:
     DescriptorResult describe(const std::string& thumbnailPath,
                               const std::string& endpoint,
+                              const std::string& model,
                               ThumbnailView currentView = ThumbnailView::Unknown);
 
     // Parse LM Studio JSON response into DescriptorResult. Public for deterministic parser tests.
@@ -71,6 +72,9 @@ class LMStudioDescriptorService {
     std::string extractClassificationJson(const std::string& responseJson);
     std::string classificationSystemPrompt() const;
     std::string classificationJsonSchema() const;
+    std::string buildClassificationRequestForTest(const std::vector<uint8_t>& imageData,
+                                                  const std::string& model,
+                                                  ThumbnailView currentView) const;
 
   private:
     // Convert model TGA thumbnail to PNG in-memory
@@ -79,6 +83,7 @@ class LMStudioDescriptorService {
     // Send PNG image to LM Studio for classification, return raw JSON text
     std::string fetchClassification(const std::vector<uint8_t>& imageData,
                                     const std::string& endpoint,
+                                    const std::string& model,
                                     ThumbnailView currentView);
 
 };

@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <system_error>
 #include <thread>
 
@@ -77,6 +78,46 @@ TEST(ImportTask, DefaultState) {
     EXPECT_FALSE(task.isDuplicate);
     EXPECT_EQ(task.modelId, 0);
     EXPECT_EQ(task.mesh, nullptr);
+}
+
+TEST(ImportThreadPolicy, CapsHugeFileBatchToSingleWorker) {
+    auto tmpDir = std::filesystem::temp_directory_path() / "dw_test_import_thread_policy_huge";
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(tmpDir);
+
+    auto hugePath = tmpDir / "huge.stl";
+    std::ofstream hugeFile(hugePath, std::ios::binary);
+    hugeFile.seekp((512ULL * 1024ULL * 1024ULL) - 1);
+    hugeFile.put('\0');
+    hugeFile.close();
+
+    EXPECT_EQ(dw::calculateImportThreadCountForBatch({hugePath}, dw::ParallelismTier::Expert),
+              1u);
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST(ImportThreadPolicy, CapsLargeBatchesBelowGenericCpuParallelism) {
+    auto tmpDir = std::filesystem::temp_directory_path() / "dw_test_import_thread_policy_large";
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(tmpDir);
+
+    std::vector<dw::Path> paths;
+    for (int i = 0; i < 4; ++i) {
+        auto path = tmpDir / ("large_" + std::to_string(i) + ".stl");
+        std::ofstream file(path, std::ios::binary);
+        file.seekp((128ULL * 1024ULL * 1024ULL) - 1);
+        file.put('\0');
+        file.close();
+        paths.push_back(path);
+    }
+
+    auto importWorkers =
+        dw::calculateImportThreadCountForBatch(paths, dw::ParallelismTier::Expert);
+    EXPECT_GE(importWorkers, 1u);
+    EXPECT_LE(importWorkers, 2u);
+
+    std::filesystem::remove_all(tmpDir);
 }
 
 // --- ImportQueue integration test ---
@@ -151,6 +192,24 @@ TEST_F(ImportQueueTest, EnqueueAndProcess) {
     ASSERT_TRUE(model.has_value());
     EXPECT_EQ(model->name, "test_model");
     EXPECT_EQ(model->fileFormat, "stl");
+}
+
+TEST_F(ImportQueueTest, CompletedTaskDoesNotRetainRawFileBuffer) {
+    auto stlPath = writeMiniSTL("no_raw_buffer_retention");
+    dw::ImportQueue queue(*m_pool);
+
+    queue.enqueue(stlPath);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (queue.isActive() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_FALSE(queue.isActive()) << "Queue did not finish in time";
+
+    auto completed = queue.pollCompleted();
+    ASSERT_EQ(completed.size(), 1u);
+    EXPECT_TRUE(completed[0].fileData.empty());
+    EXPECT_NE(completed[0].mesh, nullptr);
 }
 
 TEST_F(ImportQueueTest, QueuedForTaggingRemainsDiscoverableByBackgroundTagger) {

@@ -5,7 +5,36 @@
 #include "core/paths/app_paths.h"
 
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
+#include <optional>
+
+namespace {
+
+class ScopedEnvVar {
+  public:
+    ScopedEnvVar(const char* name, const std::string& value) : m_name(name) {
+        const char* existing = std::getenv(name);
+        if (existing != nullptr) {
+            m_oldValue = existing;
+        }
+        setenv(name, value.c_str(), 1);
+    }
+
+    ~ScopedEnvVar() {
+        if (!m_oldValue) {
+            unsetenv(m_name.c_str());
+        } else {
+            setenv(m_name.c_str(), m_oldValue->c_str(), 1);
+        }
+    }
+
+  private:
+    std::string m_name;
+    std::optional<std::string> m_oldValue;
+};
+
+} // namespace
 
 TEST(AppPaths, GetConfigDir_NonEmpty) {
     auto dir = dw::paths::getConfigDir();
@@ -63,6 +92,40 @@ TEST(AppPaths, EnsureDirectoriesExist) {
     // Verify key dirs actually exist
     EXPECT_TRUE(std::filesystem::is_directory(dw::paths::getConfigDir()));
     EXPECT_TRUE(std::filesystem::is_directory(dw::paths::getDataDir()));
+}
+
+TEST(AppPaths, FactoryResetRemovesOnlyDigitalWorkshopOwnedUserState) {
+    auto tmp = std::filesystem::temp_directory_path() / "dw_factory_reset_targets";
+    std::filesystem::remove_all(tmp);
+    std::filesystem::create_directories(tmp);
+
+    ScopedEnvVar home("HOME", (tmp / "home").string());
+    ScopedEnvVar xdgConfig("XDG_CONFIG_HOME", (tmp / "xdg_config").string());
+    ScopedEnvVar xdgData("XDG_DATA_HOME", (tmp / "xdg_data").string());
+    ScopedEnvVar xdgCache("XDG_CACHE_HOME", (tmp / "xdg_cache").string());
+
+    const auto configDir = dw::paths::getConfigDir();
+    const auto dataDir = dw::paths::getDataDir();
+    const auto cacheDir = dw::paths::getCacheDir();
+    const auto userRoot = dw::paths::getUserRoot();
+    const auto sibling = tmp / "home" / "DoNotTouch";
+
+    std::filesystem::create_directories(configDir);
+    std::filesystem::create_directories(dataDir);
+    std::filesystem::create_directories(cacheDir);
+    std::filesystem::create_directories(userRoot);
+    std::filesystem::create_directories(sibling);
+
+    const auto result = dw::paths::resetUserStateToDefaults();
+
+    EXPECT_TRUE(result.success) << result.error;
+    EXPECT_FALSE(std::filesystem::exists(configDir));
+    EXPECT_FALSE(std::filesystem::exists(dataDir));
+    EXPECT_FALSE(std::filesystem::exists(cacheDir));
+    EXPECT_FALSE(std::filesystem::exists(userRoot));
+    EXPECT_TRUE(std::filesystem::exists(sibling));
+
+    std::filesystem::remove_all(tmp);
 }
 
 #ifdef __linux__

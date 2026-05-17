@@ -34,6 +34,8 @@ class StartPage : public Panel {
     void renderRecentProjects();
     void renderQuickActions();
     void renderSetup();
+    void browseWorkspaceRoot();
+    void setWorkspaceRoot(const Path& path);
 
     VoidCallback m_onNewProject;
     VoidCallback m_onOpenProject;

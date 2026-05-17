@@ -42,6 +42,7 @@ class BackgroundTagger {
     using ThumbnailViewCallback = std::function<bool(int64_t modelId, ThumbnailView view)>;
 
     void start(const std::string& endpoint,
+               const std::string& model,
                BackgroundTaggerMode mode = BackgroundTaggerMode::ImportSinglePass);
     void stop();
     void join();
@@ -72,6 +73,7 @@ class BackgroundTagger {
     std::thread m_thread;
     std::atomic<bool> m_stopRequested{false};
     std::string m_endpoint;
+    std::string m_model;
     BackgroundTaggerMode m_mode = BackgroundTaggerMode::ImportSinglePass;
     TaggerProgress m_progress;
 };

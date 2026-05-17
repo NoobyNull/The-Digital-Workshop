@@ -183,7 +183,6 @@ void TagImageDialog::render() {
                      thumbUV1);
     } else {
         ImGui::Dummy(ImVec2(thumbSize, thumbSize));
-        ImGui::SetCursorPos(ImGui::GetCursorPos()); // no-op, placeholder
     }
     ImGui::EndGroup();
 

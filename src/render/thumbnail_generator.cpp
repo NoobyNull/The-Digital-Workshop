@@ -8,6 +8,7 @@
 
 #include "../core/utils/file_utils.h"
 #include "../core/utils/log.h"
+#include "../core/mesh/mesh_preview.h"
 #include "camera.h"
 #include "framebuffer.h"
 #include "renderer.h"
@@ -15,6 +16,8 @@
 namespace dw {
 
 namespace {
+
+constexpr u32 kMaxThumbnailTriangles = 4000000;
 
 // Simple TGA writer for thumbnails (no external dependencies)
 bool writeTGA(const Path& path, const ByteBuffer& pixels, int width, int height) {
@@ -102,6 +105,21 @@ ByteBuffer ThumbnailGenerator::generateToBuffer(const Mesh& mesh,
         return {};
     }
 
+    const Mesh* renderMesh = &mesh;
+    Mesh previewMesh;
+    if (mesh.triangleCount() > kMaxThumbnailTriangles) {
+        log::infof("Thumbnail",
+                   "Sampling oversized mesh for preview: %u -> %u triangles",
+                   mesh.triangleCount(),
+                   kMaxThumbnailTriangles);
+        previewMesh = mesh_preview::sampleTrianglesForPreview(mesh, kMaxThumbnailTriangles);
+        if (!previewMesh.isValid()) {
+            log::error("Thumbnail", "Failed to build sampled preview mesh");
+            return {};
+        }
+        renderMesh = &previewMesh;
+    }
+
     // Create framebuffer
     Framebuffer fb;
     if (!fb.create(settings.width, settings.height)) {
@@ -127,7 +145,7 @@ ByteBuffer ThumbnailGenerator::generateToBuffer(const Mesh& mesh,
     camera.setYaw(settings.cameraYaw);
 
     // Fit projected bounds so long or flat models occupy roughly 80% of the thumbnail.
-    const auto& bounds = mesh.bounds();
+    const auto& bounds = renderMesh->bounds();
     camera.fitToBoundsProjected(bounds.min, bounds.max, settings.viewportFill);
 
     // Render to framebuffer
@@ -135,7 +153,7 @@ ByteBuffer ThumbnailGenerator::generateToBuffer(const Mesh& mesh,
 
     renderer.setCamera(camera);
     renderer.beginFrame(settings.backgroundColor);
-    renderer.renderMesh(mesh, settings.materialTexture);
+    renderer.renderMesh(*renderMesh, settings.materialTexture);
     renderer.endFrame();
 
     // Read pixels

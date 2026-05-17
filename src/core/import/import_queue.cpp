@@ -16,8 +16,17 @@
 #include "file_validator.h"
 #include "import_log.h"
 
+#include <algorithm>
+
 namespace dw {
 namespace {
+
+constexpr u64 MiB = 1024ULL * 1024ULL;
+constexpr size_t kSmallBatchWorkerCap = 8;
+constexpr size_t kMediumBatchWorkerCap = 4;
+constexpr size_t kLargeBatchWorkerCap = 2;
+constexpr size_t kHugeBatchWorkerCap = 1;
+constexpr size_t kMaxCompletedTasksWaiting = 2;
 
 Path absoluteImportPath(const Path& path) {
     if (path.empty() || path.is_absolute()) {
@@ -31,6 +40,45 @@ Path absoluteImportPath(const Path& path) {
 
 } // namespace
 
+size_t calculateImportThreadCountForBatch(const std::vector<Path>& paths,
+                                          ParallelismTier tier) {
+    size_t baseCount = calculateThreadCount(tier);
+    if (paths.empty()) {
+        return baseCount;
+    }
+
+    u64 totalBytes = 0;
+    u64 maxBytes = 0;
+    size_t measuredFiles = 0;
+
+    for (const auto& path : paths) {
+        auto size = file::getFileSize(path);
+        if (!size) {
+            continue;
+        }
+        totalBytes += *size;
+        maxBytes = std::max(maxBytes, *size);
+        ++measuredFiles;
+    }
+
+    if (measuredFiles == 0) {
+        return std::min(baseCount, kSmallBatchWorkerCap);
+    }
+
+    const u64 avgBytes = totalBytes / measuredFiles;
+    size_t cap = kSmallBatchWorkerCap;
+
+    if (maxBytes >= 512 * MiB || avgBytes >= 128 * MiB) {
+        cap = kHugeBatchWorkerCap;
+    } else if (maxBytes >= 128 * MiB || avgBytes >= 64 * MiB || totalBytes >= 4 * 1024 * MiB) {
+        cap = kLargeBatchWorkerCap;
+    } else if (avgBytes >= 16 * MiB || totalBytes >= 1024 * MiB) {
+        cap = kMediumBatchWorkerCap;
+    }
+
+    return std::max<size_t>(1, std::min(baseCount, cap));
+}
+
 ImportQueue::ImportQueue(ConnectionPool& pool,
                          LibraryManager* libraryManager,
                          StorageManager* storageManager)
@@ -38,6 +86,7 @@ ImportQueue::ImportQueue(ConnectionPool& pool,
 
 ImportQueue::~ImportQueue() {
     m_shutdown.store(true);
+    m_completedCv.notify_all();
     if (m_threadPool) {
         m_threadPool->shutdown();
     }
@@ -84,9 +133,10 @@ void ImportQueue::enqueueBatch(const std::vector<Path>& paths,
         m_batchSummary.totalFiles += static_cast<int>(paths.size());
     }
 
-    // Get thread count from config
+    // Get memory-aware import thread count from config and batch sizes.
     auto tier = Config::instance().getParallelismTier();
-    size_t threadCount = calculateThreadCount(tier);
+    size_t threadCount = calculateImportThreadCountForBatch(paths, tier);
+    size_t cpuThreadCount = calculateThreadCount(tier);
 
     // Lazy-create or recreate ThreadPool with current thread count
     if (!m_threadPool || m_threadPool->isIdle()) {
@@ -100,6 +150,12 @@ void ImportQueue::enqueueBatch(const std::vector<Path>& paths,
         m_remainingTasks.fetch_add(static_cast<int>(paths.size()));
     } else {
         log::infof("Import", "%s: %zu files, %zu workers", logLabel, paths.size(), threadCount);
+        if (threadCount < cpuThreadCount) {
+            log::infof("Import",
+                       "Memory guard capped import workers from %zu to %zu for this batch",
+                       cpuThreadCount,
+                       threadCount);
+        }
 
         m_progress.reset();
         m_progress.totalFiles.store(static_cast<int>(paths.size()));
@@ -146,6 +202,7 @@ std::vector<ImportTask> ImportQueue::pollCompleted() {
     std::lock_guard<std::mutex> lock(m_mutex);
     std::vector<ImportTask> result = std::move(m_completed);
     m_completed.clear();
+    m_completedCv.notify_all();
     return result;
 }
 
@@ -574,9 +631,15 @@ void ImportQueue::stageFinalize(ImportTask& task) {
     task.stage = ImportStage::WaitingForThumbnail;
 
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_completedCv.wait(lock, [this] {
+            return m_shutdown.load() || m_completed.size() < kMaxCompletedTasksWaiting;
+        });
+        if (m_shutdown.load())
+            return;
         m_completed.push_back(std::move(task));
     }
+    m_completedCv.notify_all();
 
     m_progress.completedFiles.fetch_add(1);
 
@@ -666,8 +729,15 @@ void ImportQueue::enqueueForReimport(const std::vector<DuplicateRecord>& duplica
         m_batchSummary.totalFiles += static_cast<int>(duplicates.size());
     }
 
+    std::vector<Path> duplicatePaths;
+    duplicatePaths.reserve(duplicates.size());
+    for (const auto& dup : duplicates) {
+        duplicatePaths.push_back(dup.sourcePath);
+    }
+
     auto tier = Config::instance().getParallelismTier();
-    size_t threadCount = calculateThreadCount(tier);
+    size_t threadCount = calculateImportThreadCountForBatch(duplicatePaths, tier);
+    size_t cpuThreadCount = calculateThreadCount(tier);
 
     if (!m_threadPool || m_threadPool->isIdle()) {
         m_threadPool = std::make_unique<ThreadPool>(threadCount);
@@ -682,6 +752,12 @@ void ImportQueue::enqueueForReimport(const std::vector<DuplicateRecord>& duplica
         m_progress.active.store(true);
         m_cancelRequested.store(false);
         m_remainingTasks.store(static_cast<int>(duplicates.size()));
+        if (threadCount < cpuThreadCount) {
+            log::infof("Import",
+                       "Memory guard capped import workers from %zu to %zu for this re-import",
+                       cpuThreadCount,
+                       threadCount);
+        }
     }
 
     for (const auto& dup : duplicates) {

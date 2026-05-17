@@ -18,6 +18,7 @@
 #include <SDL.h>
 
 #include "app/workspace.h"
+#include "core/ai/ollama_runtime.h"
 #include "core/config/config.h"
 #include "core/database/connection_pool.h"
 #include "core/database/cost_repository.h"
@@ -326,6 +327,7 @@ bool Application::init(bool diagnosticMode) {
         m_rateCatRepo = std::make_unique<RateCategoryRepository>(*m_database);
         m_lmStudioService = std::make_unique<LMStudioMaterialService>();
         m_descriptorService = std::make_unique<LMStudioDescriptorService>();
+        m_ollamaRuntime = std::make_unique<OllamaRuntime>();
         m_workspace = std::make_unique<Workspace>();
 
         m_thumbnailGenerator = std::make_unique<ThumbnailGenerator>();
@@ -662,13 +664,15 @@ void Application::shutdown() {
         m_loadThread.join();
 
     // Save current camera state before shutdown
-    if (m_focusedModelId > 0 && m_uiManager && m_uiManager->viewportPanel() && m_database) {
+    if (!m_skipWorkspaceSaveOnShutdown && m_focusedModelId > 0 && m_uiManager &&
+        m_uiManager->viewportPanel() && m_database) {
         auto camState = m_uiManager->viewportPanel()->getCameraState();
         ModelRepository repo(*m_database);
         repo.updateCameraState(m_focusedModelId, camState);
     }
 
-    m_configManager->saveWorkspaceState();
+    if (!m_skipWorkspaceSaveOnShutdown)
+        m_configManager->saveWorkspaceState();
 
     // Shutdown managers in reverse creation order
     m_configManager.reset();
@@ -689,6 +693,7 @@ void Application::shutdown() {
     m_toolDatabase.reset();
     m_cncController.reset();
     m_descriptorService.reset();
+    m_ollamaRuntime.reset();
     m_lmStudioService.reset();
     m_costRepo.reset();
     m_rateCatRepo.reset();

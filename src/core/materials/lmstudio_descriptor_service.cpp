@@ -19,7 +19,7 @@
 namespace dw {
 
 namespace {
-const char* kLMStudioModel = "local-model";
+const char* kDefaultLocalModel = "local-model";
 
 struct PngWriteContext {
     std::vector<uint8_t> data;
@@ -168,9 +168,10 @@ std::vector<uint8_t> LMStudioDescriptorService::tgaToPng(const std::string& tgaP
     return writeCtx.data;
 }
 
-std::string LMStudioDescriptorService::fetchClassification(const std::vector<uint8_t>& imageData,
-                                                           const std::string& endpoint,
-                                                           ThumbnailView currentView) {
+std::string LMStudioDescriptorService::buildClassificationRequestForTest(
+    const std::vector<uint8_t>& imageData,
+    const std::string& model,
+    ThumbnailView currentView) const {
     std::string base64Image = lmstudio::base64Encode(imageData);
 
     std::string viewText = std::string("Classify this 3D model thumbnail. Current view: ") +
@@ -179,7 +180,7 @@ std::string LMStudioDescriptorService::fetchClassification(const std::vector<uin
                            "Return only JSON matching the provided schema.";
 
     nlohmann::json requestBody;
-    requestBody["model"] = kLMStudioModel;
+    requestBody["model"] = model.empty() ? kDefaultLocalModel : model;
     requestBody["temperature"] = 0.2;
     requestBody["response_format"] = {
         {"type", "json_schema"},
@@ -195,8 +196,17 @@ std::string LMStudioDescriptorService::fetchClassification(const std::vector<uin
                 {{"type", "image_url"},
                  {"image_url",
                   {{"url", "data:image/png;base64," + base64Image}}}}})}}});
+    return requestBody.dump();
+}
 
-    std::string response = lmstudio::curlPost(endpoint, requestBody.dump());
+std::string LMStudioDescriptorService::fetchClassification(const std::vector<uint8_t>& imageData,
+                                                           const std::string& endpoint,
+                                                           const std::string& model,
+                                                           ThumbnailView currentView) {
+    std::string requestBody =
+        buildClassificationRequestForTest(imageData, model, currentView);
+
+    std::string response = lmstudio::curlPost(endpoint, requestBody);
     if (response.empty()) {
         return {};
     }
@@ -414,6 +424,7 @@ DescriptorResult LMStudioDescriptorService::parseClassification(const std::strin
 
 DescriptorResult LMStudioDescriptorService::describe(const std::string& modelFilePath,
                                                      const std::string& endpoint,
+                                                     const std::string& model,
                                                      ThumbnailView currentView) {
     DescriptorResult result;
 
@@ -427,7 +438,7 @@ DescriptorResult LMStudioDescriptorService::describe(const std::string& modelFil
     }
 
     // Fetch classification from LM Studio
-    std::string classificationJson = fetchClassification(pngData, endpoint, currentView);
+    std::string classificationJson = fetchClassification(pngData, endpoint, model, currentView);
     if (classificationJson.empty()) {
         result.error = "Failed to fetch classification from LM Studio";
         return result;

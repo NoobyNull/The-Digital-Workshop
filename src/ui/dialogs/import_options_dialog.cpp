@@ -138,14 +138,15 @@ void ImportOptionsDialog::render() {
 
         // AI tagging checkbox
         ImGui::Spacing();
-        bool hasEndpoint = !Config::instance().getLMStudioEndpoint().empty();
-        if (!hasEndpoint)
+        bool hasLocalAi = Config::instance().getAiProvider() == "ollama" ||
+                          !Config::instance().getLMStudioEndpoint().empty();
+        if (!hasLocalAi)
             ImGui::BeginDisabled();
         ImGui::Checkbox("Tag with AI after import", &m_queueForTagging);
-        if (!hasEndpoint) {
+        if (!hasLocalAi) {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextDisabled("(set LM Studio endpoint in Settings)");
+            ImGui::TextDisabled("(configure local AI in Settings)");
         }
 
         ImGui::Spacing();

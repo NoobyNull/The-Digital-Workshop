@@ -9,6 +9,7 @@
 #include <imgui.h>
 
 #include "core/config/config.h"
+#include "core/paths/app_paths.h"
 #include "ui/dialogs/lighting_dialog.h"
 #include "ui/icons.h"
 #include "ui/panels/cnc_jog_panel.h"
@@ -34,6 +35,7 @@ void UIManager::renderMenuBar() {
         ImGui::EndMainMenuBar();
     }
     renderSavePresetPopup();
+    renderResetToDefaultsDialog();
 }
 
 void UIManager::renderToolbar() {
@@ -166,6 +168,10 @@ void UIManager::renderFileMenu() {
         m_onExportSettings();
     if (ImGui::MenuItem("Import Settings...") && m_onImportSettings)
         m_onImportSettings();
+    if (ImGui::MenuItem("Reset to Defaults...")) {
+        m_resetToDefaultsError.clear();
+        m_showResetToDefaultsPopup = true;
+    }
     ImGui::Separator();
     if (ImGui::MenuItem("Exit", "Alt+F4") && m_onQuit)
         m_onQuit();
@@ -327,6 +333,56 @@ void UIManager::renderHelpMenu() {
     if (ImGui::MenuItem("About Digital Workshop"))
         ImGui::OpenPopup("About Digital Workshop");
     ImGui::EndMenu();
+}
+
+void UIManager::renderResetToDefaultsDialog() {
+    if (m_showResetToDefaultsPopup)
+        ImGui::OpenPopup("Reset to Defaults");
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal(
+            "Reset to Defaults", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextWrapped(
+            "This will remove all Digital Workshop settings, databases, cache files, "
+            "and the default workspace folders. The app will close after reset.");
+        ImGui::Spacing();
+        ImGui::Text("Directories to delete:");
+        ImGui::Indent();
+        for (const auto& target : paths::getFactoryResetTargets()) {
+            ImGui::BulletText("%s", target.string().c_str());
+        }
+        ImGui::Unindent();
+
+        if (!m_resetToDefaultsError.empty()) {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f),
+                               "%s",
+                               m_resetToDefaultsError.c_str());
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Reset and Close")) {
+            if (m_onResetToDefaults) {
+                m_resetToDefaultsError = m_onResetToDefaults();
+                if (m_resetToDefaultsError.empty()) {
+                    m_showResetToDefaultsPopup = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            m_resetToDefaultsError.clear();
+            m_showResetToDefaultsPopup = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void UIManager::renderAboutDialog() {

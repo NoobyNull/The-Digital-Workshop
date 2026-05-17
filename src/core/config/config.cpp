@@ -317,6 +317,14 @@ void Config::loadMaterials(const std::string& key, const std::string& value) {
 void Config::loadApi(const std::string& key, const std::string& value) {
     if (key == "lmstudio_endpoint") {
         m_lmStudioEndpoint = value;
+    } else if (key == "ai_provider") {
+        m_aiProvider = value;
+    } else if (key == "ai_model") {
+        m_aiModel = value;
+    } else if (key == "ollama_endpoint") {
+        m_ollamaEndpoint = value;
+    } else if (key == "ollama_private_port") {
+        str::parseInt(value, m_ollamaPrivatePort);
     }
 }
 
@@ -728,6 +736,10 @@ void Config::saveMaterials(std::ostringstream& ss) const {
 
 void Config::saveApi(std::ostringstream& ss) const {
     ss << "[api]\n";
+    ss << "ai_provider=" << m_aiProvider << "\n";
+    ss << "ai_model=" << m_aiModel << "\n";
+    ss << "ollama_endpoint=" << m_ollamaEndpoint << "\n";
+    ss << "ollama_private_port=" << m_ollamaPrivatePort << "\n";
     if (!m_lmStudioEndpoint.empty()) {
         ss << "lmstudio_endpoint=" << m_lmStudioEndpoint << "\n";
     }

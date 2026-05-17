@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -18,6 +19,10 @@ namespace dw {
 class ImportLog;
 class LibraryManager;
 class StorageManager;
+
+// Import parsing expands source files into meshes, so import batches need a
+// tighter memory-aware worker cap than generic CPU jobs.
+size_t calculateImportThreadCountForBatch(const std::vector<Path>& paths, ParallelismTier tier);
 
 class ImportQueue {
   public:
@@ -101,6 +106,7 @@ class ImportQueue {
     // Thread management
     std::unique_ptr<ThreadPool> m_threadPool; // Lazily created
     std::mutex m_mutex;
+    std::condition_variable m_completedCv;
     std::atomic<bool> m_shutdown{false};
     std::atomic<bool> m_cancelRequested{false};
 

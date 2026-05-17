@@ -243,6 +243,14 @@ class Config {
     // Local AI service
     const std::string& getLMStudioEndpoint() const { return m_lmStudioEndpoint; }
     void setLMStudioEndpoint(const std::string& endpoint) { m_lmStudioEndpoint = endpoint; }
+    const std::string& getAiProvider() const { return m_aiProvider; }
+    void setAiProvider(const std::string& provider) { m_aiProvider = provider; }
+    const std::string& getAiModel() const { return m_aiModel; }
+    void setAiModel(const std::string& model) { m_aiModel = model; }
+    const std::string& getOllamaEndpoint() const { return m_ollamaEndpoint; }
+    void setOllamaEndpoint(const std::string& endpoint) { m_ollamaEndpoint = endpoint; }
+    int getOllamaPrivatePort() const { return m_ollamaPrivatePort; }
+    void setOllamaPrivatePort(int port) { m_ollamaPrivatePort = port; }
 
     // Display units (true=mm, false=inches) — display-only, commands always use mm
     bool getDisplayUnitsMetric() const { return m_displayUnitsMetric; }
@@ -498,6 +506,10 @@ class Config {
 
     // Local AI service
     std::string m_lmStudioEndpoint = "http://127.0.0.1:1234/v1/chat/completions";
+    std::string m_aiProvider = "ollama";
+    std::string m_aiModel = "llava:latest";
+    std::string m_ollamaEndpoint = "http://127.0.0.1:42319/v1/chat/completions";
+    int m_ollamaPrivatePort = 42319;
 
     // Display units
     bool m_displayUnitsMetric = true;

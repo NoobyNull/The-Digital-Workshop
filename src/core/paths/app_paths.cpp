@@ -1,6 +1,7 @@
 #include "app_paths.h"
 
 #include <cstdlib>
+#include <system_error>
 #include <string_view>
 
 #include "../config/config.h"
@@ -261,6 +262,42 @@ bool ensureDirectoriesExist() {
     ensureDir(cfg.getSupportDir() / "blobs" / ".tmp", "support blobs tmp");
 
     return success;
+}
+
+std::vector<Path> getFactoryResetTargets() {
+    return {
+        getConfigDir(),
+        getDataDir(),
+        getCacheDir(),
+        getUserRoot(),
+    };
+}
+
+FactoryResetResult resetUserStateToDefaults() {
+    FactoryResetResult result;
+
+    for (const auto& path : getFactoryResetTargets()) {
+        std::error_code ec;
+        if (!fs::exists(path, ec)) {
+            if (ec) {
+                result.success = false;
+                result.error = "Failed to inspect " + path.string() + ": " + ec.message();
+                return result;
+            }
+            continue;
+        }
+
+        fs::remove_all(path, ec);
+        if (ec) {
+            result.success = false;
+            result.error = "Failed to remove " + path.string() + ": " + ec.message();
+            return result;
+        }
+        result.removedPaths.push_back(path);
+        log::infof("Paths", "Factory reset removed %s", path.string().c_str());
+    }
+
+    return result;
 }
 
 } // namespace paths

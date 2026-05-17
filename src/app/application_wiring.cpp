@@ -9,6 +9,7 @@
 #include <ctime>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "app/workspace.h"
+#include "core/ai/ollama_runtime.h"
 #include "core/config/config.h"
 #include "core/config/settings_archive.h"
 #include "core/database/connection_pool.h"
@@ -166,10 +168,15 @@ void markManualUnclassifiable(DescriptorResult& result) {
     result.orientation = OrientationSuggestion{};
 }
 
+bool providerIsOllama(const std::string& provider) {
+    return provider.empty() || provider == "ollama" || provider == "Ollama";
+}
+
 DescriptorResult runSmartTagLoop(int64_t modelId,
                                  const std::string& modelName,
                                  const std::string& thumbnailPath,
                                  const std::string& endpoint,
+                                 const std::string& aiModel,
                                  LMStudioDescriptorService* svc,
                                  std::function<bool(int)> applyOrientationCorrection,
                                  std::function<bool(ThumbnailView)> regenerateThumbnail,
@@ -181,7 +188,7 @@ DescriptorResult runSmartTagLoop(int64_t modelId,
 
     for (int attempt = 0; attempt < smart_tagging::kMaxPerpendicularRetries + 2; ++attempt) {
         triedViews.push_back(currentView);
-        result = svc->describe(thumbnailPath, endpoint, currentView);
+        result = svc->describe(thumbnailPath, endpoint, aiModel, currentView);
         appendManualTaggerResultLog(modelId, modelName, resultEventName, result);
 
         if (result.success && result.orientation.needsRotation &&
@@ -283,6 +290,53 @@ std::string formatRelocateMsg(const WorkspaceRelocator::Result& result) {
 
 } // anonymous namespace
 
+bool Application::prepareAiTagging(std::string& endpoint, std::string& model) {
+    auto& config = Config::instance();
+    model = config.getAiModel().empty() ? "llava:latest" : config.getAiModel();
+
+    if (providerIsOllama(config.getAiProvider())) {
+        if (!m_ollamaRuntime) {
+            m_ollamaRuntime = std::make_unique<OllamaRuntime>();
+        }
+
+        OllamaRuntimeConfig runtimeConfig;
+        runtimeConfig.model = model;
+        runtimeConfig.port = static_cast<uint16_t>(config.getOllamaPrivatePort());
+        runtimeConfig.manageProcess = true;
+        runtimeConfig.autoPullMissingModel = true;
+        m_ollamaRuntime->setConfig(runtimeConfig);
+
+        auto status = m_ollamaRuntime->ensureReady();
+        if (!status.ready) {
+            log::warningf("AI", "%s. Action: %s",
+                          status.reason.c_str(),
+                          status.actionCommand.c_str());
+            ToastManager::instance().show(
+                ToastType::Warning,
+                "Local AI Not Ready",
+                status.reason + "\nRun: " + status.actionCommand);
+            return false;
+        }
+        if (status.modelDownloaded) {
+            ToastManager::instance().show(
+                ToastType::Success,
+                "Local AI Ready",
+                "Downloaded " + model + " for automatic tagging");
+        }
+
+        endpoint = status.endpoint;
+        return true;
+    }
+
+    endpoint = config.getLMStudioEndpoint();
+    if (endpoint.empty()) {
+        ToastManager::instance().show(
+            ToastType::Warning, "AI Tagging", "Local AI endpoint not configured");
+        return false;
+    }
+    return true;
+}
+
 void Application::initWiring() {
     wireImportPipeline();
     wireStartPage();
@@ -331,9 +385,10 @@ void Application::wireImportPipeline() {
         m_startAiTaggingAfterImportPostProcessing = false;
         if (!m_backgroundTagger || m_backgroundTagger->isActive())
             return;
-        auto endpoint = Config::instance().getLMStudioEndpoint();
-        if (!endpoint.empty())
-            m_backgroundTagger->start(endpoint, BackgroundTaggerMode::SmartRetag);
+        std::string endpoint;
+        std::string model;
+        if (prepareAiTagging(endpoint, model))
+            m_backgroundTagger->start(endpoint, model, BackgroundTaggerMode::SmartRetag);
     });
     m_fileIOManager->setImportOptionsDialog(m_uiManager->importOptionsDialog());
     if (m_uiManager->importOptionsDialog()) {
@@ -590,6 +645,7 @@ void Application::wireMenuActions() {
         [this, hideStart]() { m_fileIOManager->importProjectArchive(hideStart); });
     m_uiManager->setOnQuit([this]() { quit(); });
     m_uiManager->setOnSpawnSettings([this]() { m_configManager->spawnSettingsApp(); });
+    m_uiManager->setOnResetToDefaults([this]() { return handleResetToDefaults(); });
 
     wireToolsMenu();
 
@@ -597,6 +653,16 @@ void Application::wireMenuActions() {
     if (m_uiManager->taggerShutdownDialog()) {
         m_uiManager->taggerShutdownDialog()->setOnQuit([this]() { m_running = false; });
     }
+}
+
+std::string Application::handleResetToDefaults() {
+    auto result = paths::resetUserStateToDefaults();
+    if (!result.success)
+        return result.error.empty() ? "Failed to reset Digital Workshop user data." : result.error;
+
+    m_skipWorkspaceSaveOnShutdown = true;
+    m_running = false;
+    return {};
 }
 
 void Application::regenerateThumbnails(const std::vector<int64_t>& modelIds) {
@@ -674,14 +740,23 @@ void Application::regenerateBatchThumbnails(const std::vector<int64_t>& modelIds
             auto mesh = result.mesh;
             auto modelId = item.id;
             auto modelName = item.name;
-            m_mainThreadQueue->enqueue([this, mesh, modelId, modelName]() {
+            auto generated = std::make_shared<std::promise<bool>>();
+            auto generatedFuture = generated->get_future();
+            m_mainThreadQueue->enqueue([this, mesh, modelId, modelName, generated]() {
                 bool ok = generateMaterialThumbnail(modelId, *mesh);
                 if (m_uiManager->libraryPanel())
                     m_uiManager->libraryPanel()->invalidateThumbnail(modelId);
                 if (!ok)
                     ToastManager::instance().show(
                         ToastType::Error, "Thumbnail Failed", modelName + ": generation failed");
+                generated->set_value(ok);
             });
+            while (!progressDlg->isCancelled() &&
+                   generatedFuture.wait_for(std::chrono::milliseconds(100)) !=
+                       std::future_status::ready) {
+            }
+            if (generatedFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+                (void)generatedFuture.get();
             progressDlg->advance(item.name);
         }
         m_mainThreadQueue->enqueue([this, progressDlg]() {
@@ -700,11 +775,12 @@ void Application::wireTagDialog() {
 
     tagDlg->setOnRequest([this, tagDlg](int64_t modelId) {
         if (!m_descriptorService || !m_mainThreadQueue) return;
-        std::string endpoint = Config::instance().getLMStudioEndpoint();
-        if (endpoint.empty()) {
-            log::warning("App", "LM Studio endpoint not configured");
+        std::string endpoint;
+        std::string aiModel;
+        if (!prepareAiTagging(endpoint, aiModel)) {
+            log::warning("App", "Local AI endpoint not configured");
             DescriptorResult err;
-            err.error = "LM Studio endpoint not configured";
+            err.error = "Local AI is not ready";
             tagDlg->setResult(err);
             return;
         }
@@ -723,12 +799,13 @@ void Application::wireTagDialog() {
         appendManualTaggerLog("manual_request model_id=" + std::to_string(modelId) +
                               " name=\"" + modelName + "\" view=unknown thumbnail=\"" +
                               thumbPath + "\"");
-        std::thread([this, svc, mtq, tagDlg, modelId, modelName, thumbPath, endpoint]() {
+        std::thread([this, svc, mtq, tagDlg, modelId, modelName, thumbPath, endpoint, aiModel]() {
             auto result = runSmartTagLoop(
                 modelId,
                 modelName,
                 thumbPath,
                 endpoint,
+                aiModel,
                 svc,
                 [this, modelId](int rotateDegrees) {
                     return applyAiOrientationCorrection(modelId, rotateDegrees);
@@ -769,9 +846,10 @@ void Application::handleTagImage(const std::vector<int64_t>& modelIds) {
         tagDlg->open(*record, tex);
         return;
     }
-    std::string endpoint = Config::instance().getLMStudioEndpoint();
-    if (endpoint.empty()) {
-        log::warning("App", "LM Studio endpoint not configured");
+    std::string endpoint;
+    std::string aiModel;
+    if (!prepareAiTagging(endpoint, aiModel)) {
+        log::warning("App", "Local AI endpoint not configured");
         return;
     }
     auto* svc = m_descriptorService.get();
@@ -788,12 +866,13 @@ void Application::handleTagImage(const std::vector<int64_t>& modelIds) {
         appendManualTaggerLog("batch_request model_id=" + std::to_string(modelId) +
                               " name=\"" + modelName + "\" view=unknown thumbnail=\"" +
                               thumbPath + "\"");
-        std::thread([this, svc, libMgr, mtq, libPanel, modelId, modelName, thumbPath, endpoint]() {
+        std::thread([this, svc, libMgr, mtq, libPanel, modelId, modelName, thumbPath, endpoint, aiModel]() {
             auto result = runSmartTagLoop(
                 modelId,
                 modelName,
                 thumbPath,
                 endpoint,
+                aiModel,
                 svc,
                 [this, modelId](int rotateDegrees) {
                     return applyAiOrientationCorrection(modelId, rotateDegrees);
@@ -837,13 +916,12 @@ void Application::wireToolsMenu() {
                 ToastType::Info, "AI Tagging", "Background tagging is already running");
             return;
         }
-        std::string endpoint = Config::instance().getLMStudioEndpoint();
-        if (endpoint.empty()) {
-            ToastManager::instance().show(
-                ToastType::Warning, "AI Tagging", "LM Studio endpoint not configured");
+        std::string endpoint;
+        std::string model;
+        if (!prepareAiTagging(endpoint, model)) {
             return;
         }
-        m_backgroundTagger->start(endpoint, BackgroundTaggerMode::SmartRetag);
+        m_backgroundTagger->start(endpoint, model, BackgroundTaggerMode::SmartRetag);
         ToastManager::instance().show(
             ToastType::Info, "AI Tagging", "Background tagging started");
     });

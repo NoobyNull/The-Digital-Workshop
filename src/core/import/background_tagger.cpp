@@ -134,7 +134,9 @@ BackgroundTagger::~BackgroundTagger() {
     join();
 }
 
-void BackgroundTagger::start(const std::string& endpoint, BackgroundTaggerMode mode) {
+void BackgroundTagger::start(const std::string& endpoint,
+                             const std::string& model,
+                             BackgroundTaggerMode mode) {
     if (m_progress.active.load())
         return;
 
@@ -142,6 +144,7 @@ void BackgroundTagger::start(const std::string& endpoint, BackgroundTaggerMode m
     join();
 
     m_endpoint = endpoint;
+    m_model = model;
     m_mode = mode;
     m_stopRequested.store(false);
     m_progress.totalUntagged.store(0);
@@ -263,7 +266,7 @@ DescriptorResult BackgroundTagger::runImportTagAttempt(const ModelRecord& model)
     setStatusMessage(std::string("classifying ") +
                      smart_tagging::thumbnailViewName(currentView));
     DescriptorResult result =
-        m_descriptorSvc->describe(model.thumbnailPath.string(), m_endpoint, currentView);
+        m_descriptorSvc->describe(model.thumbnailPath.string(), m_endpoint, m_model, currentView);
     if (!result.success) {
         return result;
     }
@@ -305,7 +308,8 @@ DescriptorResult BackgroundTagger::runSmartTagAttempt(ModelRepository& repo,
         triedViews.push_back(currentView);
         setStatusMessage(std::string("classifying ") +
                          smart_tagging::thumbnailViewName(currentView));
-        result = m_descriptorSvc->describe(latest->thumbnailPath.string(), m_endpoint, currentView);
+        result =
+            m_descriptorSvc->describe(latest->thumbnailPath.string(), m_endpoint, m_model, currentView);
 
         if (result.success && result.orientation.needsRotation &&
             result.orientation.rotateDegrees != 0 && !orientationCorrectionTried &&

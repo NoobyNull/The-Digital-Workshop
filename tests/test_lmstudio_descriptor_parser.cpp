@@ -30,6 +30,15 @@ TEST(LMStudioDescriptorParser, ParsesSmartTaggingFields) {
     EXPECT_EQ(result.viewReason, "rear view hides the face");
 }
 
+TEST(LMStudioDescriptorParser, BuildsRequestWithConfiguredModelName) {
+    dw::LMStudioDescriptorService service;
+    auto body = service.buildClassificationRequestForTest(
+        std::vector<uint8_t>{1, 2, 3}, "llava:latest", dw::ThumbnailView::Front);
+    auto json = nlohmann::json::parse(body);
+
+    EXPECT_EQ(json["model"].get<std::string>(), "llava:latest");
+}
+
 TEST(LMStudioDescriptorParser, ParsesUnclassifiableWithoutTitle) {
     dw::LMStudioDescriptorService service;
     auto result = service.parseClassification(R"({
