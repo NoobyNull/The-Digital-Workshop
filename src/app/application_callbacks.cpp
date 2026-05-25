@@ -349,7 +349,8 @@ bool Application::applyAiOrientationCorrection(int64_t modelId, int clockwiseDeg
     f32 orientYaw = record->orientYaw.value_or(0.0f);
     Mat4 baseMatrix(1.0f);
     if (record->orientMatrix) {
-        baseMatrix = *record->orientMatrix;
+        loadResult.mesh->applyStoredOrient(*record->orientMatrix);
+        baseMatrix = loadResult.mesh->getOrientMatrix();
     } else {
         orientYaw = loadResult.mesh->autoOrient();
         baseMatrix = loadResult.mesh->getOrientMatrix();
