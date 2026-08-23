@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 
 #include "ui/panels/panel.h"
@@ -14,6 +15,15 @@ class CamPlaceholderPanel : public Panel {
     CamPlaceholderPanel() : Panel("CAM") {}
     void render() override;
     [[nodiscard]] const std::string& statusCopy() const noexcept;
+
+    void setEngineStatusProvider(std::function<std::string()> provider);
+    [[nodiscard]] std::string engineStatusLine() const;
+
+    void setOnStartEngine(std::function<void()> onStartEngine);
+
+  private:
+    std::function<std::string()> m_engineStatusProvider;
+    std::function<void()> m_onStartEngine;
 };
 
 } // namespace dw

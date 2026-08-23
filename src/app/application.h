@@ -14,6 +14,7 @@
 #include <thread>
 #include <vector>
 
+#include "../core/cam/cam_engine_runtime.h"
 #include "../core/threading/loading_state.h"
 #include "../core/types.h"
 
@@ -300,6 +301,11 @@ class Application {
 
     // CNC gamepad input (SDL_GameController for jog/actions)
     std::unique_ptr<GamepadInput> m_gamepadInput;
+
+    // CAM engine child process (PureCutCNC bridge); lazily started from the
+    // CAM placeholder panel's "Start engine" button (Phase 2).
+    std::unique_ptr<cam::CamEngineRuntime> m_camEngineRuntime;
+    std::optional<cam::CamEngineStatus> m_camEngineStatus;
 
     std::unique_ptr<DirectCarveRunEffectAdapter> m_directCarveRunEffectAdapter;
     std::unique_ptr<ProjectPlanRunTruthAdapter> m_projectPlanRunTruthAdapter;

@@ -498,6 +498,7 @@ void Application::shutdown() {
     m_toolboxRepo.reset();
     m_toolDatabase.reset();
     m_cncController.reset();
+    m_camEngineRuntime.reset();
     m_descriptorService.reset();
     m_ollamaRuntime.reset();
     m_lmStudioService.reset();

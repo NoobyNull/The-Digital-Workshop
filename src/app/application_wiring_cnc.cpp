@@ -3,9 +3,12 @@
 #include "app/application.h"
 #include "app/direct_carve_run_effect_adapter.h"
 
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include <utility>
 
+#include "core/cam/cam_engine_runtime.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/macro_manager.h"
 #include "core/cnc/machine_units.h"
@@ -22,6 +25,7 @@
 #include "managers/ui_manager.h"
 #include "modules/project_session/project_session.h"
 #include "ui/dialogs/supplier_tool_import_dialog.h"
+#include "ui/panels/cam_placeholder_panel.h"
 #include "ui/panels/cnc_console_panel.h"
 #include "ui/panels/cnc_jog_panel.h"
 #include "ui/panels/cnc_job_panel.h"
@@ -318,6 +322,40 @@ void Application::wireCncPanels() {
     if (auto* ctp = m_uiManager->cncToolPanel()) {
         ctp->setToolDatabase(m_toolDatabase.get());
         ctp->setMaterialManager(m_materialManager.get());
+    }
+
+    // Wire CAM placeholder panel's engine status surface (v0.8.0 rebuild).
+    if (auto* camp = m_uiManager->camPlaceholderPanel()) {
+        camp->setEngineStatusProvider([this]() -> std::string {
+            if (!m_camEngineStatus)
+                return "Engine not started";
+            return m_camEngineStatus->ready
+                       ? "Engine ready at " + m_camEngineStatus->endpoint
+                       : m_camEngineStatus->reason;
+        });
+        camp->setOnStartEngine([this]() {
+            if (!m_camEngineRuntime) {
+                // Same exeDir resolution as GraphManager's extension lookup
+                // (Application::init): read /proc/self/exe on Linux, else cwd.
+                std::error_code ec;
+                Path exeDir;
+#ifdef __linux__
+                Path exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
+                if (!ec)
+                    exeDir = exePath.parent_path();
+#endif
+                if (exeDir.empty())
+                    exeDir = std::filesystem::current_path();
+
+                cam::CamEngineConfig cfg;
+                cfg.payloadDir = cam::locatePayloadDir(exeDir);
+                m_camEngineRuntime = std::make_unique<cam::CamEngineRuntime>(cfg);
+            }
+            // Synchronous on the UI thread: the accepted Phase 2 manual
+            // verification path (bounded by the runtime's ~10s reachability
+            // wait). Phase 3 replaces this with an async/managed start.
+            m_camEngineStatus = m_camEngineRuntime->ensureReady();
+        });
     }
 }
 
