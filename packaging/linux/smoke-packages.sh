@@ -176,6 +176,4 @@ done
     echo "FRESH_SCHEMA=PASS"
     echo "DESKTOP_ENTRY=PASS"
     echo "BUNDLED_MATERIALS=PASS"
-    echo "TGZ_RIVER_SIGN_STUDY_PREFLIGHT=PASS"
-    echo "RUN_RIVER_SIGN_STUDY_PREFLIGHT=PASS"
 } | tee "$evidence_dir/summary.txt"
