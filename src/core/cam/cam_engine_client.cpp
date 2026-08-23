@@ -4,6 +4,31 @@
 
 #include "../utils/lmstudio_http.h"
 
+namespace {
+
+std::string stringOr(const nlohmann::json& j, const char* key, std::string fallback = {}) {
+    const auto it = j.find(key);
+    if (it != j.end() && it->is_string())
+        return it->get<std::string>();
+    return fallback;
+}
+
+bool boolOr(const nlohmann::json& j, const char* key, bool fallback = false) {
+    const auto it = j.find(key);
+    if (it != j.end() && it->is_boolean())
+        return it->get<bool>();
+    return fallback;
+}
+
+int intOr(const nlohmann::json& j, const char* key, int fallback = 0) {
+    const auto it = j.find(key);
+    if (it != j.end() && it->is_number_integer())
+        return it->get<int>();
+    return fallback;
+}
+
+} // namespace
+
 namespace dw::cam {
 
 std::optional<EngineHealth> parseHealth(const std::string& json) {
@@ -11,9 +36,9 @@ std::optional<EngineHealth> parseHealth(const std::string& json) {
     if (parsed.is_discarded() || !parsed.is_object()) return std::nullopt;
 
     EngineHealth health;
-    health.ok = parsed.value("ok", false);
-    health.service = parsed.value("service", std::string());
-    health.version = parsed.value("version", 0);
+    health.ok = boolOr(parsed, "ok", false);
+    health.service = stringOr(parsed, "service");
+    health.version = intOr(parsed, "version", 0);
     return health;
 }
 
@@ -25,10 +50,10 @@ std::vector<EngineMachine> parseMachines(const std::string& json) {
     for (const auto& entry : parsed) {
         if (!entry.is_object()) continue;
         EngineMachine machine;
-        machine.id = entry.value("id", std::string());
-        machine.name = entry.value("name", std::string());
-        machine.description = entry.value("description", std::string());
-        machine.fileExtension = entry.value("fileExtension", std::string());
+        machine.id = stringOr(entry, "id");
+        machine.name = stringOr(entry, "name");
+        machine.description = stringOr(entry, "description");
+        machine.fileExtension = stringOr(entry, "fileExtension");
         machines.push_back(std::move(machine));
     }
     return machines;
@@ -41,9 +66,9 @@ EngineJobResult parseJobResult(const std::string& json) {
     }
 
     EngineJobResult result;
-    result.ok = parsed.value("ok", false);
-    result.gcode = parsed.value("gcode", std::string());
-    result.error = parsed.value("error", std::string());
+    result.ok = boolOr(parsed, "ok", false);
+    result.gcode = stringOr(parsed, "gcode");
+    result.error = stringOr(parsed, "error");
     return result;
 }
 

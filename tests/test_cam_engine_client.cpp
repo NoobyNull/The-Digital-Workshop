@@ -40,4 +40,20 @@ TEST(CamEngineClient, ParsesJobSuccessAndFailure) {
     EXPECT_FALSE(garbage.error.empty());
 }
 
+TEST(CamEngineClient, ToleratesTypeMismatchedFieldsWithoutThrowing) {
+    const auto h = parseHealth(R"({"ok":1,"service":123,"version":"x"})");
+    ASSERT_TRUE(h.has_value());
+    EXPECT_FALSE(h->ok);
+    EXPECT_TRUE(h->service.empty());
+    EXPECT_EQ(h->version, 0);
+
+    const auto machines = parseMachines(R"([{"id":5,"name":null},[],42])");
+    ASSERT_EQ(machines.size(), 1u);
+    EXPECT_TRUE(machines[0].id.empty());
+
+    const auto job = parseJobResult(R"({"ok":1,"gcode":{},"error":[]})");
+    EXPECT_FALSE(job.ok);
+    EXPECT_TRUE(job.gcode.empty());
+}
+
 } // namespace dw::cam
