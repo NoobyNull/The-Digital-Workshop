@@ -100,16 +100,24 @@ bool CamEngineRuntime::startOwnedProcess() {
 #ifdef _WIN32
     return false;
 #else
-    if (m_pid > 0)
-        return true;
+    if (m_pid > 0) {
+        // A tracked child that already exited must not block a restart:
+        // reap it and fall through to a fresh fork.
+        if (waitpid(m_pid, nullptr, WNOHANG) == 0)
+            return true;
+        m_pid = -1;
+    }
 
+    // Built before fork(): allocating between fork and exec can deadlock a
+    // multithreaded parent on the malloc lock.
+    const std::string portValue = std::to_string(m_config.port);
     pid_t pid = fork();
     if (pid < 0)
         return false;
     if (pid == 0) {
         if (chdir(m_config.payloadDir.c_str()) != 0)
             _exit(127);
-        setenv("DW_BRIDGE_PORT", std::to_string(m_config.port).c_str(), 1);
+        setenv("DW_BRIDGE_PORT", portValue.c_str(), 1);
         execl("./bun", "bun", "dw-cam-engine.js", static_cast<char*>(nullptr));
         _exit(127);
     }
