@@ -236,7 +236,7 @@ void UIManager::buildPanelRegistry() {
         {"cnc_macros",      &m_showCncMacros,       "Macros",            "Macros",
          m_cncMacroPanel.get(), true, WindowRole::Sender},
         {"direct_carve",    &m_showDirectCarve,     "CAM",               "CAM",
-         m_camPlaceholderPanel.get(), false, WindowRole::Shared},
+         m_camPlaceholderPanel.get(), true, WindowRole::Shared},
     };
     // clang-format on
 }
@@ -246,11 +246,6 @@ void UIManager::renderPanels() {
 
     // Reset auto-context guard each frame
     m_suppressAutoContext = false;
-
-    // The CAM placeholder keeps its own visibility flag; mirror the registry
-    // flag into it before rendering and read the X-button close back after.
-    if (m_camPlaceholderPanel)
-        m_camPlaceholderPanel->setVisible(m_showDirectCarve);
 
     // Render all visible panels via registry
     for (auto& entry : m_panelRegistry) {
@@ -271,9 +266,6 @@ void UIManager::renderPanels() {
             entry.panel->setOpen(true);
         }
     }
-
-    if (m_camPlaceholderPanel)
-        m_showDirectCarve = m_camPlaceholderPanel->isVisible();
 
     // Render group panels and check for close → layout reset
     bool groupClosed = false;

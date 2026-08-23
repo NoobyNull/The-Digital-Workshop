@@ -10,11 +10,11 @@ TEST(CamPlaceholderPanel, ReportsRebuildStatusCopy) {
     EXPECT_NE(copy.find("rebuilt"), std::string::npos);
 }
 
-TEST(CamPlaceholderPanel, VisibilityDefaultsClosedAndToggles) {
+TEST(CamPlaceholderPanel, VisibilityDefaultsOpenAndToggles) {
     CamPlaceholderPanel panel;
-    EXPECT_FALSE(panel.isVisible());
-    panel.setVisible(true);
-    EXPECT_TRUE(panel.isVisible());
+    EXPECT_TRUE(panel.isOpen());
+    panel.setOpen(false);
+    EXPECT_FALSE(panel.isOpen());
 }
 
 } // namespace dw

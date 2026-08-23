@@ -13,11 +13,15 @@ const std::string& CamPlaceholderPanel::statusCopy() const noexcept {
 }
 
 void CamPlaceholderPanel::render() {
-    if (!m_visible)
+    if (!m_open)
         return;
-    if (ImGui::Begin("CAM", &m_visible)) {
-        ImGui::TextWrapped("%s", statusCopy().c_str());
+
+    if (!ImGui::Begin(m_title.c_str(), &m_open)) {
+        ImGui::End();
+        return;
     }
+
+    ImGui::TextWrapped("%s", statusCopy().c_str());
     ImGui::End();
 }
 

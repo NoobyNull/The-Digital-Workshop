@@ -13,12 +13,7 @@ class CamPlaceholderPanel : public Panel {
   public:
     CamPlaceholderPanel() : Panel("CAM") {}
     void render() override;
-    [[nodiscard]] bool isVisible() const noexcept { return m_visible; }
-    void setVisible(bool visible) noexcept { m_visible = visible; }
     [[nodiscard]] const std::string& statusCopy() const noexcept;
-
-  private:
-    bool m_visible = false;
 };
 
 } // namespace dw
