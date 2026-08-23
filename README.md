@@ -24,15 +24,13 @@ It's also fully offline and open source. Your files stay on your machine, the da
 - Home is the one place to create, open, resume, or start a project from a Library design
 - A persistent context bar shows the active project, selected item or Library preview, current area, and Back to Project
 - One six-stage Project Plan leads through Design & Size, Material & Blank, Choose Tool, Carve Preview, Machine Setup, and Review & Run
-- Prepare Carve is pinned to the exact project, model, and operation; it cannot silently create or switch projects
+- CAM is being rebuilt on the PureCutCNC engine for v0.8.0; external G-code workflows (import, preview, and Run) are unaffected in the meantime
 - Run CNC accepts an immutable, preflight-checked package and protects the active project with pause, resume, abort, and emergency-stop priority
 - Guided Workshop and Advanced Workbench share the same project data and can be selected from the Experience menu
 
-Guided Workshop is opt-in for v0.7.0. The automated suite, packaging smoke, and
-72-state responsive/keyboard visual matrix pass; the
-[documented five-person novice field test](.planning/PROJECT-CENTERED-WORKSHOP-USABILITY.md)
-is the remaining release gate. Advanced Workbench remains the default until
-that real human study passes.
+The Guided carve flow is part of the v0.8.0 CAM rebuild on the PureCutCNC
+engine; it is not available in the current build. Advanced Workbench remains
+the default experience.
 
 ### 3D Model Library
 - Import STL, OBJ, and 3MF files with drag-and-drop (including recursive folders)
@@ -183,7 +181,7 @@ Or use the packaging scripts to create a distributable installer:
 ./build/tests/dw_tests
 ```
 
-1,587 tests cover loaders, parsers, database repositories, project
+1,485 tests cover loaders, parsers, database repositories, project
 lifecycle and restart resume, contextual Library navigation, Project Plan
 derivation, pinned preparation, protected Run coordination, layout migration,
 viewport identity, the optimizer, tool calculator, and import/export pipelines.
