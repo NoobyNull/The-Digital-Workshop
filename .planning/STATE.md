@@ -87,8 +87,12 @@ C++ side: `dw::cam::CamEngineClient` is a pure, never-throw response parser
 (adversarially verified and regression-tested), and `dw::cam::CamEngineRuntime`
 mirrors the existing `OllamaRuntime` pattern — fork/exec with cwd set to the
 payload directory, typed status reporting, SIGTERM-then-SIGKILL teardown.
-Windows process management is left unmanaged, matching the template's
-current scope. In the app, the runtime is lazily constructed on the CAM
+Unlike the template, a dead child is reaped with a WNOHANG waitpid before
+spawning, so a crashed engine restarts on the next start request (verified
+live: SIGKILL the child, `ensureReady()` respawns and reports ready; the
+same stale-pid flaw still exists in `OllamaRuntime` and is noted for a
+future pass). Windows process management is left unmanaged, matching the
+template's current scope. In the app, the runtime is lazily constructed on the CAM
 placeholder panel's "Start engine" button (synchronous `ensureReady()` for
 now; Phase 3 replaces this with the async bridge session API), and torn down
 in `Application::shutdown()`.
@@ -115,6 +119,14 @@ Start Phase 3 (bridge session API): the full CAMJ surface exposed as bridge
 session endpoints, a parity checklist derived against the existing web UI,
 a schema-export endpoint to drive generated parameter forms, and contract
 tests against the sidecar.
+
+Carried into Phase 3 from the Phase 2 final review: expose
+`paths::getExeDir()` in `app_paths.h` instead of the copied `/proc/self/exe`
+idiom in `application_wiring_cnc.cpp`; move the generic HTTP helpers out of
+the `dw::lmstudio` namespace once the session client widens their use;
+hoist the hardcoded 10 s reachability wait into `CamEngineConfig` if any
+synchronous path survives; revisit `curlPost`'s 120 s timeout before real
+jobs stream through the client.
 
 ---
 *v0.8.0 Phase 1 (Yank) completed: 2026-08-23*
