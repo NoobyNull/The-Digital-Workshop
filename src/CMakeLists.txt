@@ -207,7 +207,6 @@ set(DW_SOURCES
 
     # Carve (Direct Carve pipeline)
     core/carve/heightmap.cpp
-    core/carve/heightmap_preview.cpp
     core/carve/model_fitter.cpp
     core/carve/material_blank_defaults.cpp
     core/carve/roughing_tool_selector.cpp
@@ -220,8 +219,6 @@ set(DW_SOURCES
     core/carve/direct_carve_workflow.cpp
     core/carve/surface_analysis.cpp
     core/carve/island_detector.cpp
-    core/carve/analysis_overlay.cpp
-    core/carve/tool_recommender.cpp
     core/carve/toolpath_generator.cpp
     core/carve/toolpath_preview.cpp
     core/carve/gcode_export.cpp
@@ -325,7 +322,6 @@ set(DW_SOURCES
     ui/widgets/status_tips.cpp
     ui/widgets/toast.cpp
     ui/widgets/tool_profile_preview.cpp
-    ui/widgets/tool_recommendation_widget.cpp
 
     # UI Dialogs
     ui/dialogs/message_dialog.cpp

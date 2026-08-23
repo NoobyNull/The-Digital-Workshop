@@ -140,10 +140,7 @@ set(DW_TEST_SOURCES
     test_carve_preparation_application_architecture.cpp
     test_surface_analysis.cpp
     test_island_detector.cpp
-    test_analysis_overlay.cpp
-    test_heightmap_preview.cpp
     test_roughing_tool_selector.cpp
-    test_tool_recommender.cpp
     test_toolpath_advisor.cpp
     test_toolpath_generator.cpp
     test_toolpath_preview.cpp
@@ -321,10 +318,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_workflow.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/surface_analysis.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/island_detector.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/analysis_overlay.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/roughing_tool_selector.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/tool_recommender.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/toolpath_generator.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/toolpath_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/gcode_export.cpp
