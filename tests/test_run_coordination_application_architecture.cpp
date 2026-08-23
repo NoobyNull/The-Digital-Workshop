@@ -31,7 +31,6 @@ TEST(RunCoordinationApplicationArchitecture, StartUsesLockThenRealStreamAndExact
         readFile(root / "ui" / "panels" / "direct_carve_run_adapter.cpp");
     const auto effects =
         readFile(root / "app" / "direct_carve_run_effect_adapter.cpp");
-    const auto carveJob = readFile(root / "core" / "carve" / "carve_job.cpp");
 
     EXPECT_NE(panel.find("saveGCodeToProjectDirectory"), std::string::npos);
     EXPECT_NE(panel.find("RunPreflightSnapshot"), std::string::npos);
@@ -41,7 +40,8 @@ TEST(RunCoordinationApplicationArchitecture, StartUsesLockThenRealStreamAndExact
     EXPECT_NE(effects.find("m_jobRepository.insert"), std::string::npos);
     EXPECT_NE(effects.find("m_jobRepository.finishJob"), std::string::npos);
     EXPECT_NE(effects.find("WorkshopCommand{workshop::EndRun"), std::string::npos);
-    EXPECT_NE(carveJob.find("controller->startStream(program)"), std::string::npos);
+    EXPECT_NE(effects.find("m_cncController.startStream(lines)"),
+              std::string::npos);
 }
 
 TEST(RunCoordinationApplicationArchitecture, UiControlsEmitOnlyCoordinatorCommands) {

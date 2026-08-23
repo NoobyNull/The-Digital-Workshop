@@ -12,10 +12,6 @@ class CncController;
 class JobRepository;
 class ProjectManager;
 
-namespace carve {
-class CarveJob;
-}
-
 namespace workshop {
 class ProjectSession;
 }
@@ -85,7 +81,6 @@ class DirectCarveRunEffectAdapter final {
     DirectCarveRunEffectAdapter(workshop::ProjectSession& projectSession,
                                 ProjectManager& projectManager,
                                 JobRepository& jobRepository,
-                                carve::CarveJob& carveJob,
                                 CncController& cncController) noexcept;
 
     [[nodiscard]] DirectCarveRunEffectResult
@@ -118,7 +113,6 @@ class DirectCarveRunEffectAdapter final {
     workshop::ProjectSession& m_projectSession;
     ProjectManager& m_projectManager;
     JobRepository& m_jobRepository;
-    carve::CarveJob& m_carveJob;
     CncController& m_cncController;
     DirectCarveRunEffectSnapshot m_snapshot;
     std::optional<workshop::RunId> m_lastReleasedRun;

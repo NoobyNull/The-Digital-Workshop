@@ -155,13 +155,12 @@ void Application::wireCncPanels() {
                     requestPinnedProjectDirectory(pin, std::move(completion));
                 });
             if (m_projectSession && m_projectManager && m_jobRepo &&
-                m_carveJob && m_cncController) {
+                m_cncController) {
                 m_directCarveRunEffectAdapter =
                     std::make_unique<DirectCarveRunEffectAdapter>(
                         *m_projectSession,
                         *m_projectManager,
                         *m_jobRepo,
-                        *m_carveJob,
                         *m_cncController);
                 dcarvep->setRunEffectExecutor(
                     [this](const run_coordination::RunEffect& effect) {

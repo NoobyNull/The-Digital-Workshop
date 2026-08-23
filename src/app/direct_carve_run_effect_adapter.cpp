@@ -1,12 +1,12 @@
 #include "direct_carve_run_effect_adapter.h"
 
+#include <fstream>
 #include <sstream>
 #include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
-#include "core/carve/carve_job.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/database/job_repository.h"
 #include "core/gcode/gcode_modal_scanner.h"
@@ -49,6 +49,27 @@ std::vector<std::string> readProgramLines(const Path& path) {
     return lines;
 }
 
+// Runnable lines only: blanks and comment lines dropped, inline comments and
+// trailing whitespace stripped — the same filter the G-code panel streams with.
+std::vector<std::string> readRunnableLines(const Path& path) {
+    std::vector<std::string> lines;
+    std::ifstream in(path);
+    if (!in.is_open())
+        return lines;
+    std::string raw;
+    while (std::getline(in, raw)) {
+        while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\r'))
+            raw.pop_back();
+        if (raw.empty() || raw.front() == ';' || raw.front() == '(')
+            continue;
+        const auto semi = raw.find(';');
+        if (semi != std::string::npos)
+            raw = raw.substr(0, semi);
+        lines.push_back(raw);
+    }
+    return lines;
+}
+
 const char* jobStatus(RunOutcome outcome) noexcept {
     switch (outcome) {
     case RunOutcome::Completed:
@@ -67,10 +88,9 @@ DirectCarveRunEffectAdapter::DirectCarveRunEffectAdapter(
     workshop::ProjectSession& projectSession,
     ProjectManager& projectManager,
     JobRepository& jobRepository,
-    carve::CarveJob& carveJob,
     CncController& cncController) noexcept
     : m_projectSession(projectSession), m_projectManager(projectManager),
-      m_jobRepository(jobRepository), m_carveJob(carveJob),
+      m_jobRepository(jobRepository),
       m_cncController(cncController) {}
 
 DirectCarveRunEffectResult DirectCarveRunEffectAdapter::execute(
@@ -184,24 +204,25 @@ DirectCarveRunEffectResult DirectCarveRunEffectAdapter::handle(
         return rejected(DirectCarveRunEffectError::GCodeFingerprintMismatch);
     }
 
+    const std::vector<std::string> lines = readRunnableLines(resolvedPath);
+    if (lines.empty())
+        return rejected(DirectCarveRunEffectError::GCodeFileMissing);
+
     m_snapshot.package = effect.package;
     m_snapshot.persistedGCodePath = storedPathText;
     m_snapshot.state = DirectCarveRunControlState::Streaming;
     m_snapshot.streamAttempted = true;
 
-    const bool streamStarted = m_carveJob.startStreaming(&m_cncController);
-    const StreamProgress progress = m_cncController.streamProgress();
+    const bool streamStarted = m_cncController.startStream(lines);
     JobRecord record;
     record.fileName = storedPath.filename().string();
     record.filePath = storedPathText;
-    record.totalLines = progress.totalLines;
+    record.totalLines = static_cast<int>(lines.size());
     const auto jobId = m_jobRepository.insert(record);
     if (!jobId.has_value()) {
         if (streamStarted) {
             m_cncController.feedHold();
             m_cncController.stopStream();
-            if (auto* streamer = m_carveJob.streamer())
-                streamer->abort();
         }
         m_snapshot.state = DirectCarveRunControlState::Aborting;
         return rejected(DirectCarveRunEffectError::JobRecordInsertFailed);
@@ -255,12 +276,11 @@ DirectCarveRunEffectResult DirectCarveRunEffectAdapter::handle(
         return rejected(DirectCarveRunEffectError::InvalidControlState);
     }
 
-    // Safety order is deliberate: hold motion, stop the queued stream, then
-    // reset the carve streamer. A later resume can no longer outrank abort.
+    // Safety order is deliberate: hold motion, then stop the queued stream.
+    // stopStream() already halts the queue. A later resume can no longer
+    // outrank abort.
     m_cncController.feedHold();
     m_cncController.stopStream();
-    if (auto* streamer = m_carveJob.streamer())
-        streamer->abort();
     m_snapshot.state = DirectCarveRunControlState::Aborting;
     return applied();
 }

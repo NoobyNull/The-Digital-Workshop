@@ -7,7 +7,6 @@
 #include <thread>
 
 #include "app/direct_carve_run_effect_adapter.h"
-#include "core/carve/carve_job.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/database/database.h"
 #include "core/database/gcode_repository.h"
@@ -89,7 +88,7 @@ class DirectCarveRunEffectAdapterTest : public ::testing::Test {
                   workshop::TransitionStatus::Applied);
 
         m_adapter = std::make_unique<DirectCarveRunEffectAdapter>(
-            m_session, *m_manager, *m_jobs, m_carveJob, m_controller);
+            m_session, *m_manager, *m_jobs, m_controller);
     }
 
     void TearDown() override {
@@ -140,29 +139,6 @@ class DirectCarveRunEffectAdapterTest : public ::testing::Test {
                                                RunPreflightFacts::allSatisfied()));
     }
 
-    void makeStreamableCarveJob() {
-        carve::ToolpathConfig config;
-        config.axis = carve::ScanAxis::XOnly;
-        config.direction = carve::MillDirection::Alternating;
-        config.customStepoverPct = 100.0f;
-        config.scanResolutionMm = 5.0f;
-        config.stepdownMm = 10.0f;
-
-        VtdbToolGeometry tool;
-        tool.id = "finish";
-        tool.tool_type = VtdbToolType::EndMill;
-        tool.units = VtdbUnits::Metric;
-        tool.diameter = 5.0;
-        m_carveJob.generateFixedDepthToolpath(Vec3{0.0f, 0.0f, 0.0f},
-                                              Vec3{30.0f, 20.0f, 0.0f},
-                                              Vec3{5.0f, 5.0f, 0.0f},
-                                              Vec3{25.0f, 15.0f, 0.0f},
-                                              2.0f,
-                                              config,
-                                              tool);
-        ASSERT_EQ(m_carveJob.state(), carve::CarveJobState::Ready);
-    }
-
     void connectSimulator() {
         ASSERT_TRUE(m_controller.connectSimulator());
         for (int attempts = 0; attempts < 100 && !m_controller.isConnected(); ++attempts)
@@ -173,7 +149,6 @@ class DirectCarveRunEffectAdapterTest : public ::testing::Test {
     Database m_database;
     workshop::ProjectSession m_session;
     CncController m_controller{nullptr};
-    carve::CarveJob m_carveJob;
     std::unique_ptr<ProjectManager> m_manager;
     std::unique_ptr<JobRepository> m_jobs;
     std::unique_ptr<ProjectRepository> m_projects;
@@ -226,7 +201,6 @@ TEST_F(DirectCarveRunEffectAdapterTest, ChangedResolvedFileCannotStartOrCreateJo
 }
 
 TEST_F(DirectCarveRunEffectAdapterTest, RealStreamUsesExactGCodeAndSafetyControls) {
-    makeStreamableCarveJob();
     connectSimulator();
     const auto run = package();
     ASSERT_TRUE(m_adapter->execute(AcquireRunLock{run.identity()}).succeeded());
@@ -238,7 +212,8 @@ TEST_F(DirectCarveRunEffectAdapterTest, RealStreamUsesExactGCodeAndSafetyControl
     ASSERT_TRUE(job.has_value());
     EXPECT_EQ(job->filePath, m_gcodePath.string());
     EXPECT_EQ(job->status, "running");
-    EXPECT_GT(job->totalLines, 0);
+    // Fixture file has 4 runnable lines: G21, G90, G0 X0 Y0, M30.
+    EXPECT_EQ(job->totalLines, 4);
 
     EXPECT_TRUE(m_adapter->execute(FeedHold{run.identity()}).succeeded());
     EXPECT_EQ(m_adapter->snapshot().state, DirectCarveRunControlState::Paused);
@@ -273,7 +248,6 @@ TEST_F(DirectCarveRunEffectAdapterTest, RealStreamUsesExactGCodeAndSafetyControl
 }
 
 TEST_F(DirectCarveRunEffectAdapterTest, FailedStreamCanFinalizeHistoryAndReleaseExactLock) {
-    makeStreamableCarveJob();
     const auto run = package();
     ASSERT_TRUE(m_adapter->execute(AcquireRunLock{run.identity()}).succeeded());
 
@@ -293,7 +267,6 @@ TEST_F(DirectCarveRunEffectAdapterTest, FailedStreamCanFinalizeHistoryAndRelease
 }
 
 TEST_F(DirectCarveRunEffectAdapterTest, MissingJobRowCannotStrandTheSafetyLock) {
-    makeStreamableCarveJob();
     connectSimulator();
     const auto run = package();
     ASSERT_TRUE(m_adapter->execute(AcquireRunLock{run.identity()}).succeeded());
@@ -315,7 +288,6 @@ TEST_F(DirectCarveRunEffectAdapterTest, MissingJobRowCannotStrandTheSafetyLock) 
 }
 
 TEST_F(DirectCarveRunEffectAdapterTest, FailedJobFinalizationCannotStrandTheSafetyLock) {
-    makeStreamableCarveJob();
     connectSimulator();
     const auto run = package();
     ASSERT_TRUE(m_adapter->execute(AcquireRunLock{run.identity()}).succeeded());
