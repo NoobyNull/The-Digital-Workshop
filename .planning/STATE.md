@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: PureCutCNC CAM Integration
-status: phase-1-complete
-stopped_at: Phase 1 (Yank) complete; Phase 2 (sidecar packaging) next
+status: phase-2-complete
+stopped_at: Phase 2 (Sidecar) complete; Phase 3 (bridge session API) next
 last_updated: "2026-08-23T00:00:00-07:00"
 last_activity: 2026-08-23
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
 ---
 
 # Project State
@@ -38,8 +38,8 @@ unchanged; the engine only produces G-code for DW to stream.
 
 ## Current Position
 
-- **Phase:** 1 of 7 — Yank (complete)
-- **Next phase:** 2 — Sidecar packaging
+- **Phase:** 2 of 7 — Sidecar (complete)
+- **Next phase:** 3 — Bridge session API
 
 Phase 1 removed Digital Workshop's internal CAM outright, in dependency
 order, keeping the build and full suite green at every step:
@@ -71,16 +71,51 @@ order, keeping the build and full suite green at every step:
   scripts on disk). Diagnostic-mode launch (`--diagnostic`) initializes
   cleanly end to end, including the CNC simulator.
 
+## Phase 2 (Sidecar) — complete
+
+The biggest identified risk (Bun-compile of `manifold-3d`) resolved negative:
+single-file `bun build --compile` is not viable — the bundler breaks
+manifold's emscripten glue, and a compiled binary cannot resolve external
+packages at runtime. The sidecar instead ships as the Bun runtime plus a
+bundled `dw-cam-engine.js` (`bun build --target=bun --external manifold-3d`)
+plus `node_modules/manifold-3d` alongside it: ~103 MB payload on disk, ~98 MB
+compressed into the Linux `.run` installer (171 MB staged total).
+`packaging/build-cam-engine.sh` builds the payload; `packaging/smoke-cam-engine.sh`
+smokes it end to end (health check, `/api/machines`, a real toolpath job).
+
+C++ side: `dw::cam::CamEngineClient` is a pure, never-throw response parser
+(adversarially verified and regression-tested), and `dw::cam::CamEngineRuntime`
+mirrors the existing `OllamaRuntime` pattern — fork/exec with cwd set to the
+payload directory, typed status reporting, SIGTERM-then-SIGKILL teardown.
+Windows process management is left unmanaged, matching the template's
+current scope. In the app, the runtime is lazily constructed on the CAM
+placeholder panel's "Start engine" button (synchronous `ensureReady()` for
+now; Phase 3 replaces this with the async bridge session API), and torn down
+in `Application::shutdown()`.
+
+Linux packaging installs the payload to
+`$PREFIX/share/digitalworkshop/resources/cam-engine`, where it's found by
+the existing bundled-resource fallback path with zero C++ changes. Full
+package smoke is green, including a real job run through the installed
+payload.
+
+**Known gaps (recorded honestly, not yet closed):**
+- The TGZ/CPack package does **not** ship the cam-engine payload — it's
+  staged through a separate CMake `install()` mechanism than the `.run`
+  installer uses. This needs a design decision, targeted at the
+  packaging/CI phase, not Phase 3.
+- Windows/macOS payload staging is deferred to CI; `packaging/build-cam-engine.sh`
+  has a `--platform` flag stubbed for this but unimplemented.
+- The GUI "Start engine" button click itself is manually verifiable only —
+  no automated UI-level test exercises it.
+
 ## Next Action
 
-Start Phase 2 (sidecar packaging). Per the design doc's Risks section, the
-first task is a Bun-compile proof of concept for `dw-bridge` (the API layer
-that runs inside the `dw-cam-engine` sidecar binary), specifically
-validating that the wasm dependency (`manifold-3d`) compiles cleanly with
-`bun build --compile` — this is the biggest identified risk to the whole
-milestone and is called out to be attempted early. Fallbacks if Bun compile
-fails: a Node SEA bundle, then shipping a minimal Node runtime alongside the
-app.
+Start Phase 3 (bridge session API): the full CAMJ surface exposed as bridge
+session endpoints, a parity checklist derived against the existing web UI,
+a schema-export endpoint to drive generated parameter forms, and contract
+tests against the sidecar.
 
 ---
 *v0.8.0 Phase 1 (Yank) completed: 2026-08-23*
+*v0.8.0 Phase 2 (Sidecar) completed: 2026-08-23*

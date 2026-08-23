@@ -129,6 +129,9 @@ prints the persistent uninstaller path when it finishes. For a user install,
 run `~/.local/share/digitalworkshop/uninstall.sh`; for a system install, run
 `sudo /usr/local/share/digitalworkshop/uninstall.sh --system`.
 
+The Linux `.run` installer also includes the CAM engine sidecar, which
+accounts for roughly 100 MB of the installer's size.
+
 ## Building from source
 
 ### Prerequisites
@@ -142,6 +145,11 @@ sudo apt-get install libsdl2-dev libgl-dev zlib1g-dev libcurl4-openssl-dev \
 **Windows:** Visual Studio 2019+ with C++ workload. Dependencies are fetched automatically via CMake FetchContent.
 
 **macOS:** Xcode command-line tools. SDL2 can be installed via Homebrew (`brew install sdl2`) or will be fetched automatically.
+
+**CAM engine sidecar:** Bun is only required if you want to build the CAM
+engine sidecar payload (`packaging/build-cam-engine.sh build/cam-engine`).
+The app builds and runs without it; CAM features simply report the engine
+as unavailable.
 
 ### Build
 
@@ -181,7 +189,7 @@ Or use the packaging scripts to create a distributable installer:
 ./build/tests/dw_tests
 ```
 
-1,485 tests cover loaders, parsers, database repositories, project
+1,496 tests cover loaders, parsers, database repositories, project
 lifecycle and restart resume, contextual Library navigation, Project Plan
 derivation, pinned preparation, protected Run coordination, layout migration,
 viewport identity, the optimizer, tool calculator, and import/export pipelines.
