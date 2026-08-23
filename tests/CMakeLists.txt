@@ -133,6 +133,7 @@ set(DW_TEST_SOURCES
     test_run_coordination_boundary.cpp
     test_run_coordination_application_architecture.cpp
     test_direct_carve_run_effect_adapter.cpp
+    test_carve_preparation_adapter.cpp
     test_surface_analysis.cpp
     test_island_detector.cpp
     test_roughing_tool_selector.cpp
