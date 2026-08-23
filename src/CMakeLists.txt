@@ -254,6 +254,7 @@ set(DW_SOURCES
     ui/context_menu_manager.cpp
 
     # UI Panels
+    ui/panels/cam_placeholder_panel.cpp
     ui/panels/viewport_panel.cpp
     ui/panels/viewport_toolbar.cpp
     ui/panels/viewport_interaction.cpp

@@ -112,6 +112,7 @@ set(DW_TEST_SOURCES
     test_supplier_tool_import_presentation.cpp
     test_supplier_tool_import_architecture.cpp
     test_log_viewer_panel.cpp
+    test_cam_placeholder_panel.cpp
     test_file_dialog_filters.cpp
     test_modal_dialogs.cpp
     test_grbl_settings.cpp
@@ -211,6 +212,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/gcode/machine_rigidity.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/status_tips.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/log_viewer_panel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/cam_placeholder_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/file_filter_utils.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/import_options_dialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/import_summary_dialog.cpp
