@@ -114,6 +114,8 @@ set(DW_TEST_SOURCES
     test_modal_dialogs.cpp
     test_grbl_settings.cpp
     test_macro_manager.cpp
+    # CAM engine
+    test_cam_engine_client.cpp
     # Carve (Direct Carve pipeline)
     test_model_fitter.cpp
     test_preparation_identity.cpp
@@ -286,6 +288,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/export/project_export_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/export/project_import.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/model_fitter.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cam/cam_engine_client.cpp
     ${CMAKE_SOURCE_DIR}/src/render/camera.cpp
     ${CMAKE_SOURCE_DIR}/src/app/workspace.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_session_integration.cpp

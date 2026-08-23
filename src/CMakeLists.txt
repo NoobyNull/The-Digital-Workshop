@@ -206,6 +206,9 @@ set(DW_SOURCES
     core/carve/model_fitter.cpp
     core/carve/alignment_validator.cpp
 
+    # CAM engine
+    core/cam/cam_engine_client.cpp
+
     # Archive
     core/archive/archive.cpp
 
