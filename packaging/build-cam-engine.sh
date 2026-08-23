@@ -13,6 +13,9 @@ REPO_ROOT="$(realpath "$SCRIPT_DIR/..")"
 CAMBRIDGE="$REPO_ROOT/cambridge"
 OUT="${1:?usage: build-cam-engine.sh <out-dir> [--platform linux-x64]}"
 OUT="$(realpath -m "$OUT")"
+case "$OUT" in
+    "$REPO_ROOT"|"$HOME"|/) echo "refusing to build into $OUT"; exit 1 ;;
+esac
 PLATFORM="${3:-linux-x64}"
 [ "${2:-}" = "--platform" ] && PLATFORM="$3"
 
