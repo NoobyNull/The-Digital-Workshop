@@ -10,7 +10,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 
 # Project definition (C needed for SQLite3)
 project(DigitalWorkshop
-    VERSION 0.7.0
+    VERSION 0.8.0
     DESCRIPTION "Project-centered CNC workshop for hobbyists"
     LANGUAGES CXX C
 )
