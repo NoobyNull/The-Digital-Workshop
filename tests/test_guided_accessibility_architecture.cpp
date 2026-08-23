@@ -121,4 +121,3 @@ TEST(GuidedAccessibilityArchitecture, GuidedLibraryUsesLiveExperienceAndHidesPro
     expectContains(wiring, "PreviewLibraryItemIntent{\n                                            libraryExperienceMode()");
     EXPECT_EQ(wiring.find("workshop::ExperienceMode::Advanced"), std::string::npos);
 }
-

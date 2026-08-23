@@ -117,6 +117,8 @@ void Application::wireCncPanels() {
         auto* macrop = m_uiManager->cncMacroPanel();
         auto* vpp = m_uiManager->viewportPanel();
 
+        // No production dispatcher calls execute() until the CAM rebuild
+        // restores a protected-run initiator; only snapshot() is read today.
         if (m_projectSession && m_projectManager && m_jobRepo && m_cncController) {
             m_directCarveRunEffectAdapter =
                 std::make_unique<DirectCarveRunEffectAdapter>(

@@ -141,7 +141,7 @@ class Application {
     void wireStartPage();       // Start page buttons
     void wireLibraryPanel();    // Library panel: selection, thumbnails, tagging
     void wireProjectPanel();    // Project panel: navigation, cross-panel links
-    void wireCncPanels();       // GCode, CNC status/jog/console, DirectCarve, tools
+    void wireCncPanels();       // GCode, CNC status/jog/console, tools
     void wirePropertiesPanel(); // Properties: mesh, color, grain, material
     void wireMaterialsPanel();  // Materials: assignment, AI generation
     void wireMenuActions();     // File/Tools menu, maintenance, relocator, quit
@@ -165,9 +165,6 @@ class Application {
     void requestProjectClose(workshop::ProjectClosePurpose purpose,
                              std::function<void(bool)> completion = {});
     [[nodiscard]] bool beginPrepareCarve(workshop::ProjectItemRef target);
-    void requestPinnedProjectDirectory(
-        const carve_preparation::PrepareCarvePin& pin,
-        std::function<void(std::shared_ptr<ProjectDirectory>)> completion);
     void finishProjectTransition(ProjectSessionIntegrationResult result,
                                  std::function<void(bool)> completion);
     void invalidateProjectFocus();

@@ -11,9 +11,7 @@
 #include "app/carve_preparation_adapter.h"
 #include "core/database/model_repository.h"
 #include "core/project/project.h"
-#include "core/project/project_directory.h"
 #include "managers/ui_manager.h"
-#include "modules/carve_preparation/preparation_identity.h"
 #include "modules/project_session/project_session.h"
 #include "ui/widgets/toast.h"
 
@@ -112,42 +110,6 @@ bool Application::beginPrepareCarve(workshop::ProjectItemRef target) {
     if (!operation || operation->projectId != result.pin->project().value)
         return false;
     return activateProjectOpenItem(*operation) != ProjectItemActivationStatus::Rejected;
-}
-
-void Application::requestPinnedProjectDirectory(
-    const carve_preparation::PrepareCarvePin& pin,
-    std::function<void(std::shared_ptr<ProjectDirectory>)> completion) {
-    auto fail = [&completion]() {
-        if (completion) completion(nullptr);
-    };
-    if (!m_projectManager || !m_projectSession || !pin.project().valid()) {
-        fail();
-        return;
-    }
-
-    const auto project = m_projectManager->currentProject();
-    const auto context = m_projectSession->snapshot();
-    if (!project || project->id() != pin.project().value || !context.activeProject ||
-        *context.activeProject != pin.project()) {
-        fail();
-        return;
-    }
-
-    const auto items = m_projectManager->currentOpenItems();
-    const auto snapshot = makePreparationIdentitySnapshot(
-        context.activeProject, pin.revision(), items);
-    const auto decision = carve_preparation::PreparationIdentityPolicy::evaluate(
-        true, pin, snapshot);
-    if (decision.status != carve_preparation::PreparationIdentityStatus::Ready) {
-        fail();
-        return;
-    }
-
-    if (!m_projectManager->currentDirectory() && !m_projectManager->save(*project)) {
-        fail();
-        return;
-    }
-    if (completion) completion(m_projectManager->currentDirectory());
 }
 
 } // namespace dw
