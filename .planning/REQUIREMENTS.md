@@ -1,7 +1,105 @@
 # Requirements: Digital Workshop
 
 **Defined:** 2026-03-09
+**Last updated:** 2026-07-11 for v0.7.0 Project-Centered Workshop
 **Core Value:** A woodworker can go from selecting a piece of wood and a cutting tool to safely running a CNC job with optimized feeds and speeds -- all without leaving the application.
+
+## v0.7.0 Project-Centered Workshop Requirements
+
+### Persistent Context (PCW)
+
+- [x] **PCW-01**: One authoritative ProjectSession owns the active project, active project item, Library preview, route, return selection, and session generation.
+- [x] **PCW-02**: The project name, dirty state, active item or preview state, current stage, and Back to Project action remain visible in the Guided shell.
+- [x] **PCW-03**: Home is the single surface for New Project, Open Project, Recent Projects, and starting from a Library design.
+- [x] **PCW-04**: Closing or switching projects clears or restores project-scoped focus predictably; stale asynchronous model loads cannot overwrite a newer session.
+- [x] **PCW-05**: A valid last active project and active item can be resumed after application restart.
+
+PCW-02 is complete: the shared shell keeps project identity, dirty state, active
+item or Library preview, current area, machine state, and Back to Project
+visible, while the Project Plan supplies the current six-stage preparation
+state and one Continue action. The Guided-default switch remains a separate
+Phase 48 human acceptance gate.
+
+PCW-03 is complete: Home is the single panel surface for New, Open, Recent,
+Library entry, and import entry, and its Library path starts a named project
+from exactly one selected model. Conventional global menu commands remain
+direct shortcuts; they do not create a second project-entry panel.
+
+Session 08 completes the LIBX group: the render-independent policy now drives
+visible purpose-specific UI, token-safe preview/return, atomic pinned mixed
+membership, and purpose-preserving import completion.
+
+### Design Library Relationship (LIBX)
+
+- [x] **LIBX-01**: Design Library has explicit manage, start-project, and add-to-project purposes.
+- [x] **LIBX-02**: Previewing a Library design is visibly labeled and cannot mutate project membership or project selection.
+- [x] **LIBX-03**: Cancel or Back from preview restores the prior project selection in one visible action.
+- [x] **LIBX-04**: Start Project and Add to Project are visible primary actions, not context-menu-only behavior.
+- [x] **LIBX-05**: Adding Library assets is idempotent and uses the active project name in action copy.
+- [x] **LIBX-06**: Imports completed from a picker return the imported assets to that picker purpose.
+
+### Project Plan (PLANX)
+
+- [x] **PLANX-01**: One hierarchical Project Plan replaces the duplicate Work Order and legacy Models/G-code/Materials/Costs/Cut Plans navigation sections.
+- [x] **PLANX-02**: Every visible Project Plan row is actionable or explicitly informational.
+- [x] **PLANX-03**: A deterministic builder derives the beginner stages, readiness, blockers, and one next action from project/open-item state.
+- [x] **PLANX-04**: The beginner stages are Design & Size, Material & Blank, Choose Tool, Carve Preview, Machine Setup, and Review & Run.
+- [x] **PLANX-05**: Material & Blank precedes Choose Tool so recommendations have visible material context.
+
+### Prepare and Run Boundary (RUNX)
+
+- [x] **RUNX-01**: Direct Carve setup captures and retains its initiating project, model, and operation identity.
+- [x] **RUNX-02**: Direct Carve cannot silently create, activate, replace, or write output into another project.
+- [x] **RUNX-03**: With no active project, Prepare Carve offers an explicit create-project action and performs no hidden project mutation.
+- [x] **RUNX-04**: Prepare Carve produces an immutable RunPackage and cannot issue stream commands.
+- [x] **RUNX-05**: Run coordination consumes RunPackage, owns the run lock, and cannot silently change setup identity.
+- [x] **RUNX-06**: Active streaming rejects project/context switching while preserving emergency stop, pause, resume, and abort priority.
+- [x] **RUNX-07**: When Run coordination is unavailable, preview and G-code export remain usable and no CNC command is emitted.
+
+Phases 45 and 46 are complete: preparation owns editable exact-pinned state and
+cannot express machine commands; RunCoordinator accepts only an immutable,
+preflight-bound RunPackage, acquires the exact ProjectSession lock before real
+stream submission, and owns progress plus every terminal cleanup path.
+
+### Modularity and File Health (MODX)
+
+- [x] **MODX-01**: ProjectSession is a render-independent module with typed transition results and direct tests.
+- [x] **MODX-02**: LibraryPickerFlow is a render-independent module with explicit preview/add/cancel commands and direct tests.
+- [x] **MODX-03**: ProjectPlanBuilder is a deterministic, persistence-free projection module with direct tests.
+- [x] **MODX-04**: ProjectWorkshopController routes UI intents and service commands without owning workflow policy.
+- [x] **MODX-05**: PrepareCarveFlow owns preparation state and RunCoordinator owns execution state; their only run handoff is immutable RunPackage.
+- [x] **MODX-06**: New business behavior is not implemented through direct panel-to-panel dependencies.
+- [x] **MODX-07**: Guided and Advanced experiences consume the same ProjectSession and repositories; disabling Guided emits no Guided-only commands.
+- [x] **MODX-08**: Render-independent workshop modules build in a focused target that application and tests both link.
+- [x] **MODX-09**: New or substantially rewritten files target 500 lines and may not exceed 750 lines.
+- [x] **MODX-10**: `direct_carve_panel.cpp`, `viewport_panel.cpp`, `application_wiring.cpp`, `project_repository.cpp`, `config.cpp`, and touched Library files are decomposed along owned behavior boundaries defined in the master plan.
+
+### Compatibility and Migration (MIGX)
+
+- [x] **MIGX-01**: Guided is the default only after acceptance; Advanced Workbench remains available and uses the same project truth.
+- [x] **MIGX-02**: Built-in layout migration is versioned and idempotent.
+- [x] **MIGX-03**: Existing custom layout presets survive migration unchanged.
+- [x] **MIGX-04**: Existing projects, Library records, imported G-code, and external `.nc` workflows remain usable.
+- [x] **MIGX-05**: The UI does not claim global Library material assignment is project-specific; project setup material remains operation intent.
+
+### Validation (VALX)
+
+- [x] **VALX-01**: Automated tests cover project lifecycle, preview isolation, idempotent add, plan derivation, project pinning, run locks, migration, and close/reopen persistence.
+- [x] **VALX-02**: Each execution session passes targeted tests, the full test binary, `git diff --check`, and an edited-file line-count audit.
+- [x] **VALX-03**: Guided workflow is validated at 1366x768 and 4K with 100%, 150%, and 200% UI scale.
+- [x] **VALX-04**: Critical status and navigation work by keyboard and do not depend on color alone.
+- [ ] **VALX-05**: Five inexperienced hobbyists complete the canonical create/add/preview/return/prepare/close/reopen task without navigation coaching before Guided becomes default.
+
+VALX-03 and VALX-04 are complete. The compile-gated real application produced
+72 uncropped captures covering 12 deterministic River Sign states in all six
+required environments. Independent manual review passed every cell, including
+keyboard focus, text/icon state without color, compact-height safety controls,
+and bounded 4K context/action layouts. The validated manifest is
+`project-centered-workshop-release/ux-matrix/manifest.json` with SHA-256
+`e5d0b4b3481aa4df9719e71cfb7913dce9860570ddb5a5e97d9615c872c3f98b`.
+VALX-05 is prepared, not conducted. Consequently Advanced Workbench remains the
+default and MIGX-01 is satisfied without claiming novice acceptance. The full
+42/43 trace is in `project-centered-workshop-release/COMPLETION-AUDIT.md`.
 
 ## v0.6.0 Requirements
 
@@ -120,6 +218,59 @@ Requirements for Technical Debt Cleanup milestone. Verified via deep-dive code a
 
 ## Traceability
 
+### v0.7.0
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| PCW-01 | Phase 41 | Complete |
+| PCW-02 | Phase 42 | Complete |
+| PCW-03 | Phase 42 | Complete |
+| PCW-04 | Phase 41 | Complete |
+| PCW-05 | Phase 42 | Complete |
+| LIBX-01 | Phase 43 | Complete |
+| LIBX-02 | Phase 43 | Complete |
+| LIBX-03 | Phase 43 | Complete |
+| LIBX-04 | Phase 43 | Complete |
+| LIBX-05 | Phase 43 | Complete |
+| LIBX-06 | Phase 43 | Complete |
+| PLANX-01 | Phase 44 | Complete |
+| PLANX-02 | Phase 44 | Complete |
+| PLANX-03 | Phase 44 | Complete |
+| PLANX-04 | Phase 44 | Complete |
+| PLANX-05 | Phase 45 | Complete |
+| RUNX-01 | Phase 45 | Complete |
+| RUNX-02 | Phase 45 | Complete |
+| RUNX-03 | Phase 45 | Complete |
+| RUNX-04 | Phase 46 | Complete |
+| RUNX-05 | Phase 46 | Complete |
+| RUNX-06 | Phase 46 | Complete |
+| RUNX-07 | Phase 46 | Complete |
+| MODX-01 | Phase 41 | Complete |
+| MODX-02 | Phase 43 | Complete |
+| MODX-03 | Phase 44 | Complete |
+| MODX-04 | Phase 42 | Complete |
+| MODX-05 | Phases 45-46 | Complete |
+| MODX-06 | Phases 41-47 | Complete |
+| MODX-07 | Phase 47 | Complete |
+| MODX-08 | Phase 40 | Complete |
+| MODX-09 | Phases 40-48 | Complete |
+| MODX-10 | Phases 43-47 | Complete |
+| MIGX-01 | Phase 47 | Complete; default held |
+| MIGX-02 | Phase 47 | Complete |
+| MIGX-03 | Phase 47 | Complete |
+| MIGX-04 | Phase 48 | Complete |
+| MIGX-05 | Phases 43-45 | Complete |
+| VALX-01 | Phase 48 | Complete |
+| VALX-02 | Phases 40-48 | Complete |
+| VALX-03 | Phase 48 | Complete; 72/72 visual cells pass |
+| VALX-04 | Phase 48 | Complete; keyboard/color audit passes |
+| VALX-05 | Phase 48 | Pending; protocol prepared |
+
+**Coverage:**
+- v0.7.0 requirements: 43 total
+- Mapped to phases: 43
+- Unmapped: 0
+
 ### v0.6.0
 
 | Requirement | Phase | Status |
@@ -161,4 +312,4 @@ Requirements for Technical Debt Cleanup milestone. Verified via deep-dive code a
 
 ---
 *Requirements defined: 2026-03-09*
-*Last updated: 2026-03-28 -- v0.6.0 traceability complete (9/9 requirements mapped)*
+*Last updated: 2026-07-11 -- v0.7.0 traceability complete (42 engineering requirements complete; VALX-05 human gate pending)*

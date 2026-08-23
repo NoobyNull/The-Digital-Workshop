@@ -8,6 +8,7 @@
 #include "model_fitter.h"
 #include "surface_analysis.h"
 #include "carve_streamer.h"
+#include "toolpath_preview.h"
 #include "toolpath_types.h"
 
 #include <atomic>
@@ -77,9 +78,10 @@ public:
                                     const VtdbToolGeometry& finishTool,
                                     const VtdbToolGeometry* roughingTool = nullptr);
     const MultiPassToolpath& toolpath() const;
+    const MultiPassToolpathPreviewGeometry& toolpathPreview() const;
 
     // Start streaming the generated toolpath
-    void startStreaming(CncController* controller);
+    [[nodiscard]] bool startStreaming(CncController* controller);
 
     // Streaming state accessors
     CarveStreamer* streamer();
@@ -92,6 +94,7 @@ private:
     CurvatureResult m_curvature;
     IslandResult m_islands;
     MultiPassToolpath m_toolpath;
+    MultiPassToolpathPreviewGeometry m_toolpathPreview;
     ToolpathConfig m_toolpathConfig;
     bool m_analyzed = false;
     std::string m_error;

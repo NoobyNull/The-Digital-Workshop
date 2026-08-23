@@ -5,53 +5,61 @@
 #include <vector>
 
 #include "../../core/types.h"
+#include "../../modules/workshop/home_flow.h"
 #include "panel.h"
 
 namespace dw {
 
-// Start page shown on application launch with recent projects and quick actions.
-// Renders as a non-dockable floating window — either open or closed.
+// Home is the single project entry surface. The historical class/file name is
+// retained until the versioned layout migration so saved ImGui window identity
+// remains stable.
 class StartPage : public Panel {
   public:
     StartPage();
     ~StartPage() override = default;
 
     void render() override;
+    void beginNamedProject();
+    void requestFocus() {
+        m_focusHome = true;
+        m_recentPaths.clear();
+    }
 
     // Callbacks
     using VoidCallback = std::function<void()>;
     using PathCallback = std::function<void(const Path&)>;
-    using WorkspaceModeCallback = std::function<void(int)>; // 0=Model, 1=CNC
+    using ProjectCreationCompletion = std::function<void(bool, std::string)>;
+    using NamedProjectCallback =
+        std::function<void(std::string, ProjectCreationCompletion)>;
 
-    void setOnNewProject(VoidCallback cb) { m_onNewProject = std::move(cb); }
+    void setOnNewProject(NamedProjectCallback cb) { m_onNewProject = std::move(cb); }
     void setOnOpenProject(VoidCallback cb) { m_onOpenProject = std::move(cb); }
     void setOnImportModel(VoidCallback cb) { m_onImportModel = std::move(cb); }
     void setOnImportFolder(VoidCallback cb) { m_onImportFolder = std::move(cb); }
+    void setOnBrowseLibrary(VoidCallback cb) { m_onBrowseLibrary = std::move(cb); }
     void setOnOpenRecentProject(PathCallback cb) { m_onOpenRecentProject = std::move(cb); }
-    void setOnWorkspaceModeChanged(WorkspaceModeCallback cb) { m_onWorkspaceModeChanged = std::move(cb); }
 
   private:
     void renderRecentProjects();
     void renderQuickActions();
-    void renderSetup();
-    void browseWorkspaceRoot();
-    void setWorkspaceRoot(const Path& path);
+    void renderNamedProjectDialog();
 
-    VoidCallback m_onNewProject;
+    NamedProjectCallback m_onNewProject;
     VoidCallback m_onOpenProject;
     VoidCallback m_onImportModel;
     VoidCallback m_onImportFolder;
+    VoidCallback m_onBrowseLibrary;
     PathCallback m_onOpenRecentProject;
-    WorkspaceModeCallback m_onWorkspaceModeChanged;
 
-    // Local edit buffer for workspace root
-    char m_workspaceRoot[512]{};
-    bool m_workspaceRootLoaded = false;
-    int m_startMode = 0; // 0=Modeling, 1=CNC Sender
+    workshop::HomeFlow m_homeFlow;
+    char m_projectName[128]{};
+    bool m_openProjectNamePopup = false;
+    bool m_focusProjectName = false;
+    bool m_focusHome = false;
 
     // Cached recent project display names (resolved from project.json)
     std::vector<std::string> m_recentNames;
-    size_t m_recentNamesCount = 0; // tracks staleness
+    std::vector<Path> m_recentPaths;
     void refreshRecentNames();
 };
 

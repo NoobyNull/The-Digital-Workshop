@@ -169,6 +169,8 @@ void ImportOptionsDialog::render() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(dlgBtnW, 0))) {
+            if (m_onCancel)
+                m_onCancel();
             m_open = false;
             ImGui::CloseCurrentPopup();
         }

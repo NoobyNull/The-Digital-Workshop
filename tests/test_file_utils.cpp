@@ -69,6 +69,22 @@ TEST(FileUtils, WriteAndReadText) {
     EXPECT_EQ(result.value(), "hello world");
 }
 
+TEST(FileUtils, WriteTextAtomicReplacesExistingContentsWithoutTemporaryResidue) {
+    const auto root = std::filesystem::temp_directory_path() / "dw_atomic_text_test";
+    std::filesystem::remove_all(root);
+    ASSERT_TRUE(dw::file::createDirectories(root));
+    const auto path = root / "project.json";
+    ASSERT_TRUE(dw::file::writeText(path, "old"));
+
+    ASSERT_TRUE(dw::file::writeTextAtomic(path, "new contents"));
+
+    const auto text = dw::file::readText(path);
+    ASSERT_TRUE(text.has_value());
+    EXPECT_EQ(*text, "new contents");
+    EXPECT_EQ(dw::file::listEntries(root), std::vector<std::string>{"project.json"});
+    std::filesystem::remove_all(root);
+}
+
 TEST(FileUtils, TouchCreatesMissingFileAndPreservesExistingContent) {
     auto tmp = std::filesystem::temp_directory_path() / "dw_file_utils_touch";
     std::filesystem::remove_all(tmp);

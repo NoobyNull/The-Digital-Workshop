@@ -1,0 +1,91 @@
+Running main() from /data/DW/build/_deps/googletest-src/googletest/src/gtest_main.cc
+[==========] Running 38 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 26 tests from LibraryPickerFlow
+[ RUN      ] LibraryPickerFlow.ManagePurposeHasNoImplicitMembershipAction
+[       OK ] LibraryPickerFlow.ManagePurposeHasNoImplicitMembershipAction (0 ms)
+[ RUN      ] LibraryPickerFlow.AddPurposeRequiresAndPinsProjectIdentity
+[       OK ] LibraryPickerFlow.AddPurposeRequiresAndPinsProjectIdentity (0 ms)
+[ RUN      ] LibraryPickerFlow.ReplacingSelectionDeduplicatesButDoesNotPreviewOrAdd
+[       OK ] LibraryPickerFlow.ReplacingSelectionDeduplicatesButDoesNotPreviewOrAdd (0 ms)
+[ RUN      ] LibraryPickerFlow.PreviewAndProjectMembershipRemainIndependent
+[       OK ] LibraryPickerFlow.PreviewAndProjectMembershipRemainIndependent (0 ms)
+[ RUN      ] LibraryPickerFlow.StalePreviewCompletionCannotReplaceNewerPreview
+[       OK ] LibraryPickerFlow.StalePreviewCompletionCannotReplaceNewerPreview (0 ms)
+[ RUN      ] LibraryPickerFlow.SemanticSelectionReplayKeepsPendingPreviewGeneration
+[       OK ] LibraryPickerFlow.SemanticSelectionReplayKeepsPendingPreviewGeneration (0 ms)
+[ RUN      ] LibraryPickerFlow.SelectionReplacementInvalidatesPendingPreviewAndKeepsLastSuccess
+[       OK ] LibraryPickerFlow.SelectionReplacementInvalidatesPendingPreviewAndKeepsLastSuccess (0 ms)
+[ RUN      ] LibraryPickerFlow.ImportedItemsAreOfferedToSelectionWithoutPreviewOrMembership
+[       OK ] LibraryPickerFlow.ImportedItemsAreOfferedToSelectionWithoutPreviewOrMembership (0 ms)
+[ RUN      ] LibraryPickerFlow.AddIssuesUniqueMissingOnlyRequestAndSuppressesDoubleSubmit
+[       OK ] LibraryPickerFlow.AddIssuesUniqueMissingOnlyRequestAndSuppressesDoubleSubmit (0 ms)
+[ RUN      ] LibraryPickerFlow.ConfirmedMembershipMakesRepeatedAddIdempotent
+[       OK ] LibraryPickerFlow.ConfirmedMembershipMakesRepeatedAddIdempotent (0 ms)
+[ RUN      ] LibraryPickerFlow.PartialAddCompletionLeavesOnlyFailedItemRetryable
+[       OK ] LibraryPickerFlow.PartialAddCompletionLeavesOnlyFailedItemRetryable (0 ms)
+[ RUN      ] LibraryPickerFlow.ProjectChangeRejectsAddWithoutEmittingARequest
+[       OK ] LibraryPickerFlow.ProjectChangeRejectsAddWithoutEmittingARequest (0 ms)
+[ RUN      ] LibraryPickerFlow.AsyncCompletionsCannotCommitAfterLiveContextChanges
+[       OK ] LibraryPickerFlow.AsyncCompletionsCannotCommitAfterLiveContextChanges (0 ms)
+[ RUN      ] LibraryPickerFlow.ActionCompletionCannotCrossPickerPurposes
+[       OK ] LibraryPickerFlow.ActionCompletionCannotCrossPickerPurposes (0 ms)
+[ RUN      ] LibraryPickerFlow.StartProjectRequiresExactlyOneModelAndCanRetryFailure
+[       OK ] LibraryPickerFlow.StartProjectRequiresExactlyOneModelAndCanRetryFailure (0 ms)
+[ RUN      ] LibraryPickerFlow.StartSuccessRequiresAndAcceptsTheNewlyActivatedProject
+[       OK ] LibraryPickerFlow.StartSuccessRequiresAndAcceptsTheNewlyActivatedProject (0 ms)
+[ RUN      ] LibraryPickerFlow.CancelRestoresExactContextAndInvalidatesPendingPreview
+[       OK ] LibraryPickerFlow.CancelRestoresExactContextAndInvalidatesPendingPreview (0 ms)
+[ RUN      ] LibraryPickerFlow.RestoreFailureCanRetryAndStaleAcknowledgementCannotCloseRetry
+[       OK ] LibraryPickerFlow.RestoreFailureCanRetryAndStaleAcknowledgementCannotCloseRetry (0 ms)
+[ RUN      ] LibraryPickerFlow.RestoreCompletionAfterContextChangeTearsDownWithoutRetry
+[       OK ] LibraryPickerFlow.RestoreCompletionAfterContextChangeTearsDownWithoutRetry (0 ms)
+[ RUN      ] LibraryPickerFlow.ExactLookingLaterGenerationCannotAcknowledgeOldRestore
+[       OK ] LibraryPickerFlow.ExactLookingLaterGenerationCannotAcknowledgeOldRestore (0 ms)
+[ RUN      ] LibraryPickerFlow.CancelWaitsForPendingAddExecutor
+[       OK ] LibraryPickerFlow.CancelWaitsForPendingAddExecutor (0 ms)
+[ RUN      ] LibraryPickerFlow.ChangedContextCanTearDownWhileActionExecutorIsPending
+[       OK ] LibraryPickerFlow.ChangedContextCanTearDownWhileActionExecutorIsPending (0 ms)
+[ RUN      ] LibraryPickerFlow.CancelWaitsForPendingStartExecutor
+[       OK ] LibraryPickerFlow.CancelWaitsForPendingStartExecutor (0 ms)
+[ RUN      ] LibraryPickerFlow.CancelWithChangedContextDeactivatesWithoutStaleRestore
+[       OK ] LibraryPickerFlow.CancelWithChangedContextDeactivatesWithoutStaleRestore (0 ms)
+[ RUN      ] LibraryPickerFlow.CancelAfterExternalNavigationDoesNotOverrideNewerRoute
+[       OK ] LibraryPickerFlow.CancelAfterExternalNavigationDoesNotOverrideNewerRoute (0 ms)
+[ RUN      ] LibraryPickerFlow.ClosedFlowIsInertUntilExplicitlyBegun
+[       OK ] LibraryPickerFlow.ClosedFlowIsInertUntilExplicitlyBegun (0 ms)
+[----------] 26 tests from LibraryPickerFlow (0 ms total)
+
+[----------] 10 tests from LibraryPickerPresentation
+[ RUN      ] LibraryPickerPresentation.InactiveSnapshotHasNoVisibleControls
+[       OK ] LibraryPickerPresentation.InactiveSnapshotHasNoVisibleControls (0 ms)
+[ RUN      ] LibraryPickerPresentation.ManagePurposeExplainsExplicitPreview
+[       OK ] LibraryPickerPresentation.ManagePurposeExplainsExplicitPreview (0 ms)
+[ RUN      ] LibraryPickerPresentation.StartPurposeRequiresOneModelAndSuggestsItsName
+[       OK ] LibraryPickerPresentation.StartPurposeRequiresOneModelAndSuggestsItsName (0 ms)
+[ RUN      ] LibraryPickerPresentation.AddPurposeReportsProjectNameCountAndMembership
+[       OK ] LibraryPickerPresentation.AddPurposeReportsProjectNameCountAndMembership (0 ms)
+[ RUN      ] LibraryPickerPresentation.ExistingSelectionIsClearlyIdempotent
+[       OK ] LibraryPickerPresentation.ExistingSelectionIsClearlyIdempotent (0 ms)
+[ RUN      ] LibraryPickerPresentation.PreviewCopySaysSelectedNonMemberRequiresTheAddAction
+[       OK ] LibraryPickerPresentation.PreviewCopySaysSelectedNonMemberRequiresTheAddAction (0 ms)
+[ RUN      ] LibraryPickerPresentation.PendingAndErrorStateAreVisibleAndDisableActions
+[       OK ] LibraryPickerPresentation.PendingAndErrorStateAreVisibleAndDisableActions (0 ms)
+[ RUN      ] LibraryPickerPresentation.ProjectNameTrimRejectsWhitespace
+[       OK ] LibraryPickerPresentation.ProjectNameTrimRejectsWhitespace (0 ms)
+[ RUN      ] LibraryPickerPresentation.ActionLayoutUsesMeasuredWidthsInsteadOfBreakpoint
+[       OK ] LibraryPickerPresentation.ActionLayoutUsesMeasuredWidthsInsteadOfBreakpoint (0 ms)
+[ RUN      ] LibraryPickerPresentation.DeleteResultMustConfirmUniqueRequestedItems
+[       OK ] LibraryPickerPresentation.DeleteResultMustConfirmUniqueRequestedItems (0 ms)
+[----------] 10 tests from LibraryPickerPresentation (0 ms total)
+
+[----------] 2 tests from LibraryCardPresentation
+[ RUN      ] LibraryCardPresentation.ReservesEveryMeasuredWrappedNameLine
+[       OK ] LibraryCardPresentation.ReservesEveryMeasuredWrappedNameLine (0 ms)
+[ RUN      ] LibraryCardPresentation.UsesOneFullLineForEmptyOrZeroHeightMeasurements
+[       OK ] LibraryCardPresentation.UsesOneFullLineForEmptyOrZeroHeightMeasurements (0 ms)
+[----------] 2 tests from LibraryCardPresentation (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 38 tests from 3 test suites ran. (0 ms total)
+[  PASSED  ] 38 tests.

@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <filesystem>
+
 #include "core/database/tool_database.h"
 
 namespace {
@@ -14,6 +17,25 @@ class ToolDatabaseTest : public ::testing::Test {
     }
 
     dw::ToolDatabase m_toolDb;
+};
+
+class LegacyToolDatabaseFile {
+  public:
+    LegacyToolDatabaseFile() {
+        const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+        root = std::filesystem::temp_directory_path() /
+               ("dw_tool_database_migration_" + std::to_string(nonce));
+        std::filesystem::create_directories(root);
+        path = root / "legacy.vtdb";
+    }
+
+    ~LegacyToolDatabaseFile() {
+        std::error_code error;
+        std::filesystem::remove_all(root, error);
+    }
+
+    std::filesystem::path root;
+    std::filesystem::path path;
 };
 
 }  // namespace
@@ -57,6 +79,42 @@ TEST_F(ToolDatabaseTest, Schema_VersionSet) {
     auto stmt = db.prepare("SELECT version FROM version");
     ASSERT_TRUE(stmt.step());
     EXPECT_EQ(stmt.getInt(0), 1);
+}
+
+TEST(ToolDatabaseSchemaMigration, ExistingVectricSchemaGetsExtendedColumnsOnce) {
+    LegacyToolDatabaseFile file;
+    {
+        dw::Database legacy;
+        ASSERT_TRUE(legacy.open(file.path.string()));
+        ASSERT_TRUE(legacy.execute(
+            "CREATE TABLE version (version INTEGER NOT NULL UNIQUE PRIMARY KEY)"));
+        ASSERT_TRUE(legacy.execute("INSERT INTO version(version) VALUES (1)"));
+        ASSERT_TRUE(legacy.execute(R"(
+            CREATE TABLE machine (
+                id TEXT NOT NULL UNIQUE PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                make TEXT,
+                model TEXT,
+                controller_type TEXT,
+                dimensions_units INTEGER,
+                max_width REAL,
+                max_height REAL,
+                support_rotary INTEGER,
+                support_tool_change INTEGER,
+                has_laser_head INTEGER
+            )
+        )"));
+    }
+
+    for (int pass = 0; pass < 2; ++pass) {
+        dw::ToolDatabase migrated;
+        ASSERT_TRUE(migrated.open(file.path));
+        auto columns = migrated.database().prepare(
+            "SELECT COUNT(*) FROM pragma_table_info('machine') "
+            "WHERE name IN ('spindle_power_watts', 'max_rpm', 'drive_type')");
+        ASSERT_TRUE(columns.step());
+        EXPECT_EQ(columns.getInt(0), 3) << "migration pass " << pass;
+    }
 }
 
 // --- Basic operations ---

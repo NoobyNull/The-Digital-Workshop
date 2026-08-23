@@ -3,10 +3,11 @@
 #include <optional>
 #include <string>
 
-#include "model_fitter.h"
-#include "toolpath_types.h"
 #include "../cnc/cnc_tool.h"
 #include "../database/project_repository.h"
+#include "direct_carve_tool_plan.h"
+#include "model_fitter.h"
+#include "toolpath_types.h"
 
 namespace dw {
 namespace carve {
@@ -20,7 +21,14 @@ struct DirectCarveOperationSetup {
     FitParams fit;
     ToolpathConfig toolpath;
     std::optional<VtdbToolGeometry> finishingTool;
-    std::optional<VtdbToolGeometry> clearingTool;
+
+    // New snapshots persist these independently:
+    //   clearing_mode             - automatic, selected, or disabled
+    //   selected_clearing_tool    - the user's retained picker intent
+    //   effective_clearing_tool   - the tool that produced a nonempty pass
+    ClearingToolMode clearingToolMode = ClearingToolMode::Automatic;
+    std::optional<VtdbToolGeometry> selectedClearingTool;
+    std::optional<VtdbToolGeometry> effectiveClearingTool;
 };
 
 enum class DirectCarveTouchPlate {
@@ -65,16 +73,14 @@ struct DirectCarveZeroingSetup {
     bool zeroVerified = false;
 };
 
-std::optional<DirectCarveOperationSetup>
-parseDirectCarveOperationSetup(const ProjectOpenItem& item);
+std::optional<DirectCarveOperationSetup> parseDirectCarveOperationSetup(
+    const ProjectOpenItem& item);
 
-ProjectOpenItem makeDirectCarveZeroingOpenItem(
-    i64 operationItemId,
-    const std::string& operationSourceKey,
-    const DirectCarveZeroingSetup& setup);
+ProjectOpenItem makeDirectCarveZeroingOpenItem(i64 operationItemId,
+                                               const std::string& operationSourceKey,
+                                               const DirectCarveZeroingSetup& setup);
 
-std::optional<DirectCarveZeroingSetup>
-parseDirectCarveZeroingSetup(const ProjectOpenItem& item);
+std::optional<DirectCarveZeroingSetup> parseDirectCarveZeroingSetup(const ProjectOpenItem& item);
 
 } // namespace carve
 } // namespace dw

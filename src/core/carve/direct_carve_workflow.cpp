@@ -58,11 +58,11 @@ missingDirectCarveRequirements(const DirectCarveWorkflowState& state,
     require(state.modelLoaded, DirectCarveRequirement::ModelLoaded);
     require(state.modelFitsBlank, DirectCarveRequirement::ModelFitsBlank);
     require(state.modelFitsMachine, DirectCarveRequirement::ModelFitsMachine);
+    require(state.materialSelected, DirectCarveRequirement::MaterialConfirmed);
     require(state.finishingToolSelected,
             DirectCarveRequirement::FinishingToolSelected);
     require(state.toolSetupConfirmed,
             DirectCarveRequirement::ToolSetupConfirmed);
-    require(state.materialSelected, DirectCarveRequirement::MaterialConfirmed);
     require(state.toolpathGenerated, DirectCarveRequirement::ToolpathGenerated);
     require(state.toolpathFresh, DirectCarveRequirement::FreshToolpath);
     require(state.machineConnected, DirectCarveRequirement::MachineConnected);
@@ -93,10 +93,10 @@ bool isDirectCarveStepComplete(DirectCarveWorkflowStep step,
     case DirectCarveWorkflowStep::Model:
         return state.modelLoaded && state.modelFitsBlank &&
                state.modelFitsMachine;
-    case DirectCarveWorkflowStep::Tool:
-        return state.finishingToolSelected && state.toolSetupConfirmed;
     case DirectCarveWorkflowStep::Material:
         return state.materialSelected;
+    case DirectCarveWorkflowStep::Tool:
+        return state.finishingToolSelected && state.toolSetupConfirmed;
     case DirectCarveWorkflowStep::Preview:
         return state.toolpathGenerated && state.toolpathFresh;
     case DirectCarveWorkflowStep::Machine:

@@ -1,15 +1,17 @@
 // Application wiring — CNC, GCode, DirectCarve, and tool panels.
 
 #include "app/application.h"
+#include "app/direct_carve_run_effect_adapter.h"
 
 #include <string>
+#include <utility>
 
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/macro_manager.h"
 #include "core/cnc/machine_units.h"
 #include "core/cnc/unified_settings.h"
 #include "core/config/config.h"
-#include "core/gcode/gcode_analyzer.h"
+#include "core/gcode/gcode_document.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/job_repository.h"
 #include "core/database/tool_database.h"
@@ -18,6 +20,8 @@
 #include "core/paths/path_resolver.h"
 #include "core/threading/main_thread_queue.h"
 #include "managers/ui_manager.h"
+#include "modules/project_session/project_session.h"
+#include "ui/dialogs/supplier_tool_import_dialog.h"
 #include "ui/panels/cnc_console_panel.h"
 #include "ui/panels/cnc_jog_panel.h"
 #include "ui/panels/cnc_job_panel.h"
@@ -89,13 +93,11 @@ void Application::wireCncPanels() {
         });
 
         // Forward program load/clear to viewport for toolpath rendering + simulation
-        gcp->setOnProgramLoaded([this](const gcode::Program& prog) {
+        gcp->setOnProgramLoaded([this](const gcode::Program& prog,
+                                      const gcode::Statistics& stats) {
             if (auto* vp = m_uiManager->viewportPanel()) {
-                vp->setGCodeProgram(prog);
-                // Compute segment times for viewport simulation
-                gcode::Analyzer analyzer;
-                analyzer.setMachineProfile(Config::instance().getActiveMachineProfile());
-                auto stats = analyzer.analyze(prog);
+                vp->setGCodeProgram(
+                    prog, ViewportGCodeSource::FileBackedProgram);
                 vp->setGCodeStatistics(stats);
             }
         });
@@ -129,6 +131,77 @@ void Application::wireCncPanels() {
             dcarvep->setGCodePanel(gcp);
             dcarvep->setLibraryManager(m_libraryManager.get());
             dcarvep->setProjectManager(m_projectManager.get());
+            dcarvep->setOnGCode3DPreview(
+                [this](const gcode::PreparedDocument& document) {
+                    if (auto* viewport = m_uiManager->viewportPanel()) {
+                        viewport->setGCodeProgram(
+                            document.program,
+                            ViewportGCodeSource::DirectCarvePreview);
+                        viewport->setGCodeStatistics(document.statistics);
+                    }
+                });
+            dcarvep->setOnGCode3DPreviewCleared([this]() {
+                if (auto* viewport = m_uiManager->viewportPanel()) {
+                    (void)viewport->clearGCodeProgramIfSource(
+                        ViewportGCodeSource::DirectCarvePreview);
+                }
+            });
+            dcarvep->setOpen3DPreviewCallback([this]() {
+                m_uiManager->openWindow("viewport");
+            });
+            dcarvep->setProjectDirectoryRequest(
+                [this](carve_preparation::PrepareCarvePin pin,
+                       DirectCarvePanel::ProjectDirectoryCallback completion) {
+                    requestPinnedProjectDirectory(pin, std::move(completion));
+                });
+            if (m_projectSession && m_projectManager && m_jobRepo &&
+                m_carveJob && m_cncController) {
+                m_directCarveRunEffectAdapter =
+                    std::make_unique<DirectCarveRunEffectAdapter>(
+                        *m_projectSession,
+                        *m_projectManager,
+                        *m_jobRepo,
+                        *m_carveJob,
+                        *m_cncController);
+                dcarvep->setRunEffectExecutor(
+                    [this](const run_coordination::RunEffect& effect) {
+                        if (!m_directCarveRunEffectAdapter) return false;
+                        const auto result =
+                            m_directCarveRunEffectAdapter->execute(effect);
+                        if (result.status == DirectCarveRunEffectStatus::Rejected)
+                            return false;
+                        if (result.error != DirectCarveRunEffectError::None) {
+                            ToastManager::instance().show(
+                                ToastType::Warning,
+                                "Run History Needs Attention",
+                                "The machine was made safe and unlocked, but its "
+                                "history record could not be completed.");
+                        }
+                        return true;
+                    });
+            }
+            dcarvep->setOnPreparationDirty([this](bool dirty) {
+                if (!m_projectSession) return;
+                const auto context = m_projectSession->snapshot();
+                const auto transition = m_projectSession->dispatch(workshop::WorkshopCommand{
+                    workshop::SetPreparationLock{dirty}, context.generation});
+                if (dirty && !transition.accepted()) {
+                    ToastManager::instance().show(
+                        ToastType::Warning,
+                        "Preparation Lock Failed",
+                        "The project context changed. Return to the Project Plan and reopen this setup.");
+                }
+            });
+            dcarvep->setCreateProjectRequiredCallback([this]() {
+                if (m_projectSession) {
+                    const auto context = m_projectSession->snapshot();
+                    if (context.activeProjectItem &&
+                        beginPrepareCarve(*context.activeProjectItem)) {
+                        return;
+                    }
+                }
+                showHome(true);
+            });
             dcarvep->setOpenToolBrowserCallback([this]() {
                 m_uiManager->openWindow("tool_library");
             });
@@ -198,6 +271,10 @@ void Application::wireCncPanels() {
             }
             if (settsp) settsp->onConnectionChanged(connected, version);
             if (macrop) macrop->onConnectionChanged(connected, version);
+            if (dcarvep && !connected) {
+                dcarvep->onRunFailure(
+                    run_coordination::RunFailure::ControllerDisconnected);
+            }
             if (dcarvep) dcarvep->onConnectionChanged(connected);
             if (vpp) vpp->setCncConnected(connected);
             m_uiManager->setCncConnected(connected);
@@ -230,10 +307,14 @@ void Application::wireCncPanels() {
             gcp->onGrblLineAcked(ack);
         };
         cncCb.onProgressUpdate =
-            [this, gcp, jobp, safetyp](const StreamProgress& progress) {
+            [this, gcp, jobp, safetyp, dcarvep](const StreamProgress& progress) {
+            if (dcarvep) dcarvep->onRunProgress(progress);
             gcp->onGrblProgress(progress);
-            bool streaming = progress.streaming;
-            m_uiManager->setCncStreaming(streaming);
+            const bool streaming = progress.streaming;
+            const auto origin = dcarvep && dcarvep->hasActiveProtectedRun()
+                                    ? CncStreamOrigin::DirectCarve
+                                    : CncStreamOrigin::ExternalGCode;
+            m_uiManager->setCncStreaming(streaming, origin);
             if (jobp) {
                 jobp->onProgressUpdate(progress);
                 jobp->setStreaming(streaming);
@@ -246,7 +327,10 @@ void Application::wireCncPanels() {
                 }
             }
         };
-        cncCb.onAlarm = [gcp, csp, conp](int code, const std::string& desc) {
+        cncCb.onAlarm = [gcp, csp, conp, dcarvep](int code, const std::string& desc) {
+            if (dcarvep) {
+                dcarvep->onRunFailure(run_coordination::RunFailure::ControllerAlarm);
+            }
             gcp->onGrblAlarm(code, desc);
             if (csp) csp->onAlarm(code, desc);
             if (conp) conp->onAlarm(code, desc);
@@ -255,6 +339,18 @@ void Application::wireCncPanels() {
             gcp->onGrblError(message);
             if (conp) conp->onError(message);
         };
+        cncCb.onStreamingError =
+            [gcp, conp, dcarvep](const StreamingError& error) {
+                if (dcarvep) {
+                    dcarvep->onRunFailure(
+                        run_coordination::RunFailure::InvalidMachineResponse);
+                }
+                const std::string message =
+                    "Streaming stopped at line " + std::to_string(error.lineIndex + 1) +
+                    ": " + error.errorMessage;
+                gcp->onGrblError(message);
+                if (conp) conp->onError(message);
+            };
         cncCb.onRawLine = [this, gcp, conp, wcsp, settsp, dcarvep](
             const std::string& line, bool isSent) {
             gcp->onGrblRawLine(line, isSent);
@@ -320,7 +416,11 @@ void Application::wireCncPanels() {
 
         m_uiManager->setOnPanicStop([this]() {
             m_cncController->feedHold();
-            m_cncController->stopStream();
+            if (m_uiManager && m_uiManager->directCarvePanel()) {
+                m_uiManager->directCarvePanel()->onRunFailure(
+                    run_coordination::RunFailure::OperatorEmergencyStop);
+            }
+            if (m_cncController->isStreaming()) m_cncController->stopStream();
             ToastManager::instance().show(
                 ToastType::Warning, "PANIC STOP", "Feed hold sent — job aborted", 5.0f);
         });
@@ -332,6 +432,14 @@ void Application::wireCncPanels() {
         tbp->setToolboxRepository(m_toolboxRepo.get());
         tbp->setMaterialManager(m_materialManager.get());
         tbp->setFileDialog(m_uiManager->fileDialog());
+        if (auto* importDialog = m_uiManager->supplierToolImportDialog()) {
+            importDialog->setToolDatabase(m_toolDatabase.get());
+            importDialog->setToolboxRepository(m_toolboxRepo.get());
+            importDialog->setOnImported([tbp](const SelectiveToolImportResult&) {
+                tbp->refresh();
+            });
+            tbp->setSupplierToolImportDialog(importDialog);
+        }
         tbp->setOpenMachineProfilesCallback([this]() {
             m_uiManager->openMachineProfiles();
         });

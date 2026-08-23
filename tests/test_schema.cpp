@@ -19,7 +19,7 @@ TEST(Schema, GetVersion_AfterInit) {
     ASSERT_TRUE(db.open(":memory:"));
     ASSERT_TRUE(dw::Schema::initialize(db));
 
-    EXPECT_EQ(dw::Schema::getVersion(db), 17);
+    EXPECT_EQ(dw::Schema::getVersion(db), 18);
 }
 
 TEST(Schema, GetVersion_BeforeInit) {
@@ -35,7 +35,7 @@ TEST(Schema, DoubleInit_Idempotent) {
 
     EXPECT_TRUE(dw::Schema::initialize(db));
     EXPECT_TRUE(dw::Schema::initialize(db));
-    EXPECT_EQ(dw::Schema::getVersion(db), 17);
+    EXPECT_EQ(dw::Schema::getVersion(db), 18);
 }
 
 TEST(Schema, TablesCreated) {

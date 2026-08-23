@@ -7,8 +7,8 @@ namespace carve {
 
 enum class DirectCarveWorkflowStep {
     Model,
-    Tool,
     Material,
+    Tool,
     Preview,
     Machine,
     Zero,

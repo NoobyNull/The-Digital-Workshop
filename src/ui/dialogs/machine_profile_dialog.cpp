@@ -6,6 +6,8 @@
 
 #include "../../core/config/config.h"
 #include "../../core/gcode/machine_profile.h"
+#include "../../core/gcode/machine_profile_customization.h"
+#include "../../core/gcode/machine_rigidity.h"
 #include "../icons.h"
 
 namespace dw {
@@ -15,6 +17,7 @@ void MachineProfileDialog::open() {
     auto& config = Config::instance();
     m_editProfileIndex = config.getActiveMachineProfileIndex();
     m_editProfile = config.getMachineProfiles()[static_cast<size_t>(m_editProfileIndex)];
+    m_saveFeedback.clear();
 }
 
 void MachineProfileDialog::render() {
@@ -149,9 +152,38 @@ void MachineProfileDialog::render() {
         if (ImGui::CollapsingHeader("Drive System")) {
             ImGui::Indent();
             int driveType = static_cast<int>(m_editProfile.driveSystem);
-            const char* driveItems[] = {"Belt", "Acme", "Lead Screw", "Ball Screw"};
-            if (ImGui::Combo("Drive Type", &driveType, driveItems, 4))
+            const char* driveItems[] = {
+                "Belt", "Acme", "Lead Screw", "Ball Screw", "Custom"};
+            const f32 previousFactor = static_cast<f32>(
+                gcode::effectiveRigidityFactor(m_editProfile));
+            if (ImGui::Combo("Drive Type", &driveType, driveItems, 5)) {
                 m_editProfile.driveSystem = static_cast<gcode::DriveSystem>(driveType);
+                if (m_editProfile.driveSystem == gcode::DriveSystem::Custom) {
+                    m_editProfile.customRigidityFactor = previousFactor;
+                }
+            }
+
+            if (m_editProfile.driveSystem == gcode::DriveSystem::Custom) {
+                f32 rigidityPercent = static_cast<f32>(
+                    gcode::normalizeRigidityFactor(m_editProfile.customRigidityFactor) * 100.0);
+                if (ImGui::SliderFloat(
+                        "Rigidity factor",
+                        &rigidityPercent,
+                        static_cast<f32>(gcode::kMinimumRigidityFactor * 100.0),
+                        static_cast<f32>(gcode::kMaximumRigidityFactor * 100.0),
+                        "%.0f%%",
+                        ImGuiSliderFlags_AlwaysClamp)) {
+                    m_editProfile.customRigidityFactor = rigidityPercent / 100.0f;
+                }
+                ImGui::TextWrapped(
+                    "A conservative multiplier for suggested feed and stepdown, not a "
+                    "physical stiffness measurement. 100%% keeps the base suggestion; "
+                    "80%% uses 80%%. Lower is gentler for an inexperienced setup.");
+            }
+
+            ImGui::TextDisabled(
+                "Effective rigidity: %.0f%%",
+                gcode::effectiveRigidityFactor(m_editProfile) * 100.0);
             ImGui::Unindent();
         }
 
@@ -202,22 +234,59 @@ void MachineProfileDialog::render() {
         ImGui::Separator();
         ImGui::Spacing();
 
+        const bool editingBuiltIn =
+            profiles[static_cast<size_t>(m_editProfileIndex)].builtIn;
+        if (editingBuiltIn) {
+            ImGui::TextWrapped(
+                "Built-in preset: Save creates and activates an editable custom profile "
+                "so your changes survive a restart.");
+        }
+        if (!m_saveFeedback.empty()) {
+            ImGui::TextWrapped("%s", m_saveFeedback.c_str());
+        }
+
         // Action buttons
         if (ImGui::Button("Save")) {
-            config.updateMachineProfile(m_editProfileIndex, m_editProfile);
-            config.save();
-            if (m_editProfileIndex == config.getActiveMachineProfileIndex() && m_onChanged)
+            bool activeProfileChanged =
+                m_editProfileIndex == config.getActiveMachineProfileIndex();
+            if (editingBuiltIn) {
+                const auto customProfile = gcode::makeEditableMachineProfileCopy(
+                    profiles[static_cast<size_t>(m_editProfileIndex)],
+                    m_editProfile,
+                    profiles);
+                config.addMachineProfile(customProfile);
+                m_editProfileIndex =
+                    static_cast<int>(config.getMachineProfiles().size()) - 1;
+                m_editProfile = customProfile;
+                config.setActiveMachineProfileIndex(m_editProfileIndex);
+                activeProfileChanged = true;
+            } else {
+                m_editProfile.builtIn = false;
+                config.updateMachineProfile(m_editProfileIndex, m_editProfile);
+            }
+
+            if (config.save()) {
+                m_saveFeedback = editingBuiltIn
+                    ? "Custom profile saved and set active."
+                    : "Profile saved.";
+            } else {
+                m_saveFeedback = "Could not write the profile configuration.";
+            }
+            if (activeProfileChanged && m_onChanged)
                 m_onChanged();
         }
         ImGui::SameLine();
         if (ImGui::Button("New Copy")) {
-            gcode::MachineProfile copy = m_editProfile;
-            copy.name += " (Copy)";
-            copy.builtIn = false;
+            const auto copy = gcode::makeEditableMachineProfileCopy(
+                profiles[static_cast<size_t>(m_editProfileIndex)],
+                m_editProfile,
+                profiles);
             config.addMachineProfile(copy);
             m_editProfileIndex = static_cast<int>(config.getMachineProfiles().size()) - 1;
             m_editProfile = copy;
-            config.save();
+            m_saveFeedback = config.save()
+                ? "Editable copy created."
+                : "Copy created in memory, but the configuration could not be written.";
         }
         ImGui::SameLine();
 

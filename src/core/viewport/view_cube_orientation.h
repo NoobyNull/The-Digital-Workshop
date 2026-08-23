@@ -19,5 +19,9 @@ struct ViewCubeOrientation {
 };
 
 ViewCubeOrientation snapViewCubeOrientation(ViewCubeFace face, f32 currentYawDeg);
+f32 rotateViewYawByQuarterTurns(f32 currentYawDeg, int quarterTurns);
+ViewCubeOrientation rotateViewPitchByQuarterTurns(f32 currentYawDeg,
+                                                  f32 currentPitchDeg,
+                                                  int quarterTurns);
 
 } // namespace dw

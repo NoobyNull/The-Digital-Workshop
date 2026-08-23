@@ -40,9 +40,10 @@ class CncController {
     void setCallbacks(const CncCallbacks& cb) { m_callbacks = cb; }
 
     // Streaming
-    void startStream(const std::vector<std::string>& lines);
+    [[nodiscard]] bool startStream(const std::vector<std::string>& lines);
     void stopStream();
     bool isStreaming() const { return m_streaming.load(); }
+    bool isHeld() const { return m_held.load(); }
 
     // Real-time commands (thread-safe — all routed through IO thread)
     void feedHold();

@@ -1,18 +1,45 @@
 #include "project.h"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
+#include <string_view>
 
-#include "project_directory.h"
-#include "../config/config.h"
 #include "../database/database.h"
-#include "../database/gcode_repository.h"
-#include "../database/model_repository.h"
 #include "../paths/path_resolver.h"
 #include "../utils/file_utils.h"
 #include "../utils/log.h"
+#include "project_directory.h"
 
 namespace dw {
+namespace {
+
+constexpr std::size_t kMaximumProjectNameLength = 96;
+
+std::string normalizedProjectName(std::string_view value) {
+    const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char c) {
+        return std::isspace(c) != 0;
+    });
+    const auto last = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char c) {
+                          return std::isspace(c) != 0;
+                      }).base();
+    if (first >= last)
+        return {};
+    return std::string(first, last);
+}
+
+bool validProjectName(std::string_view name) {
+    if (name.empty() || name == "." || name == ".." ||
+        name.size() > kMaximumProjectNameLength) {
+        return false;
+    }
+    return std::none_of(name.begin(), name.end(), [](char raw) {
+        const auto c = static_cast<unsigned char>(raw);
+        return c < 0x20 || c == 0x7f || c == '/' || c == '\\';
+    });
+}
+
+} // namespace
 
 // Project implementation
 
@@ -58,9 +85,35 @@ bool Project::hasModel(i64 modelId) const {
 
 ProjectManager::ProjectManager(Database& db) : m_db(db), m_projectRepo(db) {}
 
-std::shared_ptr<Project> ProjectManager::create(const std::string& name) {
+void ProjectManager::synchronizeActiveProject(std::shared_ptr<Project> project) {
+    std::shared_ptr<ProjectDirectory> directory;
+
+    if (project && !project->filePath().empty()) {
+        const Path root =
+            PathResolver::resolve(project->filePath(), PathCategory::Projects);
+        project->setFilePath(root);
+        if (file::isDirectory(root) && file::exists(root / "project.json")) {
+            auto candidate = std::make_shared<ProjectDirectory>();
+            if (candidate->open(root) && !directoryClaimedByOtherRecord(root, project->id())) {
+                directory = std::move(candidate);
+            }
+        }
+    }
+
+    m_currentProject = std::move(project);
+    m_currentDir = std::move(directory);
+}
+
+std::shared_ptr<Project> ProjectManager::create(const std::string& name, bool temporary) {
+    const std::string normalizedName = normalizedProjectName(name);
+    if (!validProjectName(normalizedName)) {
+        log::warning("Project", "Refusing to create a project with an invalid name");
+        return nullptr;
+    }
+
     ProjectRecord record;
-    record.name = name;
+    record.name = normalizedName;
+    record.temporary = temporary;
 
     auto id = m_projectRepo.insert(record);
     if (!id) {
@@ -70,9 +123,13 @@ std::shared_ptr<Project> ProjectManager::create(const std::string& name) {
 
     auto project = std::make_shared<Project>();
     project->record().id = *id;
-    project->record().name = name;
+    project->record().name = normalizedName;
+    project->record().temporary = temporary;
 
-    log::infof("Project", "Created: %s (ID: %lld)", name.c_str(), static_cast<long long>(*id));
+    log::infof("Project",
+               "Created: %s (ID: %lld)",
+               normalizedName.c_str(),
+               static_cast<long long>(*id));
 
     return project;
 }
@@ -86,6 +143,8 @@ std::shared_ptr<Project> ProjectManager::open(i64 projectId) {
 
     auto project = std::make_shared<Project>();
     project->record() = *record;
+    project->setFilePath(
+        PathResolver::resolve(record->filePath, PathCategory::Projects));
 
     // Load model IDs
     auto modelIds = m_projectRepo.getModelIds(projectId);
@@ -104,15 +163,41 @@ std::shared_ptr<Project> ProjectManager::open(i64 projectId) {
 }
 
 bool ProjectManager::save(Project& project) {
+    const Path originalPath = project.filePath();
+    const Path intendedRoot = canonicalProjectDirectory(project);
+    const bool rootExisted = file::exists(intendedRoot);
+    const auto originalManifest = rootExisted ? file::readText(intendedRoot / "project.json")
+                                              : Result<std::string>{std::nullopt};
+    const auto originalDirectory = m_currentDir;
+    auto failSave = [&]() {
+        const Path preparedRoot = project.filePath();
+        if (!rootExisted && !preparedRoot.empty()) {
+            std::error_code cleanupError;
+            std::filesystem::remove_all(preparedRoot, cleanupError);
+        } else if (rootExisted && originalManifest.has_value()) {
+            (void)file::writeTextAtomic(intendedRoot / "project.json", *originalManifest);
+        }
+        project.setFilePath(originalPath);
+        if (m_currentProject && m_currentProject->id() == project.id())
+            m_currentDir = originalDirectory;
+        return false;
+    };
+
     if (!ensureProjectDirectory(project)) {
         log::error("Project", "Failed to prepare project directory");
-        return false;
+        return failSave();
     }
 
-    // Update project record
-    if (!m_projectRepo.update(project.record())) {
+    Transaction transaction(m_db);
+
+    // Persist a stable location while retaining the materialized filesystem
+    // path on the live Project used by the save/sync operations below.
+    ProjectRecord persistedRecord = project.record();
+    persistedRecord.filePath =
+        PathResolver::durableLocation(project.filePath(), PathCategory::Projects);
+    if (!m_projectRepo.update(persistedRecord)) {
         log::error("Project", "Failed to update record");
-        return false;
+        return failSave();
     }
 
     // Sync model associations
@@ -121,7 +206,12 @@ bool ProjectManager::save(Project& project) {
     // Remove models no longer in project
     for (i64 dbId : currentDbIds) {
         if (!project.hasModel(dbId)) {
-            m_projectRepo.removeModel(project.id(), dbId);
+            if (!m_projectRepo.removeModel(project.id(), dbId)) {
+                log::errorf("Project",
+                            "Failed to remove model association %lld",
+                            static_cast<long long>(dbId));
+                return failSave();
+            }
         }
     }
 
@@ -130,14 +220,31 @@ bool ProjectManager::save(Project& project) {
     for (int i = 0; i < static_cast<int>(projectIds.size()); ++i) {
         i64 modelId = projectIds[static_cast<usize>(i)];
         if (!m_projectRepo.hasModel(project.id(), modelId)) {
-            m_projectRepo.addModel(project.id(), modelId, i);
+            if (!m_projectRepo.addModel(project.id(), modelId, i)) {
+                log::errorf("Project",
+                            "Failed to add model association %lld",
+                            static_cast<long long>(modelId));
+                return failSave();
+            }
         } else {
-            m_projectRepo.updateModelOrder(project.id(), modelId, i);
+            if (!m_projectRepo.updateModelOrder(project.id(), modelId, i)) {
+                log::errorf("Project",
+                            "Failed to reorder model association %lld",
+                            static_cast<long long>(modelId));
+                return failSave();
+            }
         }
     }
 
     m_projectRepo.ensureOpenItemsForProject(project.id());
-    syncProjectDirectory(project);
+    if (!syncProjectDirectory(project)) {
+        log::error("Project", "Failed to synchronize project directory");
+        return failSave();
+    }
+    if (!transaction.commit()) {
+        log::error("Project", "Failed to commit project save");
+        return failSave();
+    }
 
     project.clearModified();
     log::infof("Project", "Saved: %s", project.name().c_str());
@@ -185,6 +292,61 @@ std::vector<ProjectOpenItem> ProjectManager::currentOpenItems() {
     return listOpenItems(m_currentProject->id());
 }
 
+std::optional<ProjectOpenItem> ProjectManager::findOpenItem(i64 itemId) {
+    return m_projectRepo.findOpenItemById(itemId);
+}
+
+std::optional<ProjectOpenItem> ProjectManager::findOpenItemBySource(
+    std::string_view sourceTable, i64 sourceId) {
+    if (!m_currentProject)
+        return std::nullopt;
+    auto items =
+        m_projectRepo.findOpenItemsBySource(m_currentProject->id(), sourceTable, sourceId);
+    return items.empty() ? std::nullopt : std::optional<ProjectOpenItem>{items.front()};
+}
+
+bool ProjectManager::updateOpenItem(ProjectOpenItem item) {
+    if (!m_currentProject) {
+        log::warning("Project", "Cannot update an open item without an active project");
+        return false;
+    }
+    if (item.id <= 0 || item.projectId <= 0) {
+        log::warning("Project", "Cannot update an open item without an exact row identity");
+        return false;
+    }
+    if (item.projectId != m_currentProject->id()) {
+        log::warning("Project", "Cannot update an open item from a non-active project");
+        return false;
+    }
+
+    const auto persisted = m_projectRepo.findOpenItemById(item.id);
+    if (!persisted || persisted->projectId != item.projectId) {
+        log::warning("Project", "Cannot update an open item with a foreign row identity");
+        return false;
+    }
+
+    return m_projectRepo.updateOpenItem(item);
+}
+
+bool ProjectManager::removeOpenItem(i64 itemId) {
+    if (!m_currentProject) {
+        log::warning("Project", "Cannot remove an open item without an active project");
+        return false;
+    }
+    if (itemId <= 0) {
+        log::warning("Project", "Cannot remove an open item without an exact row identity");
+        return false;
+    }
+
+    const auto persisted = m_projectRepo.findOpenItemById(itemId);
+    if (!persisted || persisted->projectId != m_currentProject->id()) {
+        log::warning("Project", "Cannot remove a missing or foreign open item");
+        return false;
+    }
+
+    return m_projectRepo.removeOpenItem(itemId);
+}
+
 std::optional<i64> ProjectManager::upsertOpenItem(ProjectOpenItem item) {
     if (item.projectId <= 0) {
         log::warning("Project", "Cannot upsert open item without a project id");
@@ -224,250 +386,6 @@ bool ProjectManager::removeModelFromProject(i64 modelId) {
 
     m_currentProject->removeModel(modelId);
     return true;
-}
-
-Path ProjectManager::canonicalProjectDirectory(const Project& project) const {
-    Path filePath = project.filePath();
-    if (!filePath.empty() && filePath.extension().empty()) {
-        return filePath;
-    }
-
-    std::string baseName = project.name().empty() ? "project" : project.name();
-    return Config::instance().getProjectsDir() / ProjectDirectory::sanitizeName(baseName);
-}
-
-bool ProjectManager::ensureProjectDirectory(Project& project) {
-    Path root = canonicalProjectDirectory(project);
-    if (root.empty()) {
-        return false;
-    }
-
-    auto dir = std::make_shared<ProjectDirectory>();
-    if (file::isDirectory(root) && file::exists(root / "project.json")) {
-        if (!dir->open(root)) {
-            return false;
-        }
-        dir->setMetadata(project.name(), project.description());
-    } else {
-        if (!dir->create(root, project.name(), project.description())) {
-            return false;
-        }
-    }
-
-    project.setFilePath(root);
-    m_currentDir = dir;
-    return true;
-}
-
-Path ProjectManager::resolveModelPath(const ModelRecord& model) const {
-    Path resolved = PathResolver::resolve(model.filePath, PathCategory::Support);
-    if (file::isFile(resolved)) {
-        return resolved;
-    }
-    resolved = PathResolver::resolve(model.filePath, PathCategory::Models);
-    if (file::isFile(resolved)) {
-        return resolved;
-    }
-    return model.filePath;
-}
-
-Path ProjectManager::resolveGCodePath(const GCodeRecord& gcode) const {
-    return PathResolver::resolve(gcode.filePath, PathCategory::GCode);
-}
-
-bool ProjectManager::syncProjectDirectory(Project& project) {
-    if (!m_currentDir || m_currentDir->root() != project.filePath()) {
-        if (!ensureProjectDirectory(project)) {
-            return false;
-        }
-    }
-
-    m_currentDir->setMetadata(project.name(), project.description());
-    m_currentDir->clearModels();
-    m_currentDir->clearGCode();
-
-    ModelRepository modelRepo(m_db);
-    for (i64 modelId : project.modelIds()) {
-        auto model = modelRepo.findById(modelId);
-        if (!model) {
-            log::warningf("Project",
-                          "Project '%s' references missing model %lld",
-                          project.name().c_str(),
-                          static_cast<long long>(modelId));
-            continue;
-        }
-
-        Path sourcePath = resolveModelPath(*model);
-        if (!m_currentDir->addModelFile(sourcePath, model->hash)) {
-            log::warningf("Project",
-                          "Could not mirror model '%s' into project directory",
-                          model->name.c_str());
-        }
-    }
-
-    GCodeRepository gcodeRepo(m_db);
-    for (const auto& gcode : gcodeRepo.findByProject(project.id())) {
-        Path sourcePath = resolveGCodePath(gcode);
-        if (!m_currentDir->addGCodeFile(sourcePath)) {
-            log::warningf("Project",
-                          "Could not mirror G-code '%s' into project directory",
-                          gcode.name.c_str());
-        }
-    }
-
-    return m_currentDir->save();
-}
-
-std::shared_ptr<ProjectDirectory> ProjectManager::ensureProjectForModel(
-    const std::string& modelName, const Path& modelSourcePath) {
-
-    std::string dirName = ProjectDirectory::sanitizeName(modelName);
-
-    // Check if a permanent project already exists for this model
-    Path permanentRoot = Config::instance().getProjectsDir() / dirName;
-    if (file::isDirectory(permanentRoot) && file::exists(permanentRoot / "project.json")) {
-        auto dir = std::make_shared<ProjectDirectory>();
-        if (!dir->open(permanentRoot)) {
-            log::errorf("Project", "Failed to open existing project dir: %s",
-                        permanentRoot.c_str());
-            return nullptr;
-        }
-
-        // Sync with SQLite
-        auto records = m_projectRepo.findAll();
-        std::shared_ptr<Project> project;
-        for (const auto& rec : records) {
-            if (rec.filePath == permanentRoot) {
-                project = open(rec.id);
-                break;
-            }
-        }
-        if (!project) {
-            project = create(modelName);
-            if (project) {
-                project->setFilePath(permanentRoot);
-                save(*project);
-            }
-        }
-        if (project) {
-            m_currentProject = project;
-        }
-        m_currentDir = dir;
-        return dir;
-    }
-
-    // If the current temp dir already matches this model, reuse it
-    if (m_currentDir && m_currentDir->name() == modelName && m_currentProject &&
-        m_currentProject->isTemporary()) {
-        return m_currentDir;
-    }
-
-    // Create directly in the projects directory (same location as permanent projects)
-    Path tempRoot = Config::instance().getProjectsDir() / dirName;
-
-    auto dir = std::make_shared<ProjectDirectory>();
-    if (file::isDirectory(tempRoot) && file::exists(tempRoot / "project.json")) {
-        if (!dir->open(tempRoot)) {
-            log::errorf("Project", "Failed to open temp project dir: %s",
-                        tempRoot.c_str());
-            return nullptr;
-        }
-    } else {
-        if (!dir->create(tempRoot, modelName)) {
-            log::errorf("Project", "Failed to create temp project dir: %s",
-                        tempRoot.c_str());
-            return nullptr;
-        }
-        if (!modelSourcePath.empty() && file::isFile(modelSourcePath)) {
-            dir->addModelFile(modelSourcePath);
-            dir->save();
-        }
-    }
-
-    // Create a lightweight DB record but mark as temporary
-    auto project = create(modelName);
-    if (project) {
-        project->setFilePath(tempRoot);
-        project->setTemporary(true);
-        save(*project);
-        m_currentProject = project;
-    }
-    m_currentDir = dir;
-
-    // Don't add temp projects to recent projects list
-    return dir;
-}
-
-bool ProjectManager::saveTemporaryProject() {
-    if (!m_currentProject || !m_currentProject->isTemporary() || !m_currentDir)
-        return false;
-
-    std::string dirName = ProjectDirectory::sanitizeName(m_currentProject->name());
-    Path permanentRoot = Config::instance().getProjectsDir() / dirName;
-    Path tempRoot = m_currentDir->root();
-
-    // Move temp directory to permanent location
-    std::error_code ec;
-    std::filesystem::create_directories(permanentRoot.parent_path(), ec);
-    if (ec) {
-        log::errorf("Project", "Failed to create parent dir: %s", ec.message().c_str());
-        return false;
-    }
-
-    // If permanent already exists (race), remove it first
-    if (std::filesystem::exists(permanentRoot)) {
-        std::filesystem::remove_all(permanentRoot, ec);
-    }
-
-    std::filesystem::rename(tempRoot, permanentRoot, ec);
-    if (ec) {
-        // rename fails across filesystems — fall back to copy+delete
-        std::filesystem::copy(tempRoot, permanentRoot,
-                              std::filesystem::copy_options::recursive, ec);
-        if (ec) {
-            log::errorf("Project", "Failed to copy project to permanent: %s",
-                        ec.message().c_str());
-            return false;
-        }
-        std::filesystem::remove_all(tempRoot, ec);
-    }
-
-    // Update project record to point to permanent location
-    m_currentProject->setFilePath(permanentRoot);
-    m_currentProject->setTemporary(false);
-    save(*m_currentProject);
-
-    // Re-open directory at new location
-    m_currentDir = std::make_shared<ProjectDirectory>();
-    m_currentDir->open(permanentRoot);
-
-    // Now add to recent projects
-    Config::instance().addRecentProject(permanentRoot);
-    Config::instance().save();
-
-    log::infof("Project", "Saved temporary project to: %s", permanentRoot.c_str());
-    return true;
-}
-
-void ProjectManager::discardTemporaryProject() {
-    if (!m_currentProject || !m_currentProject->isTemporary())
-        return;
-
-    Path tempRoot;
-    if (m_currentDir)
-        tempRoot = m_currentDir->root();
-
-    // Remove from DB
-    remove(m_currentProject->id());
-
-    m_currentProject.reset();
-    m_currentDir.reset();
-
-    // Clean up temp files
-    if (!tempRoot.empty()) {
-        std::error_code ec;
-        std::filesystem::remove_all(tempRoot, ec);
-    }
 }
 
 } // namespace dw

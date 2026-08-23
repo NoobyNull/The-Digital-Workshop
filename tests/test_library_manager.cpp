@@ -87,6 +87,16 @@ class LibraryManagerTest : public ::testing::Test {
 
 } // namespace
 
+// Minimal valid 1x1 white PNG.
+constexpr dw::u8 kOnePixelPng[] = {
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00,
+    0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
+    0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
+    0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00,
+    0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00, 0x00, 0x00,
+    0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82};
+
 // --- Import ---
 
 TEST_F(LibraryManagerTest, ImportModel_Success) {
@@ -95,6 +105,22 @@ TEST_F(LibraryManagerTest, ImportModel_Success) {
     EXPECT_TRUE(result.success) << "Error: " << result.error;
     EXPECT_GT(result.modelId, 0);
     EXPECT_FALSE(result.isDuplicate);
+}
+
+TEST_F(LibraryManagerTest, ImportModel_UsesSidecarThumbnailWhenPresent) {
+    auto path = writeMiniSTL("sidecar_import");
+    const auto imagePath = m_tmpDir / "sidecar_import.png";
+    ASSERT_TRUE(dw::file::writeBinary(imagePath, kOnePixelPng, sizeof(kOnePixelPng)));
+
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << "Error: " << result.error;
+
+    auto model = m_mgr->getModel(result.modelId);
+    ASSERT_TRUE(model.has_value());
+    EXPECT_EQ(model->thumbnailPath.extension(), ".tga");
+    EXPECT_TRUE(dw::file::exists(model->thumbnailPath));
+
+    EXPECT_TRUE(m_mgr->removeModel(result.modelId));
 }
 
 TEST_F(LibraryManagerTest, ImportModel_DuplicateDetected) {
@@ -185,6 +211,30 @@ TEST_F(LibraryManagerTest, UpdateTags) {
     auto model = m_mgr->getModel(result.modelId);
     ASSERT_TRUE(model.has_value());
     EXPECT_EQ(model->tags.size(), 2u);
+}
+
+TEST_F(LibraryManagerTest, SetThumbnailFromImage_ConvertsImageToTgaAndUpdatesRecord) {
+    auto path = writeMiniSTL("with_sidecar");
+    auto result = m_mgr->importModel(path);
+    ASSERT_TRUE(result.success) << result.error;
+
+    const auto imagePath = m_tmpDir / "with_sidecar.png";
+    ASSERT_TRUE(dw::file::writeBinary(imagePath, kOnePixelPng, sizeof(kOnePixelPng)));
+
+    ASSERT_TRUE(m_mgr->setThumbnailFromImage(result.modelId, imagePath));
+
+    auto model = m_mgr->getModel(result.modelId);
+    ASSERT_TRUE(model.has_value());
+    EXPECT_EQ(model->thumbnailPath.extension(), ".tga");
+    ASSERT_TRUE(dw::file::exists(model->thumbnailPath));
+
+    auto thumbnail = dw::file::readBinary(model->thumbnailPath);
+    ASSERT_TRUE(thumbnail.has_value());
+    ASSERT_GE(thumbnail->size(), 18u);
+    EXPECT_EQ((*thumbnail)[2], 2);
+    EXPECT_EQ((*thumbnail)[12] | ((*thumbnail)[13] << 8), 512);
+    EXPECT_EQ((*thumbnail)[14] | ((*thumbnail)[15] << 8), 512);
+    EXPECT_EQ((*thumbnail)[16], 32);
 }
 
 // --- Remove ---

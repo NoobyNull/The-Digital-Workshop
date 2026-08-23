@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "core/config/layout_preset.h"
 #include <nlohmann/json.hpp>
 
 namespace dw {
@@ -18,12 +19,13 @@ bool WindowCatalogEntry::matchesKey(std::string_view candidate) const {
 
 const std::vector<WindowCatalogEntry>& windowCatalogEntries() {
     static const std::vector<WindowCatalogEntry> entries = {
-        {"start_page",      "start_page",      "Start Page",        "Start Page",
-         WindowRole::Workshop, WindowType::DockablePanel, "center", true, false, true, {}},
+        {"start_page",      "start_page",      "Home###Start Page", "Home",
+         WindowRole::Workshop, WindowType::DockablePanel, "center", true, false, true,
+         {"home"}},
         {"viewport",        "viewport",        "Viewport",          "Viewport",
          WindowRole::Shared, WindowType::DockablePanel, "center", true, true, true, {}},
         {"library",         "library",         "Library",           "Library",
-         WindowRole::Workshop, WindowType::DockablePanel, "left_top", true, false, true, {}},
+         WindowRole::Workshop, WindowType::DockablePanel, "left_top", false, false, false, {}},
         {"properties",      "properties",      "Properties",        "Properties",
          WindowRole::Workshop, WindowType::DockablePanel, "right", true, false, true, {}},
         {"project",         "project",         "Project",           "Project",
@@ -33,7 +35,8 @@ const std::vector<WindowCatalogEntry>& windowCatalogEntries() {
         {"cut_optimizer",   "cut_optimizer",   "Cut Optimizer",     "Cut Optimizer",
          WindowRole::Workshop, WindowType::DockablePanel, "center", false, false, true, {}},
         {"project_costing", "project_costing", "Project Costing",   "Project Costing",
-         WindowRole::Workshop, WindowType::DockablePanel, "left_bottom", false, false, true, {}},
+         WindowRole::Workshop, WindowType::DockablePanel, "left_bottom", false, false, true,
+         {"cost_estimator"}},
         {"materials",       "materials",       "Materials",         "Materials",
          WindowRole::Workshop, WindowType::DockablePanel, "left_bottom", false, false, true, {}},
         {"tool_library",    "tool_browser",    "Tool Library",      "Tool Library",
@@ -60,7 +63,7 @@ const std::vector<WindowCatalogEntry>& windowCatalogEntries() {
         {"cnc_macros",      "cnc_macros",      "Macros",            "Macros",
          WindowRole::Sender, WindowType::DockablePanel, "center", false, true, true, {}},
         {"direct_carve",    "direct_carve",    "Direct Carve",      "Direct Carve",
-         WindowRole::Sender, WindowType::DockablePanel, "center", false, true, true, {}},
+         WindowRole::Shared, WindowType::DockablePanel, "center", false, true, true, {}},
 
         {"file_dialog",     "",                "File Dialog",       "File Dialog",
          WindowRole::Global, WindowType::ModalDialog, "modal", false, false, false, {}},
@@ -107,6 +110,31 @@ std::string canonicalWindowKey(std::string_view key) {
     if (const auto* entry = findWindowCatalogEntry(key))
         return entry->key;
     return std::string(key);
+}
+
+std::optional<bool> layoutPresetVisibility(const LayoutPreset& preset,
+                                           std::string_view windowKey) {
+    const auto findValue = [&preset](std::string_view candidate) -> std::optional<bool> {
+        const auto found = preset.visibility.find(std::string(candidate));
+        if (found == preset.visibility.end())
+            return std::nullopt;
+        return found->second;
+    };
+
+    if (const auto exact = findValue(windowKey))
+        return exact;
+    const auto* entry = findWindowCatalogEntry(windowKey);
+    if (!entry)
+        return std::nullopt;
+    if (const auto layout = findValue(entry->layoutKey))
+        return layout;
+    if (const auto canonical = findValue(entry->key))
+        return canonical;
+    for (const auto& alias : entry->legacyKeys) {
+        if (const auto legacy = findValue(alias))
+            return legacy;
+    }
+    return std::nullopt;
 }
 
 std::string windowRoleName(WindowRole role) {

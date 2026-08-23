@@ -19,6 +19,7 @@ struct ProjectRecord {
     std::string notes;
     std::string createdAt;
     std::string modifiedAt;
+    bool temporary = false;
 };
 
 // Project-Model link

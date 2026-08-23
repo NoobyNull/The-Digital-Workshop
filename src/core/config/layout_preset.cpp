@@ -16,6 +16,8 @@ std::string LayoutPreset::toJsonString() const {
         {"visibility", visObj},
         {"autoTrigger", autoTriggerPanelKey},
     };
+    if (!id.empty())
+        j["id"] = id;
     return j.dump();
 }
 
@@ -25,6 +27,7 @@ LayoutPreset LayoutPreset::fromJsonString(const std::string& jsonStr) {
         return LayoutPreset{};
 
     LayoutPreset p;
+    if (j.contains("id") && j["id"].is_string()) p.id = j["id"].get<std::string>();
     if (j.contains("name")) p.name = j["name"].get<std::string>();
     if (j.contains("builtIn")) p.builtIn = j["builtIn"].get<bool>();
     if (j.contains("autoTrigger")) p.autoTriggerPanelKey = j["autoTrigger"].get<std::string>();
@@ -41,13 +44,14 @@ LayoutPreset LayoutPreset::fromJsonString(const std::string& jsonStr) {
 
 // --- Built-in preset factories ---
 
-LayoutPreset LayoutPreset::modelDefault() {
+LayoutPreset LayoutPreset::guidedDefault() {
     LayoutPreset p;
-    p.name = "Workshop";
+    p.id = GUIDED_LAYOUT_ID;
+    p.name = "Guided Workshop";
     p.builtIn = true;
     p.visibility = {
-        {"viewport", true},       {"library", true},
-        {"properties", true},     {"project", true},
+        {"viewport", true},       {"library", false},
+        {"properties", false},    {"project", true},
         {"start_page", true},     {"gcode", false},
         {"cut_optimizer", false}, {"project_costing", false},
         {"materials", false},     {"tool_browser", false},
@@ -60,8 +64,22 @@ LayoutPreset LayoutPreset::modelDefault() {
     return p;
 }
 
+LayoutPreset LayoutPreset::advancedDefault() {
+    LayoutPreset p = guidedDefault();
+    p.id = ADVANCED_LAYOUT_ID;
+    p.name = "Advanced Workbench";
+    p.visibility["properties"] = true;
+    p.visibility["start_page"] = false;
+    return p;
+}
+
+LayoutPreset LayoutPreset::modelDefault() {
+    return advancedDefault();
+}
+
 LayoutPreset LayoutPreset::cncDefault() {
     LayoutPreset p;
+    p.id = CNC_LAYOUT_ID;
     p.name = "CNC Sender";
     p.builtIn = true;
     p.autoTriggerPanelKey = "cnc_status";

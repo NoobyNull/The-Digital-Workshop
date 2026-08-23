@@ -86,9 +86,158 @@ TEST(DirectCarveOperationState, ParsesSetupIntentFromOpenItem) {
     EXPECT_EQ(parsed->finishingTool->units, dw::VtdbUnits::Metric);
     EXPECT_DOUBLE_EQ(parsed->finishingTool->diameter, 3.175);
     EXPECT_EQ(parsed->finishingTool->num_flutes, 2);
-    ASSERT_TRUE(parsed->clearingTool.has_value());
-    EXPECT_EQ(parsed->clearingTool->tool_type, dw::VtdbToolType::EndMill);
-    EXPECT_EQ(parsed->clearingTool->units, dw::VtdbUnits::Imperial);
+    EXPECT_EQ(parsed->clearingToolMode, dw::carve::ClearingToolMode::Selected);
+    ASSERT_TRUE(parsed->selectedClearingTool.has_value());
+    EXPECT_EQ(parsed->selectedClearingTool->id, "tool-clear");
+    EXPECT_EQ(parsed->selectedClearingTool->tool_type, dw::VtdbToolType::EndMill);
+    EXPECT_EQ(parsed->selectedClearingTool->units, dw::VtdbUnits::Imperial);
+    EXPECT_DOUBLE_EQ(parsed->selectedClearingTool->diameter, 0.25);
+    EXPECT_FALSE(parsed->effectiveClearingTool.has_value());
+}
+
+TEST(DirectCarveOperationState, ParsesAutomaticClearingIntentAndEffectiveToolSeparately) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({
+        "operation_kind":"direct_carve",
+        "model_name":"relief"
+    })";
+    item.snapshotJson = R"({
+        "clearing_mode":"automatic",
+        "selected_clearing_tool":{
+            "id":"saved-choice",
+            "name":"Saved 1/4 End Mill",
+            "type":"end_mill",
+            "units":"metric",
+            "diameter_mm":6.35,
+            "flutes":2
+        },
+        "effective_clearing_tool":{
+            "id":"auto-result",
+            "name":"Automatic 8mm End Mill",
+            "type":"end_mill",
+            "units":"metric",
+            "diameter_mm":8.0,
+            "flutes":2
+        }
+    })";
+
+    auto parsed = dw::carve::parseDirectCarveOperationSetup(item);
+
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed->clearingToolMode, dw::carve::ClearingToolMode::Automatic);
+    ASSERT_TRUE(parsed->selectedClearingTool.has_value());
+    EXPECT_EQ(parsed->selectedClearingTool->id, "saved-choice");
+    ASSERT_TRUE(parsed->effectiveClearingTool.has_value());
+    EXPECT_EQ(parsed->effectiveClearingTool->id, "auto-result");
+}
+
+TEST(DirectCarveOperationState, ParsesSelectedClearingModeFromNewSnapshotKeys) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({"operation_kind":"direct_carve","model_source_path":"/tmp/relief.stl"})";
+    item.snapshotJson = R"({
+        "clearing_mode":"selected",
+        "selected_clearing_tool":{
+            "id":"selected-tool",
+            "name":"Selected 6mm End Mill",
+            "type":"end_mill",
+            "units":"metric",
+            "diameter_mm":6.0
+        },
+        "effective_clearing_tool":{
+            "id":"selected-tool",
+            "name":"Selected 6mm End Mill",
+            "type":"end_mill",
+            "units":"metric",
+            "diameter_mm":6.0
+        },
+        "clearing_tool":{
+            "id":"ignored-legacy-tool",
+            "name":"Ignored legacy tool",
+            "type":"end_mill",
+            "units":"metric",
+            "diameter_mm":12.0
+        }
+    })";
+
+    auto parsed = dw::carve::parseDirectCarveOperationSetup(item);
+
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed->clearingToolMode, dw::carve::ClearingToolMode::Selected);
+    ASSERT_TRUE(parsed->selectedClearingTool.has_value());
+    EXPECT_EQ(parsed->selectedClearingTool->id, "selected-tool");
+    ASSERT_TRUE(parsed->effectiveClearingTool.has_value());
+    EXPECT_EQ(parsed->effectiveClearingTool->id, "selected-tool");
+}
+
+TEST(DirectCarveOperationState, DisabledClearingRetainsIntentButNeverEffectiveTool) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({"operation_kind":"direct_carve","model_name":"relief"})";
+    item.snapshotJson = R"({
+        "clearing_mode":"disabled",
+        "selected_clearing_tool":{
+            "id":"retained-choice",
+            "name":"Retained 1/4 End Mill",
+            "type":"end_mill",
+            "units":"imperial",
+            "diameter_mm":6.35
+        },
+        "effective_clearing_tool":{
+            "id":"stale-result",
+            "name":"Stale 8mm End Mill",
+            "type":"end_mill",
+            "units":"metric",
+            "diameter_mm":8.0
+        }
+    })";
+
+    auto parsed = dw::carve::parseDirectCarveOperationSetup(item);
+
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed->clearingToolMode, dw::carve::ClearingToolMode::Disabled);
+    ASSERT_TRUE(parsed->selectedClearingTool.has_value());
+    EXPECT_EQ(parsed->selectedClearingTool->id, "retained-choice");
+    EXPECT_FALSE(parsed->effectiveClearingTool.has_value());
+}
+
+TEST(DirectCarveOperationState, LegacySnapshotWithoutClearingToolDefaultsAutomatic) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({"operation_kind":"direct_carve","model_name":"relief"})";
+    item.snapshotJson = R"({"setup":{"toolpath_generated":false}})";
+
+    auto parsed = dw::carve::parseDirectCarveOperationSetup(item);
+
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed->clearingToolMode, dw::carve::ClearingToolMode::Automatic);
+    EXPECT_FALSE(parsed->selectedClearingTool.has_value());
+    EXPECT_FALSE(parsed->effectiveClearingTool.has_value());
+    EXPECT_FALSE(parsed->finishingTool.has_value());
+}
+
+TEST(DirectCarveOperationState, UnknownExplicitClearingModeFallsBackToAutomatic) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({"operation_kind":"direct_carve","model_name":"relief"})";
+    item.snapshotJson = R"({
+        "clearing_mode":"future_mode",
+        "clearing_tool":{
+            "id":"legacy-tool-must-not-be-reinterpreted",
+            "name":"Legacy tool",
+            "type":"end_mill",
+            "units":"metric",
+            "diameter_mm":6.0
+        }
+    })";
+
+    auto parsed = dw::carve::parseDirectCarveOperationSetup(item);
+
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed->clearingToolMode, dw::carve::ClearingToolMode::Automatic);
+    EXPECT_FALSE(parsed->selectedClearingTool.has_value());
+    EXPECT_FALSE(parsed->effectiveClearingTool.has_value());
 }
 
 TEST(DirectCarveOperationState, RejectsNonDirectCarveOperation) {
@@ -99,11 +248,21 @@ TEST(DirectCarveOperationState, RejectsNonDirectCarveOperation) {
     EXPECT_FALSE(dw::carve::parseDirectCarveOperationSetup(item).has_value());
 }
 
+TEST(DirectCarveOperationState, RejectsOperationWithoutModelIdentity) {
+    dw::ProjectOpenItem item;
+    item.itemType = dw::ProjectOpenItemType::Operation;
+    item.intentJson = R"({"operation_kind":"direct_carve"})";
+
+    EXPECT_FALSE(dw::carve::parseDirectCarveOperationSetup(item).has_value());
+}
+
 TEST(DirectCarveOperationState, UsesMachineSnapshotRapidRateWhenToolpathOmitsIt) {
     dw::ProjectOpenItem item;
     item.itemType = dw::ProjectOpenItemType::Operation;
     item.intentJson = R"({
         "operation_kind":"direct_carve",
+        "model_name":"River Sign",
+        "model_source_path":"/tmp/river-sign.stl",
         "toolpath":{
             "feed_rate_mm_min":1200.0,
             "plunge_rate_mm_min":300.0
@@ -139,8 +298,7 @@ TEST(DirectCarveOperationState, BuildsAndParsesSienciAutoZeroItem) {
     setup.toolDiameterMm = 3.175f;
     setup.zeroVerified = true;
 
-    auto item = dw::carve::makeDirectCarveZeroingOpenItem(
-        55, "direct_carve:relief", setup);
+    auto item = dw::carve::makeDirectCarveZeroingOpenItem(55, "direct_carve:relief", setup);
 
     EXPECT_EQ(item.itemType, dw::ProjectOpenItemType::Zeroing);
     EXPECT_EQ(item.parentItemId, std::optional<dw::i64>(55));

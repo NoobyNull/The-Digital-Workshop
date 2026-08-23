@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "../core/config/layout_preset.h"
+#include "../core/config/workspace_stream_policy.h"
 #include "../core/config/window_catalog.h"
 #include "../core/types.h"
 
@@ -62,6 +63,7 @@ class TagImageDialog;
 class MaintenanceDialog;
 class TaggerShutdownDialog;
 class SettingsImportDialog;
+class SupplierToolImportDialog;
 
 // Forward declarations - core
 struct LoadingState;
@@ -82,6 +84,11 @@ class Workspace;
 // Forward declarations - widgets
 class StatusBar;
 class ContextMenuManager;
+class ProjectContextBar;
+
+namespace workshop {
+class ProjectShellSnapshot;
+}
 
 // Callback types for actions that remain in Application
 // Workspace mode — controls which panels are visible by default
@@ -92,6 +99,8 @@ using ModelIdCallback = std::function<void(int64_t)>;
 using PathCallback = std::function<void(const Path&)>;
 using PathsCallback = std::function<void(const std::vector<std::string>&)>;
 using ResetToDefaultsCallback = std::function<std::string()>;
+using ExperienceModeGetter = std::function<bool()>;
+using ExperienceModeSetter = std::function<void(bool)>;
 
 class UIManager {
   public:
@@ -121,12 +130,16 @@ class UIManager {
 
     // --- Per-frame rendering ---
     void renderMenuBar();
+    void renderProjectContextBar();
     void renderPanels();
     void renderAboutDialog();
     void renderResetToDefaultsDialog();
     void renderRestartPopup(const ActionCallback& onRelaunch);
     void setupDefaultDockLayout(ImGuiID dockspaceId);
     void handleKeyboardShortcuts();
+    [[nodiscard]] float projectContextBarHeight() const;
+    void setProjectShellSnapshot(workshop::ProjectShellSnapshot snapshot);
+    void setOnBackToProject(ActionCallback callback);
 
     // --- Background UI (StatusBar, ToastManager, ImportSummaryDialog) ---
     void renderBackgroundUI(float deltaTime, const LoadingState* loadingState);
@@ -165,6 +178,9 @@ class UIManager {
     TagImageDialog* tagImageDialog() { return m_tagImageDialog.get(); }
     MaintenanceDialog* maintenanceDialog() { return m_maintenanceDialog.get(); }
     TaggerShutdownDialog* taggerShutdownDialog() { return m_taggerShutdownDialog.get(); }
+    SupplierToolImportDialog* supplierToolImportDialog() {
+        return m_supplierToolImportDialog.get();
+    }
     ContextMenuManager* contextMenuManager() { return m_contextMenuManager.get(); }
 
     // --- Visibility state ---
@@ -208,6 +224,11 @@ class UIManager {
     void saveCurrentAsPreset(const std::string& name);
     void deletePreset(int index);
     int activePresetIndex() const { return m_activePresetIndex; }
+    void setExperienceModeAccessors(ExperienceModeGetter getter,
+                                    ExperienceModeSetter setter) {
+        m_guidedExperienceGetter = std::move(getter);
+        m_guidedExperienceSetter = std::move(setter);
+    }
 
     // Group panels
     void addGroupPanel();
@@ -220,6 +241,8 @@ class UIManager {
     void setOnImportFolder(ActionCallback cb) { m_onImportFolder = std::move(cb); }
     void setOnExportModel(ActionCallback cb) { m_onExportModel = std::move(cb); }
     void setOnImportProjectArchive(ActionCallback cb) { m_onImportProjectArchive = std::move(cb); }
+    void setOnOpenDesignLibrary(ActionCallback cb) { m_onOpenDesignLibrary = std::move(cb); }
+    void setOnCloseDesignLibrary(ActionCallback cb) { m_onCloseDesignLibrary = std::move(cb); }
     void setOnQuit(ActionCallback cb) { m_onQuit = std::move(cb); }
     void setOnSpawnSettings(ActionCallback cb) { m_onSpawnSettings = std::move(cb); }
     void setOnShowAbout(ActionCallback cb) { m_onShowAbout = std::move(cb); }
@@ -234,9 +257,7 @@ class UIManager {
     void setOnLocateMissingFiles(ActionCallback cb) { m_onLocateMissingFiles = std::move(cb); }
     void setOnExportSettings(ActionCallback cb) { m_onExportSettings = std::move(cb); }
     void setOnImportSettings(ActionCallback cb) { m_onImportSettings = std::move(cb); }
-    void setOnResetToDefaults(ResetToDefaultsCallback cb) {
-        m_onResetToDefaults = std::move(cb);
-    }
+    void setOnResetToDefaults(ResetToDefaultsCallback cb) { m_onResetToDefaults = std::move(cb); }
 
     // Settings import dialog
     SettingsImportDialog* settingsImportDialog() const;
@@ -248,7 +269,8 @@ class UIManager {
     void setOnPanicStop(ActionCallback cb) { m_onPanicStop = std::move(cb); }
 
     // CNC streaming state (for panic smash detection)
-    void setCncStreaming(bool v);
+    void setCncStreaming(bool streaming,
+                         CncStreamOrigin origin = CncStreamOrigin::ExternalGCode);
 
     // CNC state for menu bar display
     void setCncConnected(bool v) { m_cncConnected = v; }
@@ -338,8 +360,12 @@ class UIManager {
     void syncWorkspaceModeToPanels();
     std::vector<std::string> currentStatusTips() const;
     bool senderSurfaceVisible() const;
-    static bool isBuiltInWorkshopPreset(int presetIndex) { return presetIndex == 0; }
-    static bool isBuiltInSenderPreset(int presetIndex) { return presetIndex == 1; }
+    bool isBuiltInWorkshopPreset(int presetIndex) const;
+    bool isBuiltInSenderPreset(int presetIndex) const;
+    int workshopPresetIndex() const;
+    int senderPresetIndex() const;
+    bool guidedExperienceSelected() const;
+    void selectGuidedExperience(bool guided);
 
     // Dialog list for batch rendering
     std::vector<Dialog*> m_dialogList;
@@ -349,6 +375,8 @@ class UIManager {
     bool m_suppressAutoContext = false;
     bool m_showSavePresetPopup = false;
     char m_presetNameBuf[64] = {};
+    ExperienceModeGetter m_guidedExperienceGetter;
+    ExperienceModeSetter m_guidedExperienceSetter;
     void checkAutoContextTrigger(const std::string& focusedPanelKey);
     void renderPresetSelector();
     void renderSavePresetPopup();
@@ -367,9 +395,11 @@ class UIManager {
     std::unique_ptr<MaintenanceDialog> m_maintenanceDialog;
     std::unique_ptr<TaggerShutdownDialog> m_taggerShutdownDialog;
     std::unique_ptr<SettingsImportDialog> m_settingsImportDialog;
+    std::unique_ptr<SupplierToolImportDialog> m_supplierToolImportDialog;
 
     // Widgets
     std::unique_ptr<StatusBar> m_statusBar;
+    std::unique_ptr<ProjectContextBar> m_projectContextBar;
 
     // Context menu manager
     std::unique_ptr<ContextMenuManager> m_contextMenuManager;
@@ -387,6 +417,7 @@ class UIManager {
     void renderToolbar();
     void renderFileMenu();
     void renderViewMenu();
+    void renderDesignLibraryMenuItem();
     void renderSenderSubmenu();
     void renderEditMenu();
     void renderToolsMenu();
@@ -402,6 +433,8 @@ class UIManager {
     ActionCallback m_onImportFolder;
     ActionCallback m_onExportModel;
     ActionCallback m_onImportProjectArchive;
+    ActionCallback m_onOpenDesignLibrary;
+    ActionCallback m_onCloseDesignLibrary;
     ActionCallback m_onQuit;
     ActionCallback m_onSpawnSettings;
     ActionCallback m_onShowAbout;
@@ -424,6 +457,7 @@ class UIManager {
     bool m_cncConnected = false;
     bool m_cncSimulating = false;
     bool m_cncStreaming = false;
+    CncStreamShell m_cncStreamShell = CncStreamShell::Sender;
     std::vector<std::string> m_availablePorts;
 
     // Keyboard smash panic detector

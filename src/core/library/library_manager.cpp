@@ -1,7 +1,9 @@
 #include "library_manager.h"
 
 #include "../../render/thumbnail_generator.h"
+#include "image_thumbnail.h"
 #include "../graph/graph_manager.h"
+#include "../import/thumbnail_sidecar.h"
 #include "../loaders/loader_factory.h"
 #include "../mesh/hash.h"
 #include "../paths/app_paths.h"
@@ -90,8 +92,14 @@ ImportResult LibraryManager::importModel(const Path& sourcePath) {
         return result;
     }
 
-    // Generate thumbnail (best effort)
-    generateThumbnail(*modelId, *mesh);
+    // Use a nearby image thumbnail when present; fall back to generated preview.
+    bool thumbnailOk = false;
+    if (auto sidecar = findSidecarThumbnailForImport(sourcePath)) {
+        thumbnailOk = setThumbnailFromImage(*modelId, *sidecar);
+    }
+    if (!thumbnailOk) {
+        generateThumbnail(*modelId, *mesh);
+    }
 
     // Dual-write: create graph node (non-fatal)
     if (m_graphManager && m_graphManager->isAvailable()) {
@@ -233,6 +241,27 @@ bool LibraryManager::generateThumbnail(i64 modelId,
     m_modelRepo.updateThumbnail(modelId, thumbnailPath);
 
     log::infof("Library", "Generated thumbnail: %s", thumbnailPath.string().c_str());
+    return true;
+}
+
+bool LibraryManager::setThumbnailFromImage(i64 modelId, const Path& imagePath) {
+    auto thumbnailPath = image_thumbnail::writeCachedTgaFromImage(modelId, imagePath);
+    if (!thumbnailPath) {
+        return false;
+    }
+
+    if (!m_modelRepo.updateThumbnail(modelId, *thumbnailPath)) {
+        log::warningf("Library",
+                      "Failed to update thumbnail path for model %lld",
+                      static_cast<long long>(modelId));
+        return false;
+    }
+
+    log::infof("Library",
+               "Used sidecar thumbnail for model %lld: %s -> %s",
+               static_cast<long long>(modelId),
+               imagePath.string().c_str(),
+               thumbnailPath->string().c_str());
     return true;
 }
 

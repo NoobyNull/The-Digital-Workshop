@@ -1,0 +1,604 @@
+#include <gtest/gtest.h>
+
+#include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "core/config/config.h"
+
+namespace {
+
+namespace fs = std::filesystem;
+
+#ifdef __linux__
+class ScopedXdgRuntimeDir {
+  public:
+    explicit ScopedXdgRuntimeDir(const fs::path& path) {
+        if (const char* current = std::getenv("XDG_RUNTIME_DIR"))
+            m_previous = current;
+        m_valid = setenv("XDG_RUNTIME_DIR", path.c_str(), 1) == 0;
+    }
+
+    ~ScopedXdgRuntimeDir() {
+        if (!m_valid)
+            return;
+        if (m_previous)
+            (void)setenv("XDG_RUNTIME_DIR", m_previous->c_str(), 1);
+        else
+            (void)unsetenv("XDG_RUNTIME_DIR");
+    }
+
+    bool valid() const { return m_valid; }
+
+  private:
+    std::optional<std::string> m_previous;
+    bool m_valid = false;
+};
+#endif
+
+std::string readFile(const fs::path& path) {
+    std::ifstream input(path);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+std::vector<fs::path> productionSources() {
+    std::vector<fs::path> sources;
+    const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
+    for (const auto& entry : fs::recursive_directory_iterator(root)) {
+        const auto extension = entry.path().extension().string();
+        if (entry.is_regular_file() &&
+            (extension == ".h" || extension == ".cpp" || extension == ".cc")) {
+            sources.push_back(entry.path());
+        }
+    }
+    return sources;
+}
+
+size_t occurrences(const std::string& text, const std::string& token) {
+    size_t count = 0;
+    size_t position = 0;
+    while ((position = text.find(token, position)) != std::string::npos) {
+        ++count;
+        position += token.size();
+    }
+    return count;
+}
+
+size_t lineCount(const fs::path& path) {
+    const auto contents = readFile(path);
+    return static_cast<size_t>(std::count(contents.begin(), contents.end(), '\n'));
+}
+
+} // namespace
+
+TEST(ProjectLifecycleArchitecture, LegacySetterAndHiddenActivationAreGone) {
+    for (const auto& path : productionSources()) {
+        const auto contents = readFile(path);
+        EXPECT_EQ(contents.find("setCurrentProject"), std::string::npos) << path;
+        EXPECT_EQ(contents.find("ensureProjectForModel"), std::string::npos) << path;
+    }
+}
+
+TEST(ProjectLifecycleArchitecture, GeneralWiringDelegatesAiAndThumbnailOwnership) {
+    const auto appRoot = fs::path(CMAKE_SOURCE_DIR) / "src" / "app";
+    const auto general = readFile(appRoot / "application_wiring.cpp");
+    const auto ai = readFile(appRoot / "application_wiring_ai.cpp");
+    const auto thumbnails = readFile(appRoot / "application_wiring_thumbnails.cpp");
+
+    EXPECT_LE(lineCount(appRoot / "application_wiring.cpp"), 500U);
+    EXPECT_LE(lineCount(appRoot / "application_wiring_ai.cpp"), 500U);
+    EXPECT_LE(lineCount(appRoot / "application_wiring_thumbnails.cpp"), 500U);
+
+    for (const auto* method : {"Application::prepareAiTagging",
+                               "Application::wireTagDialog",
+                               "Application::handleTagImage"}) {
+        EXPECT_EQ(general.find(method), std::string::npos) << method;
+        EXPECT_NE(ai.find(method), std::string::npos) << method;
+    }
+    for (const auto* method : {"Application::regenerateThumbnails",
+                               "Application::regenerateSingleThumbnail",
+                               "Application::regenerateBatchThumbnails"}) {
+        EXPECT_EQ(general.find(method), std::string::npos) << method;
+        EXPECT_NE(thumbnails.find(method), std::string::npos) << method;
+    }
+}
+
+TEST(ProjectLifecycleArchitecture, ManagerSynchronizationHasOneApplicationOwner) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const std::vector<fs::path> allowed = {
+        sourceRoot / "app" / "project_session_integration.cpp",
+        sourceRoot / "core" / "project" / "project.cpp",
+        sourceRoot / "core" / "project" / "project.h",
+    };
+
+    for (const auto& path : productionSources()) {
+        const auto contents = readFile(path);
+        if (contents.find("synchronizeActiveProject") == std::string::npos)
+            continue;
+        EXPECT_NE(std::find(allowed.begin(), allowed.end(), path), allowed.end()) << path;
+    }
+
+    const auto managerSource = readFile(sourceRoot / "core" / "project" / "project.cpp");
+    EXPECT_EQ(occurrences(managerSource, "m_currentProject ="), 1U);
+    EXPECT_EQ(managerSource.find("m_currentProject.reset"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, PanelsAndFileIoOnlyEmitLifecycleIntents) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto panel = readFile(sourceRoot / "ui" / "panels" / "project_panel.cpp") +
+                       readFile(sourceRoot / "ui" / "panels" / "project_panel_lifecycle.cpp");
+    for (const auto& token : {"->create(", "->close(", "synchronizeActiveProject"})
+        EXPECT_EQ(panel.find(token), std::string::npos) << token;
+
+    const auto fileIo = readFile(sourceRoot / "managers" / "file_io_manager.cpp") +
+                        readFile(sourceRoot / "managers" / "file_io_projects.cpp");
+    for (const auto& token : {"synchronizeActiveProject", "ActivateProject", "CloseProject"})
+        EXPECT_EQ(fileIo.find(token), std::string::npos) << token;
+    EXPECT_EQ(fileIo.find(".detach()"), std::string::npos);
+    EXPECT_NE(fileIo.find("showNativeFolder"), std::string::npos);
+    EXPECT_NE(fileIo.find("project.json"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, LibraryFileActionsNeverUseRawStoredParents) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto actions = readFile(sourceRoot / "ui" / "panels" / "library_panel_actions.cpp");
+
+    EXPECT_EQ(actions.find("filePath.parent_path()"), std::string::npos);
+    EXPECT_EQ(occurrences(actions, "PathResolver::fileManagerParent("), 2U);
+    EXPECT_GE(occurrences(actions, "PathResolver::durableLocation("), 4U);
+    EXPECT_GE(occurrences(actions, "PathCategory::Support"), 3U);
+}
+
+TEST(ProjectLifecycleArchitecture, PropertiesDisplayDoesNotResolveNetworkLocationPerFrame) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto properties = readFile(sourceRoot / "ui" / "panels" / "properties_panel.cpp");
+
+    EXPECT_EQ(properties.find("PathResolver::resolve("), std::string::npos);
+    EXPECT_NE(properties.find("PathResolver::durableLocation("), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, AsyncCompletionsCarrySessionIdentity) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto callbacks = readFile(sourceRoot / "app" / "application_callbacks.cpp");
+    EXPECT_EQ(occurrences(callbacks, "modelLoadStillCurrent("), 2U);
+    EXPECT_NE(callbacks.find("activeProjectIdentity()"), std::string::npos);
+
+    const auto fileIo = readFile(sourceRoot / "managers" / "file_io_manager.cpp") +
+                        readFile(sourceRoot / "managers" / "file_io_projects.cpp");
+    EXPECT_GE(occurrences(fileIo, "captureProjectGeneration()"), 3U);
+    EXPECT_NE(fileIo.find("expectedProjectGeneration"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, TemporaryCloseDecisionIsIdentityBoundAndNonDestructive) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto application = readFile(sourceRoot / "app" / "application_project_session.cpp");
+
+    EXPECT_NE(application.find("m_temporaryProjectDecisionPending"), std::string::npos);
+    EXPECT_NE(application.find("decisionGeneration"), std::string::npos);
+    EXPECT_NE(application.find("current->id() != projectId"), std::string::npos);
+    EXPECT_NE(application.find("ProjectTransitionChoice::Discard"), std::string::npos);
+    const auto closeStart = application.find("void Application::requestProjectClose");
+    const auto closeEnd = application.find("void Application::finishProjectTransition");
+    ASSERT_NE(closeStart, std::string::npos);
+    ASSERT_NE(closeEnd, std::string::npos);
+    EXPECT_EQ(
+        application.substr(closeStart, closeEnd - closeStart).find("project->clearModified()"),
+        std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, FolderImporterCannotActivateOrRewriteProjectSession) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto importer =
+        readFile(sourceRoot / "core" / "project" / "project_directory_importer.cpp");
+
+    EXPECT_EQ(importer.find("ProjectSession"), std::string::npos);
+    EXPECT_EQ(importer.find("synchronizeActiveProject"), std::string::npos);
+    EXPECT_EQ(importer.find("ProjectManager::save"), std::string::npos);
+    EXPECT_EQ(importer.find("writeText("), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, HomeIsTheOnlyPanelProjectEntrySurface) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto home = readFile(sourceRoot / "ui" / "panels" / "start_page.cpp");
+    const auto projectPanel =
+        readFile(sourceRoot / "ui" / "panels" / "project_panel_lifecycle.cpp");
+
+    for (const auto& label : {"New Project", "Open Project", "Recent Projects"}) {
+        EXPECT_NE(home.find(label), std::string::npos) << label;
+        EXPECT_EQ(projectPanel.find(label), std::string::npos) << label;
+    }
+    EXPECT_EQ(projectPanel.find("Config::"), std::string::npos);
+    EXPECT_NE(projectPanel.find("Open Home"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, ProjectServicesDoNotOwnHomeVisibility) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto fileIo = readFile(sourceRoot / "managers" / "file_io_manager.h") +
+                        readFile(sourceRoot / "managers" / "file_io_projects.cpp");
+
+    EXPECT_EQ(fileIo.find("setShowStartPage"), std::string::npos);
+    EXPECT_EQ(fileIo.find("create(\"New Project\")"), std::string::npos);
+    EXPECT_NE(fileIo.find("ProjectActivationCompletion"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, ResumeUsesTypedClosePurposeAndCanonicalGateways) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto resume = readFile(sourceRoot / "app" / "application_project_resume.cpp");
+    const auto close = readFile(sourceRoot / "app" / "application_project_session.cpp");
+    const auto runtime = readFile(sourceRoot / "app" / "application_runtime.cpp");
+
+    EXPECT_NE(resume.find("requestProjectActivation"), std::string::npos);
+    EXPECT_NE(resume.find("activateProjectOpenItem"), std::string::npos);
+    EXPECT_NE(resume.find("validateProjectStorage"), std::string::npos);
+    EXPECT_NE(close.find("ProjectClosePurpose::ExplicitClose"), std::string::npos);
+    EXPECT_NE(runtime.find("ProjectClosePurpose::ApplicationExit"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, VisibleRoutesAndMachineActionsUseCanonicalGuards) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto resume = readFile(sourceRoot / "app" / "application_project_resume.cpp");
+    const auto library = readFile(sourceRoot / "app" / "application_library_picker.cpp");
+    const auto lifecycle = readFile(sourceRoot / "app" / "application_project_session.cpp");
+    const auto runtime = readFile(sourceRoot / "app" / "application_runtime.cpp");
+
+    EXPECT_NE(resume.find("NavigateWorkshopIntent"), std::string::npos);
+    EXPECT_NE(resume.find("WorkshopRoute::Home"), std::string::npos);
+    EXPECT_NE(resume.find("showLibrary() = false"), std::string::npos);
+    EXPECT_NE(resume.find("showProject() = false"), std::string::npos);
+    EXPECT_NE(resume.find("showViewport() = false"), std::string::npos);
+    EXPECT_NE(library.find("WorkshopRoute::DesignLibrary"), std::string::npos);
+    EXPECT_NE(library.find("ReturnFromLibraryIntent"), std::string::npos);
+    EXPECT_NE(runtime.find("handleCompletedLibraryImports(items)"), std::string::npos);
+    EXPECT_GE(occurrences(lifecycle, "isStreaming()"), 2U);
+    EXPECT_GE(occurrences(lifecycle, "hasActiveMachineAction()"), 2U);
+}
+
+TEST(ProjectLifecycleArchitecture, ProjectInvalidationClearsDirectCarveContext) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto header = readFile(sourceRoot / "ui" / "panels" / "direct_carve_panel.h");
+    const auto reset = readFile(sourceRoot / "ui" / "panels" / "direct_carve_project_sync.cpp");
+    const auto panel =
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_panel.cpp") +
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_preparation_context.cpp");
+    const auto application = readFile(sourceRoot / "app" / "application_project_session.cpp");
+
+    EXPECT_NE(header.find("void clearProjectContext();"), std::string::npos);
+    const auto resetStart = reset.find("void DirectCarvePanel::clearProjectContext()");
+    const auto resetEnd = reset.find("void DirectCarvePanel::syncSetupToOptimizerAndProject");
+    ASSERT_NE(resetStart, std::string::npos);
+    ASSERT_NE(resetEnd, std::string::npos);
+    const auto resetMethod = reset.substr(resetStart, resetEnd - resetStart);
+    for (const auto& token : {
+             "m_carveJob->cancel()",
+             "m_title = \"Direct Carve\"",
+             "m_currentStep = Step::ModelFit",
+             "m_maxStepVisited = 0",
+             "m_safeZConfirmed = false",
+             "m_homingVerified = false",
+             "m_homingSkipped = false",
+             "m_stockSecuredConfirmed = false",
+             "m_modelLoaded = false",
+             "m_modelVertices.clear()",
+             "m_modelIndices.clear()",
+             "m_modelBoundsMin = Vec3{0.0f}",
+             "m_modelBoundsMax = Vec3{0.0f}",
+             "m_modelName.clear()",
+             "m_modelSourcePath.clear()",
+             "m_modelThumbnail = 0",
+             "m_fitParams = carve::FitParams{}",
+             "m_toolpathConfig = carve::ToolpathConfig{}",
+             "m_stock = carve::StockDimensions{}",
+             "m_fitter = carve::ModelFitter{}",
+             "m_pendingOperationSetup.reset()",
+             "m_toolPlan = carve::DirectCarveToolPlan{}",
+             "m_toolPickerRole = carve::DirectCarveToolPickerRole::Finishing",
+             "m_toolSelectionMessage.clear()",
+             "m_toolSetupConfirmed = false",
+             "m_toolLibraryLoaded = false",
+             "m_libraryTools.clear()",
+             "m_toolboxTools.clear()",
+             "m_allTools.clear()",
+             "m_showAllTools = false",
+             "m_useManualTool = false",
+             "m_manualToolType = 0",
+             "m_manualDiameter = 3.175f",
+             "m_manualAngle = 90.0f",
+             "m_manualTipRadius = 1.5875f",
+             "m_manualFlutes = 2",
+             "m_materialList.clear()",
+             "m_materialListLoaded = false",
+             "m_selectedMaterialIdx = -1",
+             "m_materialSelected = false",
+             "m_materialName.clear()",
+             "m_machineToolpathDefaultsApplied = false",
+             "m_machineToolpathDefaultsKey.clear()",
+             "m_toolpathGenerated = false",
+             "m_settingsVersion = 0",
+             "m_generatedAtVersion = -1",
+             "m_previewZoom = 1.0f",
+             "m_showClearing = true",
+             "m_showFinishing = true",
+             "m_autoRoughingWarning.clear()",
+             "m_surfaceToolpathPending = false",
+             "m_surfaceToolpathPendingVersion = -1",
+             "m_outlineCompleted = false",
+             "m_outlineSkipped = false",
+             "m_outlineRunning = false",
+             "m_outlineCmdIndex = 0",
+             "m_zeroConfirmed = false",
+             "m_touchPlate = carve::DirectCarveTouchPlate::Generic",
+             "m_autoZeroBitMode = carve::DirectCarveAutoZeroBitMode::Auto",
+             "m_autoZeroBitModeManual = false",
+             "m_probeMode = ProbeMode::ZOnly",
+             "m_probeCorner = 0",
+             "m_probeZThickness = 15.0f",
+             "m_probeXYThickness = 10.0f",
+             "m_probeFastSpeed = 150.0f",
+             "m_probeSlowSpeed = 75.0f",
+             "m_probeSearchDist = 30.0f",
+             "m_probeRetractDist = 2.0f",
+             "m_probeToolDiameter.reset()",
+             "m_autoZeroOriginOffset = 22.5f",
+             "m_autoZeroFinalZRetract = 1.0f",
+             "m_zeroingSteps.clear()",
+             "m_zeroingStepIndex = 0",
+             "m_zeroingPendingProbeStep = ZeroingStepKind::Command",
+             "m_zeroingRunActive = false",
+             "m_zeroingWaitingForOk = false",
+             "m_zeroingSawProbeResult = false",
+             "m_zeroingLastProbeResult.reset()",
+             "m_autoZeroXFirst = 0.0f",
+             "m_autoZeroXSecond = 0.0f",
+             "m_autoZeroYFirst = 0.0f",
+             "m_autoZeroYSecond = 0.0f",
+             "m_zeroingRunMessage.clear()",
+             "clearFinalConfirmation()",
+             "m_runCoordinator = run_coordination::RunCoordinator{}",
+             "m_runEventSequence = 0",
+             "m_runCurrentLine = 0",
+             "m_runTotalLines = 0",
+             "m_runElapsedSec = 0.0f",
+             "m_runCurrentPass.clear()",
+             "m_savedRunToolpath.reset()",
+             "m_abortHoldTime = 0.0f",
+             "m_abortHolding = false",
+         }) {
+        EXPECT_NE(resetMethod.find(token), std::string::npos) << token;
+    }
+    for (const auto& preserved : {
+             "m_open =",
+             "m_cnc =",
+             "m_cncConnected =",
+             "m_machineStatus =",
+             "m_toolDb =",
+             "m_toolboxRepo =",
+             "m_carveJob =",
+             "m_fileDialog =",
+             "m_gcodeRepo =",
+             "m_gcodePanel =",
+             "m_libraryManager =",
+             "m_materialMgr =",
+             "m_projectManager =",
+             "m_projectDirectoryRequest =",
+             "m_cutOptimizer =",
+             "m_openToolBrowser =",
+             "m_openMachineProfiles =",
+             "m_onFitParamsChanged =",
+             "m_onMaterialPartSync =",
+         }) {
+        EXPECT_EQ(resetMethod.find(preserved), std::string::npos) << preserved;
+    }
+
+    const auto confirmationStart = panel.find("void DirectCarvePanel::clearFinalConfirmation");
+    const auto confirmationEnd = panel.find("void DirectCarvePanel::markToolpathSettingsChanged");
+    ASSERT_NE(confirmationStart, std::string::npos);
+    ASSERT_NE(confirmationEnd, std::string::npos);
+    const auto confirmation = panel.substr(confirmationStart, confirmationEnd - confirmationStart);
+    EXPECT_NE(confirmation.find("m_commitConfirmed = false"), std::string::npos);
+    EXPECT_NE(confirmation.find("m_commitConfirmedSettingsVersion = -1"), std::string::npos);
+    EXPECT_NE(confirmation.find("m_commitConfirmedToolpathVersion = -1"), std::string::npos);
+
+    const auto invalidateStart = application.find("void Application::invalidateProjectFocus()");
+    const auto invalidateEnd = application.find("uint64_t Application::projectSessionGeneration");
+    ASSERT_NE(invalidateStart, std::string::npos);
+    ASSERT_NE(invalidateEnd, std::string::npos);
+    const auto invalidate = application.substr(invalidateStart, invalidateEnd - invalidateStart);
+    EXPECT_NE(invalidate.find("directCarvePanel()"), std::string::npos);
+    EXPECT_NE(invalidate.find("clearProjectContext()"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, OperationResumeRebindsOnlyFreshParentGeometry) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto panel = readFile(sourceRoot / "ui" / "panels" / "direct_carve_operation_resume.cpp");
+
+    const auto loadStart = panel.find("bool DirectCarvePanel::loadOperationOpenItem");
+    const auto loadEnd = panel.find("void DirectCarvePanel::applyOperationSetup");
+    ASSERT_NE(loadStart, std::string::npos);
+    ASSERT_NE(loadEnd, std::string::npos);
+    const auto load = panel.substr(loadStart, loadEnd - loadStart);
+    const auto clearPosition = load.find("clearProjectContext()");
+    const auto applyPosition = load.find("applyOperationSetup(*setup)");
+    ASSERT_NE(clearPosition, std::string::npos);
+    ASSERT_NE(applyPosition, std::string::npos);
+    EXPECT_LT(clearPosition, applyPosition);
+    EXPECT_NE(load.find("const bool modelLoaded = m_modelLoaded"), std::string::npos);
+    EXPECT_NE(load.find("m_modelVertices = std::move(modelVertices)"), std::string::npos);
+    EXPECT_NE(load.find("m_fitter.setModelBounds(modelBoundsMin, modelBoundsMax)"),
+              std::string::npos);
+    EXPECT_NE(load.find("m_pendingOperationSetup = *setup"), std::string::npos);
+
+    const auto modelStart = panel.find("void DirectCarvePanel::onModelLoaded");
+    ASSERT_NE(modelStart, std::string::npos);
+    const auto model = panel.substr(modelStart, loadStart - modelStart);
+    EXPECT_NE(model.find("bool restoredOperation = false"), std::string::npos);
+    EXPECT_NE(model.find("restoredOperation = true"), std::string::npos);
+    EXPECT_NE(model.find("if (!restoredOperation)"), std::string::npos);
+
+    const auto apply = panel.substr(loadEnd);
+    EXPECT_NE(apply.find("if (!m_modelLoaded)"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, ClearedContextCannotExportStaleCarveJobResults) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto header = readFile(sourceRoot / "ui" / "panels" / "direct_carve_panel.h");
+    const auto gcode = readFile(sourceRoot / "ui" / "panels" / "direct_carve_project_gcode.cpp");
+    const auto panel =
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_panel.cpp") +
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_carve_preview_step.cpp") +
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_outline_test_step.cpp") +
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_review_run_step.cpp") +
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_run_adapter.cpp");
+
+    EXPECT_NE(header.find("bool hasCurrentToolpath() const;"), std::string::npos);
+    EXPECT_NE(gcode.find("m_generatedAtVersion == m_settingsVersion"), std::string::npos);
+    EXPECT_GE(occurrences(gcode, "hasCurrentToolpath()"), 4U);
+    EXPECT_GE(occurrences(panel, "hasCurrentToolpath()"), 3U);
+}
+
+TEST(ProjectLifecycleArchitecture, DirectCarvePersistenceUsesOnlyTheImmutablePin) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto header = readFile(sourceRoot / "ui" / "panels" / "direct_carve_panel.h");
+    const auto resume =
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_operation_resume.cpp");
+    const auto setup = readFile(sourceRoot / "ui" / "panels" / "direct_carve_project_sync.cpp");
+    const auto toolChildren =
+        readFile(sourceRoot / "ui" / "panels" / "direct_carve_tool_child_sync.cpp");
+    const auto gcode = readFile(sourceRoot / "ui" / "panels" / "direct_carve_project_gcode.cpp");
+
+    EXPECT_NE(header.find("carve_preparation::PrepareCarvePin pin"), std::string::npos);
+    EXPECT_NE(header.find("setOnPreparationDirty"), std::string::npos);
+    EXPECT_NE(header.find("setCreateProjectRequiredCallback"), std::string::npos);
+    EXPECT_NE(header.find("bool savePreparation();"), std::string::npos);
+
+    const auto loadStart = resume.find("bool DirectCarvePanel::loadOperationOpenItem");
+    const auto loadEnd = resume.find("void DirectCarvePanel::applyOperationSetup");
+    ASSERT_NE(loadStart, std::string::npos);
+    ASSERT_NE(loadEnd, std::string::npos);
+    const auto load = resume.substr(loadStart, loadEnd - loadStart);
+    EXPECT_LT(load.find("clearProjectContext()"), load.find("m_preparationPin = std::move(pin)"));
+
+    EXPECT_NE(setup.find("m_projectManager->updateOpenItem(*operation)"), std::string::npos);
+    EXPECT_NE(toolChildren.find("item.projectId = m_preparationPin->project().value"),
+              std::string::npos);
+    EXPECT_NE(toolChildren.find("item.parentItemId = m_preparationPin->operationItem().item.value"),
+              std::string::npos);
+    for (const auto& forbidden : {"upsertCurrentOpenItem",
+                                  "currentModelOpenItemId",
+                                  "currentOpenItems()",
+                                  "hash::computeFile"}) {
+        EXPECT_EQ(setup.find(forbidden), std::string::npos) << forbidden;
+    }
+
+    EXPECT_NE(gcode.find("addToProject(pin.project().value, *gcodeId)"), std::string::npos);
+    EXPECT_NE(gcode.find("item.parentItemId = pin.operationItem().item.value"), std::string::npos);
+    EXPECT_EQ(gcode.find("currentProject()"), std::string::npos);
+    EXPECT_EQ(gcode.find("autoDetectModelMatch"), std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, NetworkReopenBoundariesSeparateDurableAndLivePaths) {
+    const auto sourceRoot = fs::path(CMAKE_SOURCE_DIR) / "src";
+    const auto gcode = readFile(sourceRoot / "ui" / "panels" / "gcode_panel.cpp") +
+                       readFile(sourceRoot / "ui" / "panels" / "gcode_panel_files.cpp");
+    const auto gcodeHeader = readFile(sourceRoot / "ui" / "panels" / "gcode_panel.h");
+    const auto config = readFile(sourceRoot / "core" / "config" / "config.cpp") +
+                        readFile(sourceRoot / "core" / "config" / "config_project_paths.cpp");
+    const auto projects = readFile(sourceRoot / "managers" / "file_io_projects.cpp");
+    const auto projectManager = readFile(sourceRoot / "core" / "project" / "project.cpp");
+    const auto projectImporter =
+        readFile(sourceRoot / "core" / "project" / "project_directory_importer.cpp");
+
+    EXPECT_NE(gcode.find("PathResolver::durableLocation(requestedPath"), std::string::npos);
+    EXPECT_NE(gcode.find("PathResolver::resolve(durablePath"), std::string::npos);
+    EXPECT_NE(gcode.find("m_filePath = livePath.string()"), std::string::npos);
+    EXPECT_NE(gcode.find("m_durableFilePath = storedPath.string()"), std::string::npos);
+    EXPECT_NE(gcode.find("addRecentGCodeFile(storedPath)"), std::string::npos);
+    EXPECT_NE(gcode.find("job.filePath = m_durableFilePath"), std::string::npos);
+    EXPECT_NE(gcodeHeader.find("std::string m_durableFilePath"), std::string::npos);
+
+    EXPECT_NE(config.find("network_location::durableUrl"), std::string::npos);
+    EXPECT_EQ(config.find("PathResolver::"), std::string::npos);
+    EXPECT_NE(config.find("!networkLocation && !file::exists(path)"), std::string::npos);
+
+    EXPECT_NE(projects.find("PathResolver::durableLocation(path"), std::string::npos);
+    EXPECT_NE(projects.find("PathResolver::resolve(durablePath"), std::string::npos);
+    EXPECT_NE(projects.find("directory.open(resolvedPath)"), std::string::npos);
+    EXPECT_NE(projects.find("sameProjectPath(durableRecordPath, durablePath)"), std::string::npos);
+    EXPECT_NE(projects.find("project->setFilePath(resolvedRecordPath)"), std::string::npos);
+    EXPECT_NE(projects.find("project->setFilePath(resolvedPath)"), std::string::npos);
+
+    EXPECT_NE(projectManager.find("ProjectRecord persistedRecord = project.record()"),
+              std::string::npos);
+    EXPECT_NE(projectManager.find("PathResolver::durableLocation(project.filePath()"),
+              std::string::npos);
+    EXPECT_NE(projectManager.find("m_projectRepo.update(persistedRecord)"), std::string::npos);
+    EXPECT_GE(occurrences(projectManager,
+                          "PathResolver::resolve(record->filePath, PathCategory::Projects)"),
+              1U);
+    EXPECT_NE(projectImporter.find("PathResolver::durableLocation(prepared->manifest.root"),
+              std::string::npos);
+
+    const auto projectStorage = readFile(sourceRoot / "core" / "project" / "project_storage.cpp");
+    EXPECT_NE(projectStorage.find("PathResolver::durableLocation(root"), std::string::npos);
+    EXPECT_NE(projectStorage.find("PathResolver::durableLocation(record.filePath"),
+              std::string::npos);
+}
+
+TEST(ProjectLifecycleArchitecture, RecentNetworkLocationsRejectUnsafeCandidates) {
+    auto& config = dw::Config::instance();
+    const auto originalProjects = config.getRecentProjects();
+    const auto originalGCode = config.getRecentGCodeFiles();
+
+    config.clearRecentProjects();
+    config.clearRecentGCodeFiles();
+    config.addRecentProject("smb://alice:secret@nas.local/projects/river-sign");
+    config.addRecentGCodeFile("smb://nas.local/gcode/river.nc?token=secret");
+    EXPECT_TRUE(config.getRecentProjects().empty());
+    EXPECT_TRUE(config.getRecentGCodeFiles().empty());
+
+    for (auto it = originalProjects.rbegin(); it != originalProjects.rend(); ++it)
+        config.addRecentProject(*it);
+    for (auto it = originalGCode.rbegin(); it != originalGCode.rend(); ++it)
+        config.addRecentGCodeFile(*it);
+}
+
+#ifdef __linux__
+TEST(ProjectLifecycleArchitecture, RecentNetworkLocationsAreCanonicalizedWithoutMounting) {
+    auto& config = dw::Config::instance();
+    const auto originalProjects = config.getRecentProjects();
+    const auto originalGCode = config.getRecentGCodeFiles();
+
+    const auto runtimeRoot = fs::temp_directory_path() / "dw_test_recent_network_runtime";
+    fs::remove_all(runtimeRoot);
+    ASSERT_TRUE(fs::create_directories(runtimeRoot));
+    {
+        ScopedXdgRuntimeDir runtimeDir(runtimeRoot);
+        ASSERT_TRUE(runtimeDir.valid());
+
+        config.clearRecentProjects();
+        config.clearRecentGCodeFiles();
+        config.addRecentProject(runtimeRoot / "kio-fuse-old123" / "smb" / "workshop.local" /
+                                "Projects" / "River Sign");
+        config.addRecentGCodeFile(runtimeRoot / "kio-fuse-old123" / "smb" / "workshop.local" /
+                                  "GCode" / "River Sign.nc");
+
+        EXPECT_EQ(config.getRecentProjects().front(),
+                  dw::Path("smb://workshop.local/Projects/River%20Sign"));
+        EXPECT_EQ(config.getRecentGCodeFiles().front(),
+                  dw::Path("smb://workshop.local/GCode/River%20Sign.nc"));
+
+        config.clearRecentProjects();
+        config.clearRecentGCodeFiles();
+    }
+
+    for (auto it = originalProjects.rbegin(); it != originalProjects.rend(); ++it)
+        config.addRecentProject(*it);
+    for (auto it = originalGCode.rbegin(); it != originalGCode.rend(); ++it)
+        config.addRecentGCodeFile(*it);
+    fs::remove_all(runtimeRoot);
+}
+#endif

@@ -2,6 +2,7 @@
 
 # Build directories
 build/
+build-*/
 cmake-build-*/
 out/
 
@@ -35,7 +36,14 @@ compile_commands.json
 vcpkg_installed/
 _deps/
 
+# Packaging artifacts
+_CPack_Packages/
+
+# Node
+node_modules/
+
 # Testing artifacts
+artifacts/
 Testing/
 CTestTestfile.cmake
 
@@ -80,7 +88,22 @@ CLAUDE.md
 !.ralph/
 
 # Planning artifacts
-.planning/
+# Keep milestone-level plans visible to version control; phase scratch/history stays local
+# unless it is already tracked explicitly.
+.planning/*
+!.planning/PROJECT.md
+!.planning/MILESTONES.md
+!.planning/PROJECT-CENTERED-WORKSHOP-PLAN.md
+!.planning/PROJECT-CENTERED-WORKSHOP-SESSIONS.md
+!.planning/PROJECT-CENTERED-WORKSHOP-BASELINE.md
+!.planning/PROJECT-CENTERED-WORKSHOP-USABILITY.md
+!.planning/PROJECT-CENTERED-WORKSHOP-RELEASE-VALIDATION.md
+!.planning/project-centered-workshop-baseline/
+!.planning/project-centered-workshop-baseline/**
+!.planning/project-centered-workshop-release/
+!.planning/project-centered-workshop-release/**
+# Live participant evidence may contain consent records and must stay local.
+.planning/project-centered-workshop-release/human-study-live/
 .session-summary.md
 CHECKPOINT.md
 PHASE_01_SUMMARY.md
@@ -97,3 +120,7 @@ docs/
 
 # Tools
 tools/
+
+# Python
+__pycache__/
+*.pyc

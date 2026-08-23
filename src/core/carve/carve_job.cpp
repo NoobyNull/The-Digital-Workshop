@@ -1,8 +1,8 @@
 #include "carve_job.h"
-#include "surface_analysis.h"
-#include "island_detector.h"
-#include "toolpath_generator.h"
 #include "../cnc/cnc_controller.h"
+#include "island_detector.h"
+#include "surface_analysis.h"
+#include "toolpath_generator.h"
 
 #include <cmath>
 #include <stdexcept>
@@ -11,8 +11,7 @@ namespace dw {
 namespace carve {
 namespace {
 
-f64 diameterMm(const VtdbToolGeometry& tool)
-{
+f64 diameterMm(const VtdbToolGeometry& tool) {
     f64 diameter = tool.diameter > 0.0 ? tool.diameter : tool.flat_diameter;
     if (tool.units == VtdbUnits::Imperial) {
         diameter *= 25.4;
@@ -20,8 +19,7 @@ f64 diameterMm(const VtdbToolGeometry& tool)
     return diameter;
 }
 
-f64 tipDiameterMm(const VtdbToolGeometry& tool)
-{
+f64 tipDiameterMm(const VtdbToolGeometry& tool) {
     f64 diameter = 0.0;
     if (tool.flat_diameter > 0.0) {
         diameter = tool.flat_diameter;
@@ -36,14 +34,12 @@ f64 tipDiameterMm(const VtdbToolGeometry& tool)
     return diameter;
 }
 
-bool sameTool(const VtdbToolGeometry& a, const VtdbToolGeometry& b)
-{
+bool sameTool(const VtdbToolGeometry& a, const VtdbToolGeometry& b) {
     if (!a.id.empty() && !b.id.empty()) {
         return a.id == b.id;
     }
 
-    return a.tool_type == b.tool_type &&
-           a.units == b.units &&
+    return a.tool_type == b.tool_type && a.units == b.units &&
            std::abs(a.diameter - b.diameter) < 0.0001 &&
            std::abs(a.flat_diameter - b.flat_diameter) < 0.0001 &&
            std::abs(a.tip_radius - b.tip_radius) < 0.0001;
@@ -51,8 +47,7 @@ bool sameTool(const VtdbToolGeometry& a, const VtdbToolGeometry& b)
 
 } // namespace
 
-CarveJob::~CarveJob()
-{
+CarveJob::~CarveJob() {
     cancel();
     if (m_future.valid()) {
         m_future.wait();
@@ -60,11 +55,10 @@ CarveJob::~CarveJob()
 }
 
 void CarveJob::startHeightmap(const std::vector<Vertex>& vertices,
-                               const std::vector<u32>& indices,
-                               const ModelFitter& fitter,
-                               const FitParams& fitParams,
-                               const HeightmapConfig& hmConfig)
-{
+                              const std::vector<u32>& indices,
+                              const ModelFitter& fitter,
+                              const FitParams& fitParams,
+                              const HeightmapConfig& hmConfig) {
     // Wait for any previous job to finish
     if (m_future.valid()) {
         m_future.wait();
@@ -104,87 +98,79 @@ void CarveJob::startHeightmap(const std::vector<Vertex>& vertices,
     Vec3 boundsMin = fitResult.modelMin;
     Vec3 boundsMax = fitResult.modelMax;
 
-    m_future = std::async(std::launch::async,
-        [this, verts = std::move(capturedVerts),
-         idxs = std::move(capturedIndices),
-         cfg = capturedConfig,
-         bMin = boundsMin, bMax = boundsMax]() {
+    m_future =
+        std::async(std::launch::async,
+                   [this,
+                    verts = std::move(capturedVerts),
+                    idxs = std::move(capturedIndices),
+                    cfg = capturedConfig,
+                    bMin = boundsMin,
+                    bMax = boundsMax]() {
+                       try {
+                           m_heightmap.build(verts, idxs, bMin, bMax, cfg, [this](f32 p) {
+                               m_progress.store(p, std::memory_order_release);
+                               if (m_cancelled.load(std::memory_order_acquire)) {
+                                   throw std::runtime_error("Cancelled");
+                               }
+                           });
 
-        try {
-            m_heightmap.build(verts, idxs, bMin, bMax, cfg,
-                [this](f32 p) {
-                    m_progress.store(p, std::memory_order_release);
-                    if (m_cancelled.load(std::memory_order_acquire)) {
-                        throw std::runtime_error("Cancelled");
-                    }
-                });
-
-            if (m_cancelled.load(std::memory_order_acquire)) {
-                m_state.store(CarveJobState::Idle, std::memory_order_release);
-            } else {
-                m_state.store(CarveJobState::Ready, std::memory_order_release);
-            }
-        } catch (const std::exception& e) {
-            if (m_cancelled.load(std::memory_order_acquire)) {
-                m_state.store(CarveJobState::Idle, std::memory_order_release);
-            } else {
-                m_error = e.what();
-                m_state.store(CarveJobState::Error, std::memory_order_release);
-            }
-        }
-    });
+                           if (m_cancelled.load(std::memory_order_acquire)) {
+                               m_state.store(CarveJobState::Idle, std::memory_order_release);
+                           } else {
+                               m_state.store(CarveJobState::Ready, std::memory_order_release);
+                           }
+                       } catch (const std::exception& e) {
+                           if (m_cancelled.load(std::memory_order_acquire)) {
+                               m_state.store(CarveJobState::Idle, std::memory_order_release);
+                           } else {
+                               m_error = e.what();
+                               m_state.store(CarveJobState::Error, std::memory_order_release);
+                           }
+                       }
+                   });
 }
 
-CarveJobState CarveJob::state() const
-{
+CarveJobState CarveJob::state() const {
     return m_state.load(std::memory_order_acquire);
 }
 
-f32 CarveJob::progress() const
-{
+f32 CarveJob::progress() const {
     return m_progress.load(std::memory_order_acquire);
 }
 
-const Heightmap& CarveJob::heightmap() const
-{
+const Heightmap& CarveJob::heightmap() const {
     return m_heightmap;
 }
 
-std::string CarveJob::errorMessage() const
-{
+std::string CarveJob::errorMessage() const {
     return m_error;
 }
 
-void CarveJob::cancel()
-{
+void CarveJob::cancel() {
     m_cancelled.store(true, std::memory_order_release);
 }
 
-void CarveJob::setReady()
-{
+void CarveJob::setReady() {
     m_state.store(CarveJobState::Ready, std::memory_order_release);
     m_progress.store(1.0f, std::memory_order_release);
 }
 
-bool CarveJob::loadHeightmap(const std::string& path)
-{
-    if (!m_heightmap.load(path)) return false;
+bool CarveJob::loadHeightmap(const std::string& path) {
+    if (!m_heightmap.load(path))
+        return false;
     setReady();
     return true;
 }
 
-const CurvatureResult& CarveJob::curvatureResult() const
-{
+const CurvatureResult& CarveJob::curvatureResult() const {
     return m_curvature;
 }
 
-const IslandResult& CarveJob::islandResult() const
-{
+const IslandResult& CarveJob::islandResult() const {
     return m_islands;
 }
 
-void CarveJob::analyzeHeightmap(f32 toolAngleDeg)
-{
+void CarveJob::analyzeHeightmap(f32 toolAngleDeg) {
     if (m_state.load(std::memory_order_acquire) != CarveJobState::Ready) {
         return;
     }
@@ -194,9 +180,8 @@ void CarveJob::analyzeHeightmap(f32 toolAngleDeg)
 }
 
 void CarveJob::generateToolpath(const ToolpathConfig& config,
-                                 const VtdbToolGeometry& finishTool,
-                                 const VtdbToolGeometry* clearTool)
-{
+                                const VtdbToolGeometry& finishTool,
+                                const VtdbToolGeometry* clearTool) {
     if (!m_analyzed) {
         return;
     }
@@ -206,35 +191,41 @@ void CarveJob::generateToolpath(const ToolpathConfig& config,
 
     const f32 tipDia = static_cast<f32>(tipDiameterMm(finishTool));
 
-    m_toolpath.finishing = gen.generateFinishing(
-        m_heightmap, config, tipDia, finishTool);
+    // A CarveJob may be regenerated repeatedly while the user changes tools.
+    // Start from a clean multi-pass contract so a previous clearing pass can
+    // never leak its tool-change metadata into the new program.
+    m_toolpath = MultiPassToolpath{};
+    m_toolpath.finishingToolName = resolveToolNameFormat(finishTool);
+    m_toolpath.finishing = gen.generateFinishing(m_heightmap, config, tipDia, finishTool);
 
     if (clearTool && !m_islands.islands.empty()) {
         m_toolpath.clearing = gen.generateClearing(
-            m_heightmap, m_islands, config,
-            static_cast<f32>(clearTool->diameter));
-        m_toolpath.totalTimeSec =
-            m_toolpath.finishing.estimatedTimeSec +
-            m_toolpath.clearing.estimatedTimeSec;
-        m_toolpath.totalLineCount =
-            m_toolpath.finishing.lineCount +
-            m_toolpath.clearing.lineCount;
-    } else {
-        m_toolpath.clearing = Toolpath{};
-        m_toolpath.totalTimeSec = m_toolpath.finishing.estimatedTimeSec;
-        m_toolpath.totalLineCount = m_toolpath.finishing.lineCount;
+            m_heightmap, m_islands, config, static_cast<f32>(diameterMm(*clearTool)));
+
+        // A selected clearing tool is only an effective first pass when the
+        // generator produced motion for it. Empty passes must not create a
+        // phantom tool-change pause or advertise stale tool metadata.
+        if (!m_toolpath.clearing.points.empty()) {
+            m_toolpath.clearingToolName = resolveToolNameFormat(*clearTool);
+            m_toolpath.requiresToolChange = !sameTool(*clearTool, finishTool);
+        }
     }
+
+    m_toolpath.totalTimeSec = m_toolpath.finishing.estimatedTimeSec +
+                              m_toolpath.clearing.estimatedTimeSec;
+    m_toolpath.totalLineCount = m_toolpath.finishing.lineCount + m_toolpath.clearing.lineCount +
+                                (m_toolpath.requiresToolChange ? 6 : 0);
+    m_toolpathPreview = buildToolpathPreviewGeometry(m_toolpath);
 }
 
 void CarveJob::generateFixedDepthToolpath(const Vec3& stockMin,
-                                           const Vec3& stockMax,
-                                           const Vec3& modelMin,
-                                           const Vec3& modelMax,
-                                           f32 depthMm,
-                                           const ToolpathConfig& config,
-                                           const VtdbToolGeometry& finishTool,
-                                           const VtdbToolGeometry* roughingTool)
-{
+                                          const Vec3& stockMax,
+                                          const Vec3& modelMin,
+                                          const Vec3& modelMax,
+                                          f32 depthMm,
+                                          const ToolpathConfig& config,
+                                          const VtdbToolGeometry& finishTool,
+                                          const VtdbToolGeometry* roughingTool) {
     if (m_future.valid()) {
         m_future.wait();
     }
@@ -255,62 +246,78 @@ void CarveJob::generateFixedDepthToolpath(const Vec3& stockMin,
         const f64 roughDia = diameterMm(*roughingTool);
         if (config.cutExtents == CutExtents::Material) {
             m_toolpath.clearing = gen.generateFixedDepthRaster(
-                stockMin, stockMax, config, static_cast<f32>(roughDia),
-                depthMm);
+                stockMin, stockMax, config, static_cast<f32>(roughDia), depthMm);
         } else {
-            m_toolpath.clearing = gen.generateFixedDepthClearingAroundModel(
-                stockMin, stockMax, modelMin, modelMax, config,
-                static_cast<f32>(roughDia), depthMm);
+            m_toolpath.clearing =
+                gen.generateFixedDepthClearingAroundModel(stockMin,
+                                                          stockMax,
+                                                          modelMin,
+                                                          modelMax,
+                                                          config,
+                                                          static_cast<f32>(roughDia),
+                                                          depthMm);
         }
-        m_toolpath.clearingToolName = resolveToolNameFormat(*roughingTool);
-        m_toolpath.requiresToolChange =
-            !m_toolpath.clearing.points.empty() &&
-            !sameTool(*roughingTool, finishTool);
+        if (!m_toolpath.clearing.points.empty()) {
+            m_toolpath.clearingToolName = resolveToolNameFormat(*roughingTool);
+            m_toolpath.requiresToolChange = !sameTool(*roughingTool, finishTool);
+        }
     }
-    const Vec3& finishMin =
-        config.cutExtents == CutExtents::Material ? stockMin : modelMin;
-    const Vec3& finishMax =
-        config.cutExtents == CutExtents::Material ? stockMax : modelMax;
+    const Vec3& finishMin = config.cutExtents == CutExtents::Material ? stockMin : modelMin;
+    const Vec3& finishMax = config.cutExtents == CutExtents::Material ? stockMax : modelMax;
     m_toolpath.finishing = gen.generateFixedDepthRaster(
         finishMin, finishMax, config, static_cast<f32>(finishDia), depthMm);
-    m_toolpath.totalTimeSec =
-        m_toolpath.clearing.estimatedTimeSec +
-        m_toolpath.finishing.estimatedTimeSec;
-    m_toolpath.totalLineCount =
-        m_toolpath.clearing.lineCount + m_toolpath.finishing.lineCount +
-        (m_toolpath.requiresToolChange ? 6 : 0);
+    m_toolpath.totalTimeSec = m_toolpath.clearing.estimatedTimeSec +
+                              m_toolpath.finishing.estimatedTimeSec;
+    m_toolpath.totalLineCount = m_toolpath.clearing.lineCount + m_toolpath.finishing.lineCount +
+                                (m_toolpath.requiresToolChange ? 6 : 0);
     m_curvature = CurvatureResult{};
     m_islands = IslandResult{};
     m_analyzed = true;
     m_progress.store(1.0f, std::memory_order_release);
-    m_state.store(m_toolpath.finishing.points.empty()
-                      ? CarveJobState::Error
-                      : CarveJobState::Ready,
+    m_state.store(m_toolpath.finishing.points.empty() ? CarveJobState::Error : CarveJobState::Ready,
                   std::memory_order_release);
     if (m_toolpath.finishing.points.empty()) {
         m_error = "Fixed-depth raster toolpath is empty";
     }
+    m_toolpathPreview = buildToolpathPreviewGeometry(m_toolpath);
 }
 
-const MultiPassToolpath& CarveJob::toolpath() const
-{
+const MultiPassToolpath& CarveJob::toolpath() const {
     return m_toolpath;
 }
 
-void CarveJob::startStreaming(CncController* controller)
-{
-    if (!m_analyzed || m_toolpath.finishing.points.empty()) {
-        return;
+const MultiPassToolpathPreviewGeometry& CarveJob::toolpathPreview() const {
+    return m_toolpathPreview;
+}
+
+bool CarveJob::startStreaming(CncController* controller) {
+    if (!controller || !controller->isConnected() || !m_analyzed ||
+        m_toolpath.finishing.points.empty()) {
+        return false;
     }
 
     m_streamer = std::make_unique<CarveStreamer>();
     m_streamer->setCncController(controller);
-    const auto units = controller ? controller->sendUnits() : cnc::SendUnits::Millimeters;
+    const auto units = controller->sendUnits();
     m_streamer->start(m_toolpath, m_toolpathConfig, units);
+
+    std::vector<std::string> program;
+    program.reserve(static_cast<std::size_t>(m_streamer->totalLines()));
+    while (!m_streamer->isComplete()) {
+        auto line = m_streamer->nextLine();
+        if (!line.empty()) {
+            program.push_back(std::move(line));
+        }
+    }
+
+    if (!controller->startStream(program)) {
+        m_streamer.reset();
+        return false;
+    }
+    return true;
 }
 
-CarveStreamer* CarveJob::streamer()
-{
+CarveStreamer* CarveJob::streamer() {
     return m_streamer.get();
 }
 

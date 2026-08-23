@@ -74,9 +74,14 @@ Program Parser::parse(const std::string& content) {
             currentTool = cmd.t;
         }
 
+        // Program.path is the application's machine-space representation and
+        // is always millimeters/mm-min, even when the exact source commands
+        // remain expressed in inches for display and sending.
+        const f32 unitScale = program.units == Units::Inches ? 25.4f : 1.0f;
+
         // Update feed rate if specified
         if (cmd.hasF()) {
-            currentFeedRate = cmd.f;
+            currentFeedRate = cmd.f * unitScale;
         }
 
         // Generate path segments for motion commands
@@ -85,18 +90,18 @@ Program Parser::parse(const std::string& content) {
 
             if (program.positioning == PositioningMode::Absolute) {
                 if (cmd.hasX())
-                    targetPos.x = cmd.x;
+                    targetPos.x = cmd.x * unitScale;
                 if (cmd.hasY())
-                    targetPos.y = cmd.y;
+                    targetPos.y = cmd.y * unitScale;
                 if (cmd.hasZ())
-                    targetPos.z = cmd.z;
+                    targetPos.z = cmd.z * unitScale;
             } else {
                 if (cmd.hasX())
-                    targetPos.x += cmd.x;
+                    targetPos.x += cmd.x * unitScale;
                 if (cmd.hasY())
-                    targetPos.y += cmd.y;
+                    targetPos.y += cmd.y * unitScale;
                 if (cmd.hasZ())
-                    targetPos.z += cmd.z;
+                    targetPos.z += cmd.z * unitScale;
             }
 
             // Lambda to update bounding box
@@ -114,14 +119,14 @@ Program Parser::parse(const std::string& content) {
                 }
             };
 
-            f32 segFeedRate = cmd.hasF() ? cmd.f : currentFeedRate;
+            f32 segFeedRate = cmd.hasF() ? cmd.f * unitScale : currentFeedRate;
 
             if ((cmd.type == CommandType::G2 || cmd.type == CommandType::G3) &&
                 (cmd.hasI() || cmd.hasJ())) {
                 // Arc move (G2 = clockwise, G3 = counter-clockwise)
                 // Arc center is at current position + (I, J) offset
-                f32 iOff = cmd.hasI() ? cmd.i : 0.0f;
-                f32 jOff = cmd.hasJ() ? cmd.j : 0.0f;
+                f32 iOff = cmd.hasI() ? cmd.i * unitScale : 0.0f;
+                f32 jOff = cmd.hasJ() ? cmd.j * unitScale : 0.0f;
 
                 f32 centerX = currentPos.x + iOff;
                 f32 centerY = currentPos.y + jOff;

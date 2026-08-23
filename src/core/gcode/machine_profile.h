@@ -10,7 +10,7 @@ namespace dw {
 namespace gcode {
 
 enum class ConnectionType { Auto, Serial, TCP };
-enum class DriveSystem { Belt, Acme, LeadScrew, BallScrew };
+enum class DriveSystem { Belt, Acme, LeadScrew, BallScrew, Custom };
 enum class HomeCorner { BottomLeft, BottomRight, TopLeft, TopRight, Center };
 
 // CNC machine kinematic parameters for accurate motion planning.
@@ -56,6 +56,8 @@ struct MachineProfile {
 
     // Drive system
     DriveSystem driveSystem = DriveSystem::LeadScrew;
+    // Conservative 0.10..1.00 recommendation multiplier, used for Custom only.
+    f32 customRigidityFactor = 0.80f;
 
     // Home location — which corner the machine homes to (Center computes midpoint)
     HomeCorner homeCorner = HomeCorner::BottomLeft;

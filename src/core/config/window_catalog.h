@@ -1,10 +1,13 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace dw {
+
+struct LayoutPreset;
 
 enum class WindowRole {
     Shared,
@@ -43,9 +46,10 @@ struct WindowCatalogEntry {
 [[nodiscard]] const std::vector<WindowCatalogEntry>& windowCatalogEntries();
 [[nodiscard]] const WindowCatalogEntry* findWindowCatalogEntry(std::string_view key);
 [[nodiscard]] std::string canonicalWindowKey(std::string_view key);
+[[nodiscard]] std::optional<bool> layoutPresetVisibility(
+    const LayoutPreset& preset, std::string_view windowKey);
 [[nodiscard]] std::string windowRoleName(WindowRole role);
 [[nodiscard]] std::string windowTypeName(WindowType type);
 [[nodiscard]] std::string windowCatalogJson();
 
 } // namespace dw
-

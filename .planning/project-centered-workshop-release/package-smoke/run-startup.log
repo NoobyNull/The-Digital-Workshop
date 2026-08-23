@@ -1,0 +1,69 @@
+[32m[09:32:39.737] [INFO ] [Config] [0mNo config file found, using defaults
+STARTUP: Config Loading took 0.07 ms
+STARTUP: Directory Creation took 0.07 ms
+STARTUP: SDL2 Initialization took 151.08 ms
+[32m[09:32:39.960] [INFO ] [Application] [0mOpenGL 4.6 (Core Profile) Mesa 26.1.4-arch3.1
+STARTUP: OpenGL Window Setup took 71.44 ms
+STARTUP: ImGui Setup and Fonts took 4.66 ms
+[32m[09:32:39.965] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.966] [INFO ] [Schema] [0mDatabase schema initialized successfully
+[32m[09:32:39.966] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.966] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.967] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.967] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.967] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.967] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.967] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.967] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.968] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.968] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.968] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.968] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.968] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.968] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+[32m[09:32:39.969] [INFO ] [ConnectionPool] [0mCreated pool with 21 connections to /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/library.db
+STARTUP: Threading and Database Setup took 4.73 ms
+[32m[09:32:39.971] [INFO ] [GraphManager] [0mGraphQLite extension loaded successfully
+[32m[09:32:39.971] [INFO ] [GraphManager] [0mGraph schema initialized (implicit)
+STARTUP: GraphManager Extension took 1.08 ms
+[32m[09:32:40.073] [INFO ] [MaterialManager] [0mSeeded 32 materials (30 with textures)
+STARTUP: Managers and Repositories took 102.43 ms
+[32m[09:32:40.073] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/tools.vtdb
+[32m[09:32:40.073] [INFO ] [ToolDatabase] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/tools.vtdb
+STARTUP: Storage and Tool Systems took 0.48 ms
+[32m[09:32:40.074] [INFO ] [Database] [0mOpened: /tmp/tmp.h6cKOIq7xM/data/digitalworkshop/macros.db
+[32m[09:32:40.074] [INFO ] [GamepadInput] [0mOpened controller: se Gamepad
+STARTUP: CNC and Background Systems took 0.33 ms
+[32m[09:32:40.080] [INFO ] [Renderer] [0mInitialized
+[32m[09:32:40.081] [INFO ] [Config] [0mWatching /tmp/tmp.h6cKOIq7xM/config/digitalworkshop/config.ini (poll 500ms)
+STARTUP: UI and File IO Managers took 6.97 ms
+STARTUP: Wiring and Final Setup took 0.07 ms
+
+=== STARTUP TIMING REPORT ===
+Config Loading: 0.07 ms
+Directory Creation: 0.07 ms
+SDL2 Initialization: 151.08 ms
+OpenGL Window Setup: 71.44 ms
+ImGui Setup and Fonts: 4.66 ms
+Threading and Database Setup: 4.73 ms
+GraphManager Extension: 1.08 ms
+Managers and Repositories: 102.43 ms
+Storage and Tool Systems: 0.48 ms
+CNC and Background Systems: 0.33 ms
+UI and File IO Managers: 6.97 ms
+Wiring and Final Setup: 0.07 ms
+TOTAL: 343.41 ms
+=============================
+
+Digital Workshop 0.7.0 (5347e22-dirty) initialized
+[32m[09:32:40.081] [INFO ] [CNC] [0mSimulator IO thread started
+[32m[09:32:40.081] [INFO ] [CNC] [0mSimulator connected: Grbl 1.1h [Simulator]
+[32m[09:32:40.238] [INFO ] [Config] [0mLoaded from /tmp/tmp.h6cKOIq7xM/config/digitalworkshop/config.ini
+[32m[09:32:40.242] [INFO ] [CNC] [0mSimulator IO thread stopped

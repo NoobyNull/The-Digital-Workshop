@@ -129,7 +129,9 @@ void PropertiesPanel::renderModelRecordInfo() {
     ImGui::Spacing();
     if (ImGui::CollapsingHeader("File")) {
         ImGui::Indent();
-        ImGui::TextWrapped("%s", PathResolver::resolve(r.filePath, PathCategory::Support).string().c_str());
+        const std::string displayPath =
+            PathResolver::durableLocation(r.filePath, PathCategory::Support).string();
+        ImGui::TextWrapped("%s", displayPath.c_str());
         ImGui::Unindent();
     }
 

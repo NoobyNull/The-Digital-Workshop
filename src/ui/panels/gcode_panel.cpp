@@ -13,8 +13,6 @@
 #include "../../core/cnc/preflight_check.h"
 #include "../../core/gcode/gcode_modal_scanner.h"
 #include "../../core/gcode/gcode_viewport_sampling.h"
-#include "../../core/mesh/hash.h"
-#include "../../core/paths/path_resolver.h"
 #include "../../core/project/gcode_project_context.h"
 #include "../../core/project/project.h"
 #include "../../core/cnc/serial_port.h"
@@ -278,74 +276,6 @@ void GCodePanel::renderModeTabs() {
         }
         ImGui::EndTabBar();
     }
-}
-
-bool GCodePanel::loadFile(const std::string& path) {
-    auto content = file::readText(path);
-    if (!content) {
-        ToastManager::instance().show(ToastType::Error,
-                                      "File Read Error",
-                                      "Could not read G-code file: " + path);
-        return false;
-    }
-
-    gcode::Parser parser;
-    m_program = parser.parse(*content);
-
-    if (!m_program.commands.empty()) {
-        m_filePath = path;
-
-        // Add to recent G-code files list
-        Config::instance().addRecentGCodeFile(path);
-        Config::instance().save();
-
-        gcode::Analyzer analyzer;
-        analyzer.setMachineProfile(Config::instance().getActiveMachineProfile());
-        m_stats = analyzer.analyze(m_program);
-
-        m_currentGCodeId = -1;
-        if (m_gcodeRepo) {
-            const Path gcodePath(path);
-            if (auto existing = m_gcodeRepo->findByHash(hash::computeFile(gcodePath))) {
-                m_currentGCodeId = existing->id;
-            } else if (auto byPath = m_gcodeRepo->findByPath(
-                           PathResolver::makeStorable(gcodePath, PathCategory::GCode))) {
-                m_currentGCodeId = byPath->id;
-            } else {
-                const auto stem = file::getStem(gcodePath);
-                auto matches = m_gcodeRepo->findByName(stem);
-                auto exact = std::find_if(matches.begin(), matches.end(),
-                                          [&stem](const GCodeRecord& rec) {
-                                              return rec.name == stem;
-                                          });
-                if (exact != matches.end()) {
-                    m_currentGCodeId = exact->id;
-                } else if (!matches.empty()) {
-                    m_currentGCodeId = matches.front().id;
-                }
-            }
-        }
-
-        if (m_onProgramLoaded) m_onProgramLoaded(m_program);
-
-        return true;
-    }
-
-    ToastManager::instance().show(ToastType::Warning,
-                                  "Empty G-code",
-                                  "File contains no valid G-code commands");
-    return false;
-}
-
-void GCodePanel::clear() {
-    m_program = gcode::Program{};
-    m_stats = gcode::Statistics{};
-    m_filePath.clear();
-    m_currentGCodeId = -1;
-    m_lastAckedLine = -1;
-    m_streamProgress = {};
-
-    if (m_onProgramCleared) m_onProgramCleared();
 }
 
 void GCodePanel::renderToolbar() {
@@ -1128,7 +1058,7 @@ void GCodePanel::buildSendProgram() {
     if (m_jobRepo) {
         JobRecord job;
         job.fileName = file::getStem(m_filePath) + "." + file::getExtension(m_filePath);
-        job.filePath = PathResolver::makeStorable(Path(m_filePath), PathCategory::GCode).string();
+        job.filePath = m_durableFilePath;
         job.totalLines = static_cast<int>(lines.size());
         auto id = m_jobRepo->insert(job);
         m_activeJobId = id.value_or(-1);
@@ -1138,7 +1068,7 @@ void GCodePanel::buildSendProgram() {
         m_jobHistoryDirty = true;
     }
 
-    m_cnc->startStream(lines);
+    (void)m_cnc->startStream(lines);
     addConsoleLine(
         "Streaming " + std::to_string(lines.size()) + " lines",
         ConsoleLine::Info);

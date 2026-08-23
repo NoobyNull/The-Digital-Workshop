@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "../database/model_repository.h"
@@ -14,8 +15,21 @@ namespace dw {
 // Forward declarations
 class Database;
 class ProjectDirectory;
+class ProjectAssetMembershipService;
 struct GCodeRecord;
 struct ModelRecord;
+struct ProjectAssetMembershipRequest;
+struct ProjectAssetMembershipResult;
+
+enum class ProjectStorageValidationStatus {
+    Ready,
+    MissingRecord,
+    MissingPath,
+    InvalidDirectory,
+    IdentityMismatch,
+    DuplicateClaim,
+    InvalidTemporaryOwnership,
+};
 
 // Project class - represents an open project
 class Project {
@@ -50,8 +64,8 @@ class Project {
     void clearModified() { m_modified = false; }
 
     // Temporary project (lives in system temp, not saved to permanent location)
-    bool isTemporary() const { return m_temporary; }
-    void setTemporary(bool temp) { m_temporary = temp; }
+    bool isTemporary() const { return m_record.temporary; }
+    void setTemporary(bool temporary) { m_record.temporary = temporary; }
 
     // Internal record access
     const ProjectRecord& record() const { return m_record; }
@@ -61,7 +75,6 @@ class Project {
     ProjectRecord m_record;
     std::vector<i64> m_modelIds;
     bool m_modified = false;
-    bool m_temporary = false;
 };
 
 // Project manager - handles project lifecycle
@@ -70,7 +83,7 @@ class ProjectManager {
     explicit ProjectManager(Database& db);
 
     // Project operations
-    std::shared_ptr<Project> create(const std::string& name);
+    std::shared_ptr<Project> create(const std::string& name, bool temporary = false);
     std::shared_ptr<Project> open(i64 projectId);
     bool save(Project& project);
     bool close(Project& project);
@@ -79,32 +92,48 @@ class ProjectManager {
     // Query projects
     std::vector<ProjectRecord> listProjects();
     std::optional<ProjectRecord> getProjectInfo(i64 projectId);
+    [[nodiscard]] ProjectStorageValidationStatus validateProjectStorage(i64 projectId);
     std::vector<ProjectOpenItem> listOpenItems(i64 projectId);
     std::vector<ProjectOpenItem> currentOpenItems();
+    std::optional<ProjectOpenItem> findOpenItem(i64 itemId);
+    std::optional<ProjectOpenItem> findOpenItemBySource(std::string_view sourceTable,
+                                                        i64 sourceId);
+    // Persist changes to one existing open item in the active project. The row
+    // identity is mandatory; this path never creates or source-key-upserts an item.
+    bool updateOpenItem(ProjectOpenItem item);
+    // Remove one exact open-item row owned by the active project. This rejects
+    // missing, stale, and foreign row identities rather than deleting by source key.
+    bool removeOpenItem(i64 itemId);
     std::optional<i64> upsertOpenItem(ProjectOpenItem item);
     std::optional<i64> upsertCurrentOpenItem(ProjectOpenItem item);
 
     // Current project
     std::shared_ptr<Project> currentProject() const { return m_currentProject; }
-    void setCurrentProject(std::shared_ptr<Project> project) { m_currentProject = project; }
+    // Compatibility seam for the ProjectSession integration adapter. Keeps the
+    // legacy active-project pointer and its on-disk directory synchronized.
+    void synchronizeActiveProject(std::shared_ptr<Project> project);
 
-    // On-disk project directory (created in system temp for new projects)
-    std::shared_ptr<ProjectDirectory> ensureProjectForModel(
-        const std::string& modelName, const Path& modelSourcePath);
+    // On-disk directory belonging to the synchronized active project.
     std::shared_ptr<ProjectDirectory> currentDirectory() const { return m_currentDir; }
 
     // Promote a temporary project to permanent storage
     bool saveTemporaryProject();
 
     // Clean up temporary project directory (call on discard)
-    void discardTemporaryProject();
+    [[nodiscard]] bool discardTemporaryProjectData();
+    [[nodiscard]] bool discardTemporaryProjectData(i64 projectId, const Path& projectRoot);
 
     // Model operations within current project
     bool addModelToProject(i64 modelId);
     bool removeModelFromProject(i64 modelId);
 
   private:
+    friend class ProjectAssetMembershipService;
+
+    [[nodiscard]] ProjectAssetMembershipResult
+    persistAssetMembership(const ProjectAssetMembershipRequest& normalizedRequest);
     Path canonicalProjectDirectory(const Project& project) const;
+    bool directoryClaimedByOtherRecord(const Path& root, i64 projectId);
     bool ensureProjectDirectory(Project& project);
     bool syncProjectDirectory(Project& project);
     Path resolveModelPath(const ModelRecord& model) const;

@@ -9,6 +9,7 @@
 - [x] **v0.5.0 Codebase Cleanup & Simplification** - Phases 27-30 (completed 2026-04-18)
 - [x] **v0.5.5 Unified 3D Viewport** - Phases 31-35 (completed 2026-03-09, P35 back-filled 2026-04-18)
 - [x] **v0.6.0 Technical Debt Cleanup** - Phases 36-39 (completed 2026-03-29)
+- [ ] **v0.7.0 Project-Centered Workshop** - Phases 40-48 (engineering and 72-state visual validation complete 2026-07-11; Guided-default human gate pending)
 
 ## Phases
 
@@ -90,6 +91,25 @@
 - [x] **Phase 37: Coordinate Space Consolidation** - Introduce gcodeToRenderer() helper and replace all 5 manual Y↔Z swap sites (completed 2026-03-29)
 - [x] **Phase 38: GL State Safety** - Introduce GLStateScope RAII struct and replace manual toggle pairs in 5 renderer functions (completed 2026-03-29)
 - [x] **Phase 39: CNC Controller Dedup** - Extract shared connection initialization into a private initializeConnection() helper (completed 2026-03-29)
+
+### v0.7.0 Project-Centered Workshop (Phases 40-48)
+
+**Milestone Goal:** Make Project the persistent preparation context for inexperienced hobbyists, make Design Library an explicit reusable catalog/picker, and hand an immutable verified setup into protected Run CNC execution. Build the experience through independently testable modules while shrinking every touched monolithic file.
+
+- **Master plan:** `.planning/PROJECT-CENTERED-WORKSHOP-PLAN.md`
+- **Execution sessions:** `.planning/PROJECT-CENTERED-WORKSHOP-SESSIONS.md`
+
+- [x] **Phase 40: Baseline and Module Guardrails** - Preserve current dirty work, record the canonical journey, create the render-independent workshop target, and establish file-size/module-contract checks. (2026-07-10)
+- [x] **Phase 41: Authoritative Project Session** - Centralize project activation, selection origin, preview/return state, route transitions, generation tokens, and streaming conflict priority. (2026-07-10)
+- [x] **Phase 42: Home and Persistent Project Shell** - One authoritative Home, named project lifecycle, storage-validated restart resume, and deterministic close/reset behavior are complete. (2026-07-10)
+- [x] **Phase 43: Contextual Design Library** - Explicit manage/start/add UI, token-safe preview and return, atomic mixed membership, purpose-preserving imports, linked-delete protection, and Library extraction are complete. (2026-07-10)
+- [x] **Phase 44: Project Plan Navigation** - One deterministic hierarchy now drives the Project panel, with one Continue action, six textual stages, generic exact-identity activation, and secondary project details. (2026-07-10)
+- [x] **Phase 45: Modular Prepare Carve** - Exact pinning, explicit project handling, headless preparation policy, stale-result guards, Material-before-Tool order, and four snapshot-guided focused preparation views are complete. (2026-07-10)
+- [x] **Phase 46: Protected Run Boundary** - Immutable RunPackage, RunCoordinator, exact run locks, real stream submission, Machine Setup, Review & Run, history, and terminal cleanup are complete. (2026-07-10)
+- [x] **Phase 47: Layout, Viewport, and Advanced Compatibility** - Versioned/idempotent built-in migration, custom-preset preservation, shared Guided/Advanced truth, and viewport decomposition are complete. (2026-07-10)
+- [ ] **Phase 48: Integrated Validation and Release Readiness** - Automated E2E, accessibility heuristics, 72/72 independently reviewed workflow captures, packages, source audit, and handoff pass; only the five-person novice study remains before Guided becomes default.
+
+**Execution order:** 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48. Do not parallelize sessions that share ProjectSession, Direct Carve state, or layout migration. Limited isolated worktree parallelism is allowed only after the owning contract is frozen.
 
 ## Phase Details (v0.5.0)
 
@@ -321,6 +341,22 @@ Plans:
 | 38. GL State Safety | v0.6.0 | 1/1 | Complete   | 2026-03-29 |
 | 39. CNC Controller Dedup | v0.6.0 | 1/1 | Complete   | 2026-03-29 |
 
+## Progress (v0.7.0)
+
+| Phase | Planned sessions | Status | Completed |
+|-------|-----------------:|--------|-----------|
+| 40. Baseline and Module Guardrails | 2 | Complete | 2026-07-10 |
+| 41. Authoritative Project Session | 2 | Complete | 2026-07-10 |
+| 42. Home and Persistent Project Shell | 2 | Complete | 2026-07-10 |
+| 43. Contextual Design Library | 2 | Complete | 2026-07-10 |
+| 44. Project Plan Navigation | 2 | Complete | 2026-07-10 |
+| 45. Modular Prepare Carve | 3 | Complete | 2026-07-10 |
+| 46. Protected Run Boundary | 2 | Complete | 2026-07-10 |
+| 47. Layout, Viewport, and Advanced Compatibility | 2 | Complete | 2026-07-10 |
+| 48. Integrated Validation and Release Readiness | 1 | Engineering + visual pass; human gate pending | - |
+
+**Total:** 18 planned execution sessions. Each session ends with direct tests, the full test binary, `git diff --check`, edited-file line counts, and a written handoff.
+
 ---
 *Roadmap created: 2026-02-24*
-*Last updated: 2026-03-28 -- Phase 38 planned (1 plan, wave 1)*
+*Last updated: 2026-07-11 -- Sessions 01-17 complete; Session 18 engineering and 72-state visual pass, Guided-default human gate pending*

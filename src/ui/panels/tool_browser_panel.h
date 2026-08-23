@@ -16,6 +16,7 @@ class ToolDatabase;
 class ToolboxRepository;
 class MaterialManager;
 class FileDialog;
+class SupplierToolImportDialog;
 
 inline bool toolBrowserSelectionNeedsReload(const std::string& loadedGeometryId,
                                             const std::string& selectedGeometryId) {
@@ -49,6 +50,9 @@ class ToolBrowserPanel : public Panel {
     void setToolboxRepository(ToolboxRepository* repo) { m_toolboxRepo = repo; }
     void setMaterialManager(MaterialManager* mgr) { m_materialManager = mgr; }
     void setFileDialog(FileDialog* dlg) { m_fileDialog = dlg; }
+    void setSupplierToolImportDialog(SupplierToolImportDialog* dialog) {
+        m_supplierToolImportDialog = dialog;
+    }
     void setOpenMachineProfilesCallback(std::function<void()> cb) {
         m_openMachineProfiles = std::move(cb);
     }
@@ -73,6 +77,7 @@ class ToolBrowserPanel : public Panel {
     ToolboxRepository* m_toolboxRepo = nullptr;
     MaterialManager* m_materialManager = nullptr;
     FileDialog* m_fileDialog = nullptr;
+    SupplierToolImportDialog* m_supplierToolImportDialog = nullptr;
 
     // Cached data
     std::vector<VtdbTreeEntry> m_treeEntries;

@@ -197,7 +197,7 @@ void MaterialsPanel::renderToolbar() {
         } else if (!m_modelLoaded) {
             ImGui::SetTooltip("Load a model into the viewport first");
         } else {
-            ImGui::SetTooltip("Assign selected material to loaded model");
+            ImGui::SetTooltip("Assign as shared Library metadata for the loaded model");
         }
     }
 

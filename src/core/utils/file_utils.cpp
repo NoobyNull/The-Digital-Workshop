@@ -1,6 +1,7 @@
 #include "file_utils.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -14,6 +15,7 @@
 #endif
 #include <windows.h>
 #else
+#include <fcntl.h>
 #include <unistd.h>
 #endif
 
@@ -98,6 +100,66 @@ bool writeText(const Path& path, std::string_view content) {
 
     file.write(content.data(), static_cast<std::streamsize>(content.size()));
     return file.good();
+}
+
+bool writeTextAtomic(const Path& path, std::string_view content) {
+    const Path parent = path.parent_path();
+    if (!parent.empty() && !createDirectories(parent))
+        return false;
+
+    static std::atomic<unsigned long long> sequence{0};
+#ifdef _WIN32
+    const auto processId = static_cast<unsigned long long>(GetCurrentProcessId());
+#else
+    const auto processId = static_cast<unsigned long long>(getpid());
+#endif
+    Path temporary = path;
+    temporary += ".tmp-" + std::to_string(processId) + "-" + std::to_string(sequence.fetch_add(1));
+    if (!writeText(temporary, content))
+        return false;
+
+#ifdef _WIN32
+    if (!MoveFileExW(
+            temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        (void)file::remove(temporary);
+        log::errorf("FileIO", "Failed to atomically replace: %s", path.string().c_str());
+        return false;
+    }
+#else
+    const int temporaryFd = ::open(temporary.c_str(), O_RDONLY);
+    if (temporaryFd < 0 || ::fsync(temporaryFd) != 0) {
+        if (temporaryFd >= 0)
+            ::close(temporaryFd);
+        (void)file::remove(temporary);
+        log::errorf("FileIO", "Failed to sync temporary file: %s", temporary.c_str());
+        return false;
+    }
+    ::close(temporaryFd);
+
+    std::error_code replaceError;
+    std::filesystem::rename(temporary, path, replaceError);
+    if (replaceError) {
+        (void)file::remove(temporary);
+        log::errorf("FileIO",
+                    "Failed to atomically replace %s: %s",
+                    path.c_str(),
+                    replaceError.message().c_str());
+        return false;
+    }
+
+    if (!parent.empty()) {
+        int directoryFlags = O_RDONLY;
+#ifdef O_DIRECTORY
+        directoryFlags |= O_DIRECTORY;
+#endif
+        const int parentFd = ::open(parent.c_str(), directoryFlags);
+        if (parentFd >= 0) {
+            (void)::fsync(parentFd);
+            ::close(parentFd);
+        }
+    }
+#endif
+    return true;
 }
 
 bool writeBinary(const Path& path, const ByteBuffer& data) {

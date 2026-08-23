@@ -133,6 +133,27 @@ TEST(DirectCarveWorkflow, ToolGateRequiresToolSetupConfirmation)
         missing, dw::carve::DirectCarveRequirement::ToolSetupConfirmed));
 }
 
+TEST(DirectCarveWorkflow, MaterialStageAndRequirementPrecedeToolSelection)
+{
+    using dw::carve::DirectCarveRequirement;
+    using dw::carve::DirectCarveWorkflowStep;
+    EXPECT_LT(static_cast<int>(DirectCarveWorkflowStep::Material),
+              static_cast<int>(DirectCarveWorkflowStep::Tool));
+
+    auto state = readyState();
+    state.materialSelected = false;
+    state.finishingToolSelected = false;
+    state.toolSetupConfirmed = false;
+    const auto missing = dw::carve::missingDirectCarveRequirements(state, false);
+    const auto material = std::find(
+        missing.begin(), missing.end(), DirectCarveRequirement::MaterialConfirmed);
+    const auto tool = std::find(
+        missing.begin(), missing.end(), DirectCarveRequirement::FinishingToolSelected);
+    ASSERT_NE(material, missing.end());
+    ASSERT_NE(tool, missing.end());
+    EXPECT_LT(material, tool);
+}
+
 TEST(DirectCarveWorkflow, FinalConfirmationAloneIsNotEnough)
 {
     auto state = readyState();

@@ -1,5 +1,7 @@
 #include "tool_calculator.h"
 
+#include "../gcode/machine_rigidity.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -185,7 +187,9 @@ CalcResult ToolCalculator::calculate(const CalcInput& input) {
     result.hardness_band = classifyMaterial(input.janka_hardness, input.material_name);
 
     // 2. Get rigidity derating
-    result.rigidity_factor = rigidityFactor(input.drive_type);
+    result.rigidity_factor = input.rigidity_factor_override.has_value()
+        ? gcode::normalizeRigidityFactor(*input.rigidity_factor_override)
+        : rigidityFactor(input.drive_type);
 
     if (input.max_rpm <= 0) return result;
 
