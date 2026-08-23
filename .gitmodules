@@ -1,0 +1,3 @@
+[submodule "cambridge/vendor/purecutcnc"]
+	path = cambridge/vendor/purecutcnc
+	url = https://github.com/PureCutCNC/purecutcnc.git
