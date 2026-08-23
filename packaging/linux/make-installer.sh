@@ -19,13 +19,25 @@ require_file() {
     fi
 }
 
+CAM_ENGINE_SOURCE="$BUILD_DIR/cam-engine"
+
 require_file "$BUILD_DIR/digital_workshop"
 require_file "$BUILD_DIR/dw_settings"
 require_file "$BUILD_DIR/graphqlite.so"
 require_file "$RESOURCE_SOURCE/icons/statue.png"
 require_file "$RESOURCE_SOURCE/icons/Digital Workshop.png"
+require_file "$CAM_ENGINE_SOURCE/dw-cam-engine.js"
+require_file "$CAM_ENGINE_SOURCE/bun"
 if [[ ! -x "$BUILD_DIR/digital_workshop" || ! -x "$BUILD_DIR/dw_settings" ]]; then
     echo "Release application binaries must be executable" >&2
+    exit 1
+fi
+if [[ ! -x "$CAM_ENGINE_SOURCE/bun" ]]; then
+    echo "CAM engine bun runtime must be executable: $CAM_ENGINE_SOURCE/bun" >&2
+    exit 1
+fi
+if [[ ! -d "$CAM_ENGINE_SOURCE/node_modules/manifold-3d" ]]; then
+    echo "CAM engine payload is missing node_modules/manifold-3d: $CAM_ENGINE_SOURCE" >&2
     exit 1
 fi
 
@@ -56,6 +68,7 @@ install -m 755 "$SCRIPT_DIR/uninstall.sh" "$STAGING_DIR/uninstall.sh"
 mkdir -p "$STAGING_DIR/resources"
 cp -a "$RESOURCE_SOURCE/icons" "$STAGING_DIR/resources/icons"
 cp -a "$RESOURCE_SOURCE/materials" "$STAGING_DIR/resources/materials"
+cp -a "$CAM_ENGINE_SOURCE" "$STAGING_DIR/resources/cam-engine"
 
 # Build self-extracting archive
 rm -f "$OUTPUT"

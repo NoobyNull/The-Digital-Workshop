@@ -43,12 +43,18 @@ for required in \
     "$SCRIPT_DIR/bin/$GRAPHQLITE_LIB" \
     "$SCRIPT_DIR/uninstall.sh" \
     "$RESOURCE_SRC/icons/statue.png" \
-    "$RESOURCE_SRC/icons/Digital Workshop.png"; do
+    "$RESOURCE_SRC/icons/Digital Workshop.png" \
+    "$RESOURCE_SRC/cam-engine/dw-cam-engine.js" \
+    "$RESOURCE_SRC/cam-engine/bun"; do
     if [[ ! -s "$required" ]]; then
         echo "Installer payload is missing or empty: $required" >&2
         exit 1
     fi
 done
+if [[ ! -x "$RESOURCE_SRC/cam-engine/bun" ]]; then
+    echo "Installer payload cam-engine bun runtime is not executable" >&2
+    exit 1
+fi
 if ! find "$RESOURCE_SRC/materials" -maxdepth 1 -type f -name '*.dwmat' \
         -print -quit | grep -q .; then
     echo "Installer payload has no bundled materials" >&2
@@ -114,6 +120,7 @@ echo "$APP_NAME installed successfully."
 echo "  Binaries:  $BIN_DIR/$BIN_NAME"
 echo "             $BIN_DIR/$SETTINGS_BIN"
 echo "  Desktop:   $DESKTOP_DIR/$DESKTOP_ID.desktop"
+echo "  CAM engine: $RESOURCE_DIR/cam-engine"
 if [[ "$MODE" == "--system" ]]; then
     echo "  Uninstall: sudo $UNINSTALL_PATH --system"
 else

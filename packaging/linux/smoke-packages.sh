@@ -137,6 +137,15 @@ xvfb-run -a -s '-screen 0 1366x768x24 -dpi 96' \
     "$script_dir/smoke-settings-app.sh" "$run_settings" \
     "$evidence_dir/run-settings-startup.log"
 
+run_cam_engine_dir="$run_home/.local/share/digitalworkshop/resources/cam-engine"
+if [[ ! -d "$run_cam_engine_dir" ]]; then
+    echo ".run install is missing cam-engine payload: $run_cam_engine_dir" >&2
+    exit 1
+fi
+DW_SMOKE_JOBSPEC="$repo_root/cambridge/bridge/examples/dome-fluidnc.json" \
+    "$script_dir/../smoke-cam-engine.sh" "$run_cam_engine_dir" \
+    | tee "$evidence_dir/run-cam-engine-smoke.log"
+
 HOME="$run_home" "$run_uninstaller" >"$evidence_dir/run-uninstall.log" 2>&1
 for removed in \
     "$run_binary" \
@@ -161,6 +170,7 @@ done
     echo "RUN_INSTALL=PASS"
     echo "RUN_STARTUP=PASS"
     echo "RUN_SETTINGS_STARTUP=PASS"
+    echo "CAM_ENGINE_SMOKE=PASS"
     echo "RUN_UNINSTALL=PASS"
     echo "GRAPHQLITE=PASS"
     echo "FRESH_SCHEMA=PASS"
