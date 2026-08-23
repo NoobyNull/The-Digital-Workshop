@@ -328,6 +328,8 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
             carve_preparation::PreparationRevision{context.generation.value};
         const auto token =
             carve_preparation::PreparationToken{m_nextPreparationToken++};
+        // The pin resolve validates the operation's identity chain before
+        // falling back to the parent model.
         const auto pinResult = resolvePrepareCarvePin(
             context.activeProject,
             itemRef,

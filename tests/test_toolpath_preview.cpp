@@ -152,19 +152,3 @@ TEST(ToolpathPreview, CarveJobCachesPreviewWhenGeneratingFixedDepthPath)
     EXPECT_LT(job.toolpathPreview().finishing.strokes.front().cutPoints.size(),
               job.toolpath().finishing.points.size());
 }
-
-TEST(ToolpathPreview, DirectCarveUiRendersCachedStrokesInsteadOfRawMoves)
-{
-    const std::string path =
-        std::string(CMAKE_SOURCE_DIR) +
-        "/src/ui/panels/direct_carve_carve_preview_step.cpp";
-    std::ifstream input(path);
-    ASSERT_TRUE(input.is_open());
-    const std::string source((std::istreambuf_iterator<char>(input)),
-                             std::istreambuf_iterator<char>());
-
-    EXPECT_NE(source.find("m_carveJob->toolpathPreview()"), std::string::npos);
-    EXPECT_NE(source.find("selectToolpathPreviewStrokes"), std::string::npos);
-    EXPECT_EQ(source.find("tp.finishing.points[i]"), std::string::npos);
-    EXPECT_EQ(source.find("tp.clearing.points[i]"), std::string::npos);
-}

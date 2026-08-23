@@ -44,11 +44,6 @@ class ProjectPanel : public Panel {
     void setProjectPlanProvider(ProjectPlanProvider provider) {
         m_projectPlanProvider = std::move(provider);
     }
-#ifdef DW_ENABLE_UX_CAPTURE
-    [[nodiscard]] std::optional<ProjectPanelSnapshot> uxCaptureSnapshot() const {
-        return m_projectPlanProvider ? m_projectPlanProvider() : std::nullopt;
-    }
-#endif
     void setOnProjectPlanAction(ProjectPlanActionCallback callback) {
         m_onProjectPlanAction = std::move(callback);
     }

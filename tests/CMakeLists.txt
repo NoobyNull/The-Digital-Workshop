@@ -127,15 +127,12 @@ set(DW_TEST_SOURCES
     test_preparation_identity.cpp
     test_prepare_carve_flow.cpp
     test_preparation_step_guidance.cpp
-    test_prepare_carve_ui_architecture.cpp
     test_carve_preparation_boundary.cpp
     test_run_package.cpp
     test_run_coordinator.cpp
     test_run_coordination_boundary.cpp
     test_run_coordination_application_architecture.cpp
     test_direct_carve_run_effect_adapter.cpp
-    test_carve_preparation_adapter.cpp
-    test_carve_preparation_application_architecture.cpp
     test_surface_analysis.cpp
     test_island_detector.cpp
     test_roughing_tool_selector.cpp
@@ -145,7 +142,6 @@ set(DW_TEST_SOURCES
     test_gcode_export.cpp
     test_carve_streamer.cpp
     test_carve_integration.cpp
-    test_direct_carve_ui_copy.cpp
     test_unit_conversion.cpp
     test_costing_engine.cpp
     test_board_foot.cpp

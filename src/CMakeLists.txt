@@ -31,9 +31,9 @@ set(DW_SOURCES
     app/application_runtime.cpp
     app/application_library_picker.cpp
     app/application_carve_preparation.cpp
+    app/carve_preparation_adapter.cpp
     app/library_workflow_adapter.cpp
     app/library_workflow_coordinator.cpp
-    app/carve_preparation_adapter.cpp
     app/direct_carve_run_effect_adapter.cpp
     app/project_plan_input_adapter.cpp
     app/project_plan_run_truth_adapter.cpp
@@ -289,28 +289,6 @@ set(DW_SOURCES
     ui/panels/cnc_safety_panel.cpp
     ui/panels/cnc_settings_panel.cpp
     ui/panels/cnc_macro_panel.cpp
-    ui/panels/direct_carve_panel.cpp
-    ui/panels/direct_carve_machine_check_step.cpp
-    ui/panels/direct_carve_zero_confirm_step.cpp
-    ui/panels/direct_carve_outline_test_step.cpp
-    ui/panels/direct_carve_review_run_step.cpp
-    ui/panels/direct_carve_active_run.cpp
-    ui/panels/direct_carve_design_size_step.cpp
-    ui/panels/direct_carve_material_blank_step.cpp
-    ui/panels/direct_carve_choose_tool_step.cpp
-    ui/panels/direct_carve_tool_library_picker.cpp
-    ui/panels/direct_carve_carve_preview_step.cpp
-    ui/panels/direct_carve_step_guidance.cpp
-    ui/panels/direct_carve_operation_resume.cpp
-    ui/panels/direct_carve_preparation_adapter.cpp
-    ui/panels/direct_carve_preparation_navigation.cpp
-    ui/panels/direct_carve_step_indicator.cpp
-    ui/panels/direct_carve_preparation_context.cpp
-    ui/panels/direct_carve_project_sync.cpp
-    ui/panels/direct_carve_tool_child_sync.cpp
-    ui/panels/direct_carve_project_gcode.cpp
-    ui/panels/direct_carve_gcode_preview.cpp
-    ui/panels/direct_carve_run_adapter.cpp
     ui/panels/group_panel.cpp
 
     # UI Widgets

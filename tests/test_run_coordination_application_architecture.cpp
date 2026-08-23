@@ -27,14 +27,9 @@ std::size_t lineCount(const fs::path& path) {
 
 TEST(RunCoordinationApplicationArchitecture, StartUsesLockThenRealStreamAndExactHistory) {
     const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
-    const auto panel =
-        readFile(root / "ui" / "panels" / "direct_carve_run_adapter.cpp");
     const auto effects =
         readFile(root / "app" / "direct_carve_run_effect_adapter.cpp");
 
-    EXPECT_NE(panel.find("saveGCodeToProjectDirectory"), std::string::npos);
-    EXPECT_NE(panel.find("RunPreflightSnapshot"), std::string::npos);
-    EXPECT_NE(panel.find("m_runCoordinator.dispatch(StartRun"), std::string::npos);
     EXPECT_NE(effects.find("WorkshopCommand{workshop::BeginRun"), std::string::npos);
     EXPECT_NE(effects.find("GCodeFingerprintMismatch"), std::string::npos);
     EXPECT_NE(effects.find("m_jobRepository.insert"), std::string::npos);
@@ -44,74 +39,8 @@ TEST(RunCoordinationApplicationArchitecture, StartUsesLockThenRealStreamAndExact
               std::string::npos);
 }
 
-TEST(RunCoordinationApplicationArchitecture, UiControlsEmitOnlyCoordinatorCommands) {
-    const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
-    const auto running =
-        readFile(root / "ui" / "panels" / "direct_carve_active_run.cpp");
-    const auto preparation = readFile(
-        root / "modules" / "carve_preparation" / "prepare_carve_flow.h");
-
-    for (const auto& forbidden : {"feedHold", "cycleStart", "softReset",
-                                  "startStreaming", "startStream"}) {
-        EXPECT_EQ(running.find(forbidden), std::string::npos) << forbidden;
-        EXPECT_EQ(preparation.find(forbidden), std::string::npos) << forbidden;
-    }
-    EXPECT_NE(running.find("requestRunPause"), std::string::npos);
-    EXPECT_NE(running.find("requestRunResume"), std::string::npos);
-    EXPECT_NE(running.find("requestRunAbort"), std::string::npos);
-}
-
-TEST(RunCoordinationApplicationArchitecture,
-     MissingRunEffectExecutorPreservesPreviewAndExportButGuardsStartBeforeDispatch) {
-    const auto root = fs::path(CMAKE_SOURCE_DIR) / "src" / "ui" / "panels";
-    const auto navigation =
-        readFile(root / "direct_carve_preparation_navigation.cpp");
-    const auto runAdapter =
-        readFile(root / "direct_carve_run_adapter.cpp");
-    const auto preview =
-        readFile(root / "direct_carve_carve_preview_step.cpp");
-    const auto gcode =
-        readFile(root / "direct_carve_project_gcode.cpp");
-    const auto review =
-        readFile(root / "direct_carve_review_run_step.cpp");
-
-    // Missing application execution is a start-only gate. The early return
-    // precedes RunCoordinator dispatch, so no lock or CNC effect can exist.
-    EXPECT_NE(navigation.find(
-                  "return m_stockSecuredConfirmed && m_runEffectExecutor"),
-              std::string::npos);
-    const auto unavailableGuard = runAdapter.find("if (!canStartCarve()");
-    const auto startDispatch =
-        runAdapter.find("m_runCoordinator.dispatch(StartRun");
-    ASSERT_NE(unavailableGuard, std::string::npos);
-    ASSERT_NE(startDispatch, std::string::npos);
-    EXPECT_LT(unavailableGuard, startDispatch);
-
-    // Planning and file output remain separate capabilities. Neither path
-    // consults Run coordination or can emit one of its effects.
-    EXPECT_NE(preview.find("requestPinnedPreviewGeneration()"), std::string::npos);
-    EXPECT_NE(preview.find("saveGCodeToProject()"), std::string::npos);
-    EXPECT_NE(gcode.find("void DirectCarvePanel::saveGCodeToProject()"),
-              std::string::npos);
-    for (const auto* source : {&preview, &gcode}) {
-        EXPECT_EQ(source->find("m_runEffectExecutor"), std::string::npos);
-        EXPECT_EQ(source->find("m_runCoordinator"), std::string::npos);
-    }
-
-    // Review disables only the final confirmation/start region. Export is
-    // rendered before that gate and therefore stays usable without Run.
-    const auto exportControl = review.find("Save as G-code");
-    const auto startAvailability = review.find("const bool preflightIncomplete");
-    ASSERT_NE(exportControl, std::string::npos);
-    ASSERT_NE(startAvailability, std::string::npos);
-    EXPECT_LT(exportControl, startAvailability);
-    EXPECT_NE(review.find("!m_runEffectExecutor"), std::string::npos);
-}
-
 TEST(RunCoordinationApplicationArchitecture, NewRunIntegrationUnitsRemainFocused) {
     const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
-    EXPECT_LE(lineCount(root / "ui" / "panels" / "direct_carve_run_adapter.cpp"),
-              500U);
     EXPECT_LE(lineCount(root / "app" / "direct_carve_run_effect_adapter.cpp"),
               500U);
     EXPECT_LE(lineCount(root / "core" / "cnc" /

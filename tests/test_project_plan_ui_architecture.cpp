@@ -171,13 +171,7 @@ TEST(ProjectPlanUiArchitecture, ApplicationOverlaysLivePreparationAndExactRunTru
     const auto advancedSource = readFile(
         sourceRoot / "ui" / "panels" / "gcode_panel_run_truth.cpp");
     const auto application = readFile(sourceRoot / "app" / "application.cpp");
-    const auto preparation = readFile(
-        sourceRoot / "ui" / "panels" /
-        "direct_carve_preparation_adapter.cpp");
 
-    EXPECT_NE(preparation.find("DirectCarvePanel::projectPlanSnapshot"),
-              std::string::npos);
-    EXPECT_NE(preparation.find("workflowState()"), std::string::npos);
     EXPECT_NE(wiring.find("m_directCarveRunEffectAdapter->snapshot()"),
               std::string::npos);
     EXPECT_NE(wiring.find("gcodePanel->projectPlanRunSnapshot()"),

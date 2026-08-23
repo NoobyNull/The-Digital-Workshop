@@ -198,30 +198,4 @@ TEST(ProjectPlanInputAdapter, FocusRequiresExactProjectItemMembership) {
     EXPECT_FALSE(input.liveRun.has_value());
 }
 
-TEST(ProjectPlanInputAdapter, LiveFactsCarryIdentityAndBlankOnly) {
-    const carve_preparation::PrepareCarvePin pin(
-        workshop::ProjectId(9),
-        {workshop::ProjectId(9), workshop::ProjectItemId(1)},
-        {workshop::LibraryItemKind::Model, workshop::LibraryItemId(41)},
-        {workshop::ProjectId(9), workshop::ProjectItemId(2)},
-        carve_preparation::PreparationToken{7},
-        carve_preparation::PreparationRevision{8});
-
-    const auto facts = makeLiveProjectPlanOperationFacts(pin, true);
-
-    EXPECT_EQ(facts.operation, pin.operationItem());
-    EXPECT_EQ(facts.blankSpecified, Evidence::Satisfied);
-    // Carve-stage evidence is absent until the CAM rebuild supplies it.
-    EXPECT_EQ(facts.modelLoaded, Evidence::Unknown);
-    EXPECT_EQ(facts.materialSelected, Evidence::Unknown);
-    EXPECT_EQ(facts.toolpathGenerated, Evidence::Unknown);
-    EXPECT_EQ(facts.toolpathFresh, Evidence::Unknown);
-    EXPECT_EQ(facts.machineHomedOrSkipped, Evidence::Unknown);
-    EXPECT_EQ(facts.zeroVerified, Evidence::Unknown);
-    EXPECT_EQ(facts.finalConfirmed, Evidence::Unknown);
-
-    const auto blocked = makeLiveProjectPlanOperationFacts(pin, false);
-    EXPECT_EQ(blocked.blankSpecified, Evidence::Unsatisfied);
-}
-
 } // namespace

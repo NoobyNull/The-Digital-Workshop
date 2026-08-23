@@ -191,8 +191,8 @@ void Application::wireCncPanels() {
             [this, gcp, jobp, safetyp](const StreamProgress& progress) {
             gcp->onGrblProgress(progress);
             const bool streaming = progress.streaming;
-            const auto origin = CncStreamOrigin::ExternalGCode;
-            m_uiManager->setCncStreaming(streaming, origin);
+            // DirectCarve-origin streams return with the CAM rebuild.
+            m_uiManager->setCncStreaming(streaming, CncStreamOrigin::ExternalGCode);
             if (jobp) {
                 jobp->onProgressUpdate(progress);
                 jobp->setStreaming(streaming);

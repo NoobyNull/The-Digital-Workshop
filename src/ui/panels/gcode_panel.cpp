@@ -206,7 +206,6 @@ void GCodePanel::render() {
                     renderMachineStatus();
                     renderPlaybackControls();
                     renderProgressBar();
-                    renderCarveProgress();
                     renderFeedOverride();
                 }
             }
@@ -754,55 +753,6 @@ void GCodePanel::renderProgressBar() {
         ImGui::TextColored(colors::kError, "Errors: %d",
                            m_streamProgress.errorCount);
     }
-}
-
-// --- Direct Carve streaming ---
-
-void GCodePanel::onCarveStreamStart(int totalLines) {
-    m_carveStreamActive = true;
-    m_carveCurrentLine = 0;
-    m_carveTotalLines = totalLines;
-    m_carveElapsedSec = 0.0f;
-    m_carveAborted = false;
-}
-
-void GCodePanel::onCarveStreamProgress(int currentLine, int totalLines, float elapsedSec) {
-    m_carveCurrentLine = currentLine;
-    m_carveTotalLines = totalLines;
-    m_carveElapsedSec = elapsedSec;
-}
-
-void GCodePanel::onCarveStreamComplete() {
-    m_carveStreamActive = false;
-}
-
-void GCodePanel::onCarveStreamAborted() {
-    m_carveStreamActive = false;
-    m_carveAborted = true;
-}
-
-void GCodePanel::renderCarveProgress() {
-    if (!m_carveStreamActive || m_carveTotalLines <= 0) return;
-
-    float fraction = static_cast<float>(m_carveCurrentLine) /
-                     static_cast<float>(m_carveTotalLines);
-
-    // ETA from line rate
-    float etaSec = 0.0f;
-    if (m_carveCurrentLine > 0 && fraction < 1.0f) {
-        float rate = static_cast<float>(m_carveCurrentLine) / m_carveElapsedSec;
-        float remaining = static_cast<float>(m_carveTotalLines - m_carveCurrentLine);
-        etaSec = remaining / rate;
-    }
-
-    int etaMin = static_cast<int>(etaSec / 60.0f);
-    int etaS = static_cast<int>(etaSec) % 60;
-    char overlay[128];
-    snprintf(overlay, sizeof(overlay), "Carve: %d / %d  (%.0f%%)  ETA: %d:%02d",
-             m_carveCurrentLine, m_carveTotalLines,
-             static_cast<double>(fraction * 100.0f), etaMin, etaS);
-
-    ImGui::ProgressBar(fraction, ImVec2(-1, 0), overlay);
 }
 
 // --- Feed override ---

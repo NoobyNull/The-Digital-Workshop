@@ -17,10 +17,6 @@ Evidence boolEvidence(const nlohmann::json& object, const char* key) {
     return object[key].get<bool>() ? Evidence::Satisfied : Evidence::Unsatisfied;
 }
 
-Evidence liveEvidence(bool satisfied) noexcept {
-    return satisfied ? Evidence::Satisfied : Evidence::Unsatisfied;
-}
-
 bool positiveNumber(const nlohmann::json& object, const char* key) {
     return object.contains(key) && object[key].is_number() &&
            object[key].get<double>() > 0.0;
@@ -146,15 +142,6 @@ project_plan::ProjectPlanInput makeProjectPlanInput(
     }
     if (focusedItemExists) input.focusedItem = focusedItem;
     return input;
-}
-
-project_plan::OperationFacts makeLiveProjectPlanOperationFacts(
-    const carve_preparation::PrepareCarvePin& pin,
-    bool blankSpecified) {
-    project_plan::OperationFacts facts;
-    facts.operation = pin.operationItem();
-    facts.blankSpecified = liveEvidence(blankSpecified);
-    return facts;
 }
 
 } // namespace dw

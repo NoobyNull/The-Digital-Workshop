@@ -40,17 +40,14 @@ TEST(MachineProfileUiArchitecture, SavingBuiltInCreatesAndActivatesDurableCopy) 
 
 TEST(MachineProfileUiArchitecture, ProfileCalculatorsShareOneAdapter) {
     const auto root = std::filesystem::path(CMAKE_SOURCE_DIR) / "src" / "ui" / "panels";
-    const auto direct = readFile(root / "direct_carve_panel.cpp");
     const auto browser = readFile(root / "tool_browser_panel.cpp");
     const auto cncTool = readFile(root / "cnc_tool_panel.cpp");
 
-    EXPECT_NE(direct.find("applyMachineProfileToCalcInput(mp, ci)"), std::string::npos);
     EXPECT_NE(browser.find("applyMachineProfileToCalcInput(profile, input)"),
               std::string::npos);
     EXPECT_NE(cncTool.find("applyMachineProfileToCalcInput(mp, input)"),
               std::string::npos);
 
-    EXPECT_EQ(direct.find("switch (mp.driveSystem)"), std::string::npos);
     EXPECT_EQ(browser.find("driveTypeFromProfile"), std::string::npos);
     EXPECT_EQ(cncTool.find("switch (mp.driveSystem)"), std::string::npos);
 }

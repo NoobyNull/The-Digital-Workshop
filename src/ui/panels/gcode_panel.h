@@ -95,12 +95,6 @@ class GCodePanel : public Panel {
     [[nodiscard]] std::optional<GCodePanelRunSnapshot>
     projectPlanRunSnapshot() const noexcept;
 
-    // Direct Carve streaming — called by DirectCarvePanel
-    void onCarveStreamStart(int totalLines);
-    void onCarveStreamProgress(int currentLine, int totalLines, float elapsedSec);
-    void onCarveStreamComplete();
-    void onCarveStreamAborted();
-
   private:
     // Render sections
     void renderToolbar();
@@ -205,14 +199,6 @@ class GCodePanel : public Panel {
     void renderSearchBar();
     void findNext();
     void gotoLineNumber(int lineNum);
-
-    // Direct Carve streaming state
-    void renderCarveProgress();
-    bool m_carveStreamActive = false;
-    int m_carveCurrentLine = 0;
-    int m_carveTotalLines = 0;
-    float m_carveElapsedSec = 0.0f;
-    bool m_carveAborted = false;
 };
 
 } // namespace dw
