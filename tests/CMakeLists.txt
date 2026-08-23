@@ -115,15 +115,7 @@ set(DW_TEST_SOURCES
     test_grbl_settings.cpp
     test_macro_manager.cpp
     # Carve (Direct Carve pipeline)
-    test_heightmap.cpp
     test_model_fitter.cpp
-    test_material_blank_defaults.cpp
-    test_carve_job.cpp
-    test_direct_carve_operation_state.cpp
-    test_direct_carve_probe_tool_diameter.cpp
-    test_direct_carve_tool_plan.cpp
-    test_direct_carve_zeroing_probe.cpp
-    test_direct_carve_workflow.cpp
     test_preparation_identity.cpp
     test_prepare_carve_flow.cpp
     test_preparation_step_guidance.cpp
@@ -134,15 +126,6 @@ set(DW_TEST_SOURCES
     test_run_coordination_application_architecture.cpp
     test_direct_carve_run_effect_adapter.cpp
     test_carve_preparation_adapter.cpp
-    test_surface_analysis.cpp
-    test_island_detector.cpp
-    test_roughing_tool_selector.cpp
-    test_toolpath_advisor.cpp
-    test_toolpath_generator.cpp
-    test_toolpath_preview.cpp
-    test_gcode_export.cpp
-    test_carve_streamer.cpp
-    test_carve_integration.cpp
     test_unit_conversion.cpp
     test_costing_engine.cpp
     test_board_foot.cpp
@@ -229,7 +212,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/cnc/unified_settings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/machine_units.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/macro_manager.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap.cpp
     ${CMAKE_SOURCE_DIR}/src/core/optimizer/cut_optimizer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/optimizer/bin_packer.cpp
     ${CMAKE_SOURCE_DIR}/src/core/optimizer/guillotine.cpp
@@ -303,22 +285,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/storage/storage_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/export/project_export_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/export/project_import.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/heightmap.cpp
     ${CMAKE_SOURCE_DIR}/src/core/carve/model_fitter.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/material_blank_defaults.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/carve_job.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_operation_state.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_probe_tool_diameter.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_tool_plan.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_zeroing_probe.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/direct_carve_workflow.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/surface_analysis.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/island_detector.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/roughing_tool_selector.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/toolpath_generator.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/toolpath_preview.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/gcode_export.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/carve/carve_streamer.cpp
     ${CMAKE_SOURCE_DIR}/src/render/camera.cpp
     ${CMAKE_SOURCE_DIR}/src/app/workspace.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_session_integration.cpp

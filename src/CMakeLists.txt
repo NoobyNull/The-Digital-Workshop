@@ -203,23 +203,8 @@ set(DW_SOURCES
     core/optimizer/clo_result_file.cpp
 
     # Carve (Direct Carve pipeline)
-    core/carve/heightmap.cpp
     core/carve/model_fitter.cpp
-    core/carve/material_blank_defaults.cpp
-    core/carve/roughing_tool_selector.cpp
     core/carve/alignment_validator.cpp
-    core/carve/carve_job.cpp
-    core/carve/direct_carve_operation_state.cpp
-    core/carve/direct_carve_probe_tool_diameter.cpp
-    core/carve/direct_carve_tool_plan.cpp
-    core/carve/direct_carve_zeroing_probe.cpp
-    core/carve/direct_carve_workflow.cpp
-    core/carve/surface_analysis.cpp
-    core/carve/island_detector.cpp
-    core/carve/toolpath_generator.cpp
-    core/carve/toolpath_preview.cpp
-    core/carve/gcode_export.cpp
-    core/carve/carve_streamer.cpp
 
     # Archive
     core/archive/archive.cpp

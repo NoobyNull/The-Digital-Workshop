@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "core/carve/gcode_export.h"
 #include "core/gcode/gcode_document.h"
 #include "core/gcode/machine_profile.h"
 
@@ -26,30 +25,6 @@ TEST(GCodeDocument, PreservesExactTextAndPreparesSharedMetadata) {
     EXPECT_FLOAT_EQ(document.statistics.boundsMax.z, 5.0f);
     EXPECT_GT(document.statistics.totalPathLength, 0.0f);
     EXPECT_EQ(document.statistics.segmentTimes.size(), document.program.path.size());
-}
-
-TEST(GCodeDocument, CanonicalDirectCarveProgramRetainsThreeDimensionalMotion) {
-    carve::MultiPassToolpath toolpath;
-    toolpath.finishing.points = {
-        {{2.0f, 3.0f, 5.0f}, true},
-        {{2.0f, 3.0f, -2.0f}, false},
-        {{12.0f, 3.0f, -1.0f}, false},
-        {{12.0f, 3.0f, 5.0f}, true},
-    };
-    carve::ToolpathConfig config;
-    config.safeZMm = 5.0f;
-    config.feedRateMmMin = 700.0f;
-    config.plungeRateMmMin = 200.0f;
-
-    const auto exactText = carve::generateGcode(
-        toolpath, config, "relief", "ball nose");
-    const auto document = prepareDocument(exactText, MachineProfile{});
-
-    EXPECT_EQ(document.exactText, exactText);
-    ASSERT_TRUE(document.hasMotion());
-    EXPECT_FLOAT_EQ(document.program.boundsMin.z, -2.0f);
-    EXPECT_FLOAT_EQ(document.program.boundsMax.z, 5.0f);
-    EXPECT_LT(document.program.boundsMin.z, document.program.boundsMax.z);
 }
 
 TEST(GCodeDocument, NormalizesInchProgramGeometryAndFeedsToMillimeters) {

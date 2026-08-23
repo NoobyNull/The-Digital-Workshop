@@ -408,9 +408,8 @@ void GCodePanel::renderStatistics() {
         ImGui::PushStyleColor(ImGuiCol_Text, colors::kWarning);
         ImGui::TextWrapped(
             "Large program warning: this file is long enough that extra density is likely "
-            "past the useful quality return. Regenerate with a coarser Direct Carve stepover "
-            "such as Fine (8%%), Basic (12%%), or Rough (25%%), or use a larger tip/tool to "
-            "reduce runtime and file size.");
+            "past the useful quality return. Regenerate the G-code with a coarser stepover "
+            "or a larger tip/tool to reduce runtime and file size.");
         ImGui::PopStyleColor();
     }
 
