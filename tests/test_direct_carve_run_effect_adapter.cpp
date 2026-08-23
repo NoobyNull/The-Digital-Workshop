@@ -42,7 +42,8 @@ class DirectCarveRunEffectAdapterTest : public ::testing::Test {
         const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
         m_gcodePath = std::filesystem::temp_directory_path() /
                       ("dw-run-effect-" + std::to_string(nonce) + ".nc");
-        ASSERT_TRUE(file::writeText(m_gcodePath, "G21\nG90\nG0 X0 Y0\nM30\n"));
+        ASSERT_TRUE(file::writeText(
+            m_gcodePath, "; header comment\nG21\nG90\n\nG0 X0 Y0\nM30\n"));
         m_fingerprint = hash::computeFile(m_gcodePath);
         ASSERT_FALSE(m_fingerprint.empty());
 
@@ -212,7 +213,8 @@ TEST_F(DirectCarveRunEffectAdapterTest, RealStreamUsesExactGCodeAndSafetyControl
     ASSERT_TRUE(job.has_value());
     EXPECT_EQ(job->filePath, m_gcodePath.string());
     EXPECT_EQ(job->status, "running");
-    // Fixture file has 4 runnable lines: G21, G90, G0 X0 Y0, M30.
+    // Fixture file has a comment and a blank line filtered out, leaving
+    // 4 runnable lines: G21, G90, G0 X0 Y0, M30.
     EXPECT_EQ(job->totalLines, 4);
 
     EXPECT_TRUE(m_adapter->execute(FeedHold{run.identity()}).succeeded());

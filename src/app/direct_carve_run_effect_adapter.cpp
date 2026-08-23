@@ -1,7 +1,6 @@
 #include "direct_carve_run_effect_adapter.h"
 
 #include <fstream>
-#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -13,7 +12,6 @@
 #include "core/mesh/hash.h"
 #include "core/paths/path_resolver.h"
 #include "core/project/project.h"
-#include "core/utils/file_utils.h"
 #include "modules/project_session/project_session.h"
 
 namespace dw {
@@ -34,19 +32,6 @@ bool sameLock(const workshop::RunLockRef& lhs,
 bool runnableGCodeStatus(ProjectOpenItemStatus status) noexcept {
     return status == ProjectOpenItemStatus::Ready ||
            status == ProjectOpenItemStatus::Generated;
-}
-
-std::vector<std::string> readProgramLines(const Path& path) {
-    const auto content = file::readText(path);
-    if (!content)
-        return {};
-
-    std::vector<std::string> lines;
-    std::istringstream input(*content);
-    std::string line;
-    while (std::getline(input, line))
-        lines.push_back(std::move(line));
-    return lines;
 }
 
 // Runnable lines only: blanks and comment lines dropped, inline comments and
@@ -314,7 +299,7 @@ DirectCarveRunEffectResult DirectCarveRunEffectAdapter::handle(
         const Path resolvedPath = PathResolver::resolve(
             Path(m_snapshot.persistedGCodePath), PathCategory::GCode);
         const ModalState modal = GCodeModalScanner::scanToLine(
-            readProgramLines(resolvedPath), progress.ackedLines);
+            readRunnableLines(resolvedPath), progress.ackedLines);
         finalizedJob = *m_snapshot.jobId;
         if (!m_jobRepository.finishJob(*finalizedJob,
                                        jobStatus(effect.outcome),
