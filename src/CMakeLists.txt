@@ -208,6 +208,7 @@ set(DW_SOURCES
 
     # CAM engine
     core/cam/cam_engine_client.cpp
+    core/cam/cam_engine_runtime.cpp
 
     # Archive
     core/archive/archive.cpp
