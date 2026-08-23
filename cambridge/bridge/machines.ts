@@ -8,17 +8,13 @@
  * PureCutCNC is Apache-2.0 licensed (see repository root LICENSE/NOTICE).
  */
 
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 import { BUNDLED_DEFINITIONS } from '../vendor/purecutcnc/src/engine/gcode/definitions'
 import { validateMachineDefinition, type MachineDefinition } from '../vendor/purecutcnc/src/engine/gcode/types'
-
-const here = dirname(fileURLToPath(import.meta.url))
+// Imported (not readFileSync) so single-file compiles embed the definition.
+import fluidncJson from './machines/fluidnc.json'
 
 function loadFluidnc(): MachineDefinition {
-  const raw = readFileSync(join(here, 'machines', 'fluidnc.json'), 'utf8')
-  return validateMachineDefinition(JSON.parse(raw))
+  return validateMachineDefinition(fluidncJson)
 }
 
 let cached: MachineDefinition[] | null = null

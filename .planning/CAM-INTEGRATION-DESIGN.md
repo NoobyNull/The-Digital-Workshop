@@ -38,12 +38,17 @@ digital_workshop (C++/ImGui)                    dw-cam-engine (sidecar binary)
 
 Key decisions:
 
-1. **Sidecar, not embedded.** The engine is TypeScript; it runs in a
-   single-file sidecar executable compiled with Bun (`bun build --compile`),
-   shipped in the install payload. Development mode falls back to `tsx` from
-   the `cambridge/` environment. DW spawns the sidecar lazily on first CAM
-   use, binds it to a loopback ephemeral port, health-checks `/api/health`,
-   and terminates it on app exit. Fully offline; no system Node required.
+1. **Sidecar, not embedded.** The engine is TypeScript; it ships as a
+   three-part payload proven by the Phase 2 proof of concept: the Bun
+   runtime binary, a bundled `dw-cam-engine.js`
+   (`bun build --target=bun --external manifold-3d`, ~5 MB), and
+   `node_modules/manifold-3d` beside it (kept external because Bun's
+   bundler breaks the emscripten glue, and `--compile` binaries cannot
+   resolve external packages — both verified). ~103 MB total. Development
+   mode runs `bun bridge/server.ts` from the `cambridge/` environment. DW
+   spawns the sidecar lazily on first CAM use on loopback, health-checks
+   `/api/health`, and terminates it on app exit. Fully offline; no system
+   Node required.
 2. **Stateless bridge, authoritative native app.** DW owns the CAMJ document
    and sends it with each request. The bridge validates, computes, and
    returns JSON; it holds no session state. A sidecar crash loses nothing;
