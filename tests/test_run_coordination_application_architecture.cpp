@@ -61,20 +61,6 @@ TEST(RunCoordinationApplicationArchitecture, UiControlsEmitOnlyCoordinatorComman
     EXPECT_NE(running.find("requestRunAbort"), std::string::npos);
 }
 
-TEST(RunCoordinationApplicationArchitecture, ApplicationForwardsEveryTerminalMachineEvent) {
-    const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
-    const auto wiring =
-        readFile(root / "app" / "application_wiring_cnc.cpp");
-
-    EXPECT_NE(wiring.find("DirectCarveRunEffectAdapter"), std::string::npos);
-    EXPECT_NE(wiring.find("setRunEffectExecutor"), std::string::npos);
-    EXPECT_NE(wiring.find("onRunProgress(progress)"), std::string::npos);
-    EXPECT_NE(wiring.find("ControllerDisconnected"), std::string::npos);
-    EXPECT_NE(wiring.find("ControllerAlarm"), std::string::npos);
-    EXPECT_NE(wiring.find("InvalidMachineResponse"), std::string::npos);
-    EXPECT_NE(wiring.find("OperatorEmergencyStop"), std::string::npos);
-}
-
 TEST(RunCoordinationApplicationArchitecture,
      MissingRunEffectExecutorPreservesPreviewAndExportButGuardsStartBeforeDispatch) {
     const auto root = fs::path(CMAKE_SOURCE_DIR) / "src" / "ui" / "panels";

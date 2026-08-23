@@ -11,7 +11,6 @@
 #include <utility>
 
 #include "app/project_resume_file_store.h"
-#include "core/carve/direct_carve_operation_state.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/config/config.h"
 #include "core/database/cost_repository.h"
@@ -30,7 +29,6 @@
 #include "modules/workshop/project_workshop_controller.h"
 #include "ui/panels/cost_panel.h"
 #include "ui/panels/cut_optimizer_panel.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/project_panel.h"
@@ -190,9 +188,7 @@ void Application::showHome(bool beginNamedProject) {
         }
     }
     const bool machineActionActive =
-        (m_cncController && m_cncController->isStreaming()) ||
-        (m_uiManager->directCarvePanel() &&
-         m_uiManager->directCarvePanel()->hasActiveMachineAction());
+        m_cncController && m_cncController->isStreaming();
     if (machineActionActive) {
         ToastManager::instance().show(
             ToastType::Warning,
@@ -325,11 +321,8 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
         return ProjectItemContentStatus::Opened;
     }
     case ProjectOpenItemType::Operation: {
-        auto* directCarve = m_uiManager->directCarvePanel();
-        if (!directCarve || !m_projectManager ||
-            !carve::parseDirectCarveOperationSetup(item)) {
+        if (!m_projectManager)
             return ProjectItemContentStatus::Unavailable;
-        }
         const auto context = m_projectSession->snapshot();
         const auto revision =
             carve_preparation::PreparationRevision{context.generation.value};
@@ -346,20 +339,16 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
         const i64 parentModelId = pinResult.pin->modelSource().item.value;
         if (!m_modelRepo || !m_modelRepo->findById(parentModelId))
             return ProjectItemContentStatus::Unavailable;
+        // CAM rebuild: the saved operation setup is no longer restorable, so the
+        // item resolves to its parent model and opens the CAM placeholder.
         onModelSelected(parentModelId,
-                        [this, item, pin = *pinResult.pin,
-                         completion = std::move(completion)](
+                        [this, completion = std::move(completion)](
                             ModelSelectionStatus status) mutable {
                             if (status == ModelSelectionStatus::Superseded)
                                 return;
-                            bool opened = false;
-                            if (status == ModelSelectionStatus::Loaded && m_uiManager &&
-                                m_uiManager->directCarvePanel()) {
-                                opened = m_uiManager->directCarvePanel()->loadOperationOpenItem(
-                                    item, std::move(pin));
-                                if (opened)
-                                    m_uiManager->openWindow("direct_carve");
-                            }
+                            const bool opened = status == ModelSelectionStatus::Loaded;
+                            if (opened && m_uiManager)
+                                m_uiManager->openWindow("direct_carve");
                             if (completion)
                                 completion(opened);
                         },

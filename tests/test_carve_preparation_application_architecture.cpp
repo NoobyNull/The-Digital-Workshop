@@ -35,42 +35,6 @@ TEST(CarvePreparationApplicationArchitecture, PinnedDirectoryRequestCannotCreate
     }
 }
 
-TEST(CarvePreparationApplicationArchitecture, PreparationBeginsOnlyFromExplicitTypedIntent) {
-    const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
-    const auto adapter =
-        readFile(root / "app" / "application_carve_preparation.cpp");
-    const auto wiring =
-        readFile(root / "app" / "application_wiring_workshop.cpp");
-    const auto resume =
-        readFile(root / "app" / "application_project_resume.cpp");
-
-    EXPECT_NE(adapter.find("bool Application::beginPrepareCarve"), std::string::npos);
-    EXPECT_NE(adapter.find("PrepareCarveAdapterStatus::OperationRequired"),
-              std::string::npos);
-    EXPECT_NE(adapter.find("operation.parentItemId = model.id"), std::string::npos);
-    EXPECT_NE(wiring.find("const bool prepareAction"), std::string::npos);
-    EXPECT_NE(wiring.find("beginPrepareCarve(*action.target)"), std::string::npos);
-    EXPECT_NE(resume.find("resolvePrepareCarvePin("), std::string::npos);
-    EXPECT_NE(resume.find("loadOperationOpenItem("), std::string::npos);
-}
-
-TEST(CarvePreparationApplicationArchitecture, DirtyPreparationUsesSessionLockAndSaveGate) {
-    const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
-    const auto cncWiring =
-        readFile(root / "app" / "application_wiring_cnc.cpp");
-    const auto sessionWiring =
-        readFile(root / "app" / "application_project_session.cpp");
-    const auto integration =
-        readFile(root / "app" / "project_session_integration.cpp");
-
-    EXPECT_NE(cncWiring.find("setOnPreparationDirty"), std::string::npos);
-    EXPECT_NE(cncWiring.find("workshop::SetPreparationLock{dirty}"), std::string::npos);
-    EXPECT_NE(cncWiring.find("setCreateProjectRequiredCallback"), std::string::npos);
-    EXPECT_NE(sessionWiring.find("savePreparation()"), std::string::npos);
-    EXPECT_NE(integration.find("pendingChanges.unsavedPreparation"), std::string::npos);
-    EXPECT_NE(integration.find("m_savePreparation()"), std::string::npos);
-}
-
 TEST(CarvePreparationApplicationArchitecture, PinnedPanelUsesFlowForEveryPreparationBoundary) {
     const auto root = fs::path(CMAKE_SOURCE_DIR) / "src";
     const auto navigation = readFile(

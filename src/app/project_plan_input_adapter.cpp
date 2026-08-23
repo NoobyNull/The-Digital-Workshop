@@ -150,31 +150,10 @@ project_plan::ProjectPlanInput makeProjectPlanInput(
 
 project_plan::OperationFacts makeLiveProjectPlanOperationFacts(
     const carve_preparation::PrepareCarvePin& pin,
-    const carve::DirectCarveWorkflowState& workflow,
     bool blankSpecified) {
     project_plan::OperationFacts facts;
     facts.operation = pin.operationItem();
-    facts.modelLoaded = liveEvidence(workflow.modelLoaded);
-    facts.modelFitsBlank = liveEvidence(workflow.modelFitsBlank);
-    facts.modelFitsMachine = liveEvidence(workflow.modelFitsMachine);
-    facts.materialSelected = liveEvidence(workflow.materialSelected);
     facts.blankSpecified = liveEvidence(blankSpecified);
-    facts.finishingToolSelected = liveEvidence(workflow.finishingToolSelected);
-    facts.toolSetupConfirmed = liveEvidence(workflow.toolSetupConfirmed);
-    facts.toolpathGenerated = liveEvidence(workflow.toolpathGenerated);
-    facts.toolpathFresh = liveEvidence(workflow.toolpathFresh);
-    facts.machineConnected = liveEvidence(workflow.machineConnected);
-    facts.machineIdle = liveEvidence(workflow.machineIdle);
-    facts.machineAlarmClear = liveEvidence(workflow.machineAlarmClear);
-    facts.machineProfileConfigured = liveEvidence(workflow.machineProfileConfigured);
-    facts.machineHomedOrSkipped =
-        liveEvidence(workflow.machineHomed || workflow.homingSkipped);
-    facts.limitSwitchesClear = liveEvidence(workflow.limitSwitchesClear);
-    facts.safeZVerified = liveEvidence(workflow.safeZVerified);
-    facts.zeroVerified = liveEvidence(workflow.zeroVerified);
-    facts.outlineCompletedOrSkipped =
-        liveEvidence(workflow.outlineCompleted || workflow.outlineSkipped);
-    facts.finalConfirmed = liveEvidence(workflow.finalConfirmed);
     return facts;
 }
 

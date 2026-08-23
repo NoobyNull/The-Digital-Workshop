@@ -42,7 +42,7 @@
 #include "ui/panels/cnc_wcs_panel.h"
 #include "ui/panels/cost_panel.h"
 #include "ui/panels/cut_optimizer_panel.h"
-#include "ui/panels/direct_carve_panel.h"
+#include "ui/panels/cam_placeholder_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/group_panel.h"
 #include "ui/panels/library_panel.h"
@@ -95,7 +95,7 @@ void UIManager::init(LibraryManager* libraryManager,
     m_cncSafetyPanel = std::make_unique<CncSafetyPanel>();
     m_cncSettingsPanel = std::make_unique<CncSettingsPanel>();
     m_cncMacroPanel = std::make_unique<CncMacroPanel>();
-    m_directCarvePanel = std::make_unique<DirectCarvePanel>();
+    m_camPlaceholderPanel = std::make_unique<CamPlaceholderPanel>();
     m_fileDialog = std::make_unique<FileDialog>();
     m_lightingDialog = std::make_unique<LightingDialog>();
     m_machineProfileDialog = std::make_unique<MachineProfileDialog>();
@@ -186,7 +186,7 @@ void UIManager::shutdown() {
     m_cncSafetyPanel.reset();
     m_cncSettingsPanel.reset();
     m_cncMacroPanel.reset();
-    m_directCarvePanel.reset();
+    m_camPlaceholderPanel.reset();
     m_startPage.reset();
 }
 
@@ -235,8 +235,8 @@ void UIManager::buildPanelRegistry() {
          m_cncSettingsPanel.get(), true, WindowRole::Sender},
         {"cnc_macros",      &m_showCncMacros,       "Macros",            "Macros",
          m_cncMacroPanel.get(), true, WindowRole::Sender},
-        {"direct_carve",    &m_showDirectCarve,     "Direct Carve",      "Direct Carve",
-         m_directCarvePanel.get(), true, WindowRole::Shared},
+        {"direct_carve",    &m_showDirectCarve,     "CAM",               "CAM",
+         m_camPlaceholderPanel.get(), false, WindowRole::Shared},
     };
     // clang-format on
 }
@@ -246,6 +246,11 @@ void UIManager::renderPanels() {
 
     // Reset auto-context guard each frame
     m_suppressAutoContext = false;
+
+    // The CAM placeholder keeps its own visibility flag; mirror the registry
+    // flag into it before rendering and read the X-button close back after.
+    if (m_camPlaceholderPanel)
+        m_camPlaceholderPanel->setVisible(m_showDirectCarve);
 
     // Render all visible panels via registry
     for (auto& entry : m_panelRegistry) {
@@ -266,6 +271,9 @@ void UIManager::renderPanels() {
             entry.panel->setOpen(true);
         }
     }
+
+    if (m_camPlaceholderPanel)
+        m_showDirectCarve = m_camPlaceholderPanel->isVisible();
 
     // Render group panels and check for close → layout reset
     bool groupClosed = false;

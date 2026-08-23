@@ -1,4 +1,4 @@
-// Application wiring — CNC, GCode, DirectCarve, and tool panels.
+// Application wiring — CNC, GCode, and tool panels.
 
 #include "app/application.h"
 #include "app/direct_carve_run_effect_adapter.h"
@@ -32,7 +32,6 @@
 #include "ui/panels/cnc_tool_panel.h"
 #include "ui/panels/cnc_wcs_panel.h"
 #include "ui/panels/cut_optimizer_panel.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/tool_browser_panel.h"
 #include "ui/panels/viewport_panel.h"
@@ -116,123 +115,12 @@ void Application::wireCncPanels() {
         auto* safetyp = m_uiManager->cncSafetyPanel();
         auto* settsp = m_uiManager->cncSettingsPanel();
         auto* macrop = m_uiManager->cncMacroPanel();
-        auto* dcarvep = m_uiManager->directCarvePanel();
         auto* vpp = m_uiManager->viewportPanel();
 
-        // Wire Direct Carve panel dependencies
-        if (dcarvep) {
-            dcarvep->setCncController(m_cncController.get());
-            dcarvep->setToolDatabase(m_toolDatabase.get());
-            dcarvep->setToolboxRepository(m_toolboxRepo.get());
-            dcarvep->setMaterialManager(m_materialManager.get());
-            dcarvep->setCarveJob(m_carveJob.get());
-            dcarvep->setFileDialog(m_uiManager->fileDialog());
-            dcarvep->setGCodeRepository(m_gcodeRepo.get());
-            dcarvep->setGCodePanel(gcp);
-            dcarvep->setLibraryManager(m_libraryManager.get());
-            dcarvep->setProjectManager(m_projectManager.get());
-            dcarvep->setOnGCode3DPreview(
-                [this](const gcode::PreparedDocument& document) {
-                    if (auto* viewport = m_uiManager->viewportPanel()) {
-                        viewport->setGCodeProgram(
-                            document.program,
-                            ViewportGCodeSource::DirectCarvePreview);
-                        viewport->setGCodeStatistics(document.statistics);
-                    }
-                });
-            dcarvep->setOnGCode3DPreviewCleared([this]() {
-                if (auto* viewport = m_uiManager->viewportPanel()) {
-                    (void)viewport->clearGCodeProgramIfSource(
-                        ViewportGCodeSource::DirectCarvePreview);
-                }
-            });
-            dcarvep->setOpen3DPreviewCallback([this]() {
-                m_uiManager->openWindow("viewport");
-            });
-            dcarvep->setProjectDirectoryRequest(
-                [this](carve_preparation::PrepareCarvePin pin,
-                       DirectCarvePanel::ProjectDirectoryCallback completion) {
-                    requestPinnedProjectDirectory(pin, std::move(completion));
-                });
-            if (m_projectSession && m_projectManager && m_jobRepo &&
-                m_cncController) {
-                m_directCarveRunEffectAdapter =
-                    std::make_unique<DirectCarveRunEffectAdapter>(
-                        *m_projectSession,
-                        *m_projectManager,
-                        *m_jobRepo,
-                        *m_cncController);
-                dcarvep->setRunEffectExecutor(
-                    [this](const run_coordination::RunEffect& effect) {
-                        if (!m_directCarveRunEffectAdapter) return false;
-                        const auto result =
-                            m_directCarveRunEffectAdapter->execute(effect);
-                        if (result.status == DirectCarveRunEffectStatus::Rejected)
-                            return false;
-                        if (result.error != DirectCarveRunEffectError::None) {
-                            ToastManager::instance().show(
-                                ToastType::Warning,
-                                "Run History Needs Attention",
-                                "The machine was made safe and unlocked, but its "
-                                "history record could not be completed.");
-                        }
-                        return true;
-                    });
-            }
-            dcarvep->setOnPreparationDirty([this](bool dirty) {
-                if (!m_projectSession) return;
-                const auto context = m_projectSession->snapshot();
-                const auto transition = m_projectSession->dispatch(workshop::WorkshopCommand{
-                    workshop::SetPreparationLock{dirty}, context.generation});
-                if (dirty && !transition.accepted()) {
-                    ToastManager::instance().show(
-                        ToastType::Warning,
-                        "Preparation Lock Failed",
-                        "The project context changed. Return to the Project Plan and reopen this setup.");
-                }
-            });
-            dcarvep->setCreateProjectRequiredCallback([this]() {
-                if (m_projectSession) {
-                    const auto context = m_projectSession->snapshot();
-                    if (context.activeProjectItem &&
-                        beginPrepareCarve(*context.activeProjectItem)) {
-                        return;
-                    }
-                }
-                showHome(true);
-            });
-            dcarvep->setOpenToolBrowserCallback([this]() {
-                m_uiManager->openWindow("tool_library");
-            });
-            dcarvep->setOpenMachineProfilesCallback([this]() {
-                m_uiManager->openMachineProfiles();
-            });
-            dcarvep->setCutOptimizerPanel(m_uiManager->cutOptimizerPanel());
-            dcarvep->setOnMaterialPartSync([this](const DirectCarvePanel::MaterialPartSync& data) {
-                auto* costPanel = m_uiManager->costPanel();
-                if (!costPanel || !m_projectManager || !m_projectManager->currentDirectory())
-                    return;
-
-                costPanel->setCostingDir(m_projectManager->currentDirectory()->costingDir());
-                auto entry = CostingEngine::createMaterialEntry(
-                    data.materialName.empty() ? data.name : data.materialName,
-                    data.stockSizeDbId,
-                    data.dimensions,
-                    data.unitRate,
-                    data.quantity,
-                    data.unit);
-                entry.name = data.name;
-                costPanel->upsertAutoEntry(entry, data.key);
-                costPanel->save();
-            });
-            if (vpp) {
-                dcarvep->setOnFitParamsChanged(
-                    [vpp](const carve::FitParams& params,
-                          const Vec3& boundsMin, const Vec3& boundsMax,
-                          const carve::StockDimensions& stock) {
-                        vpp->setFitParams(params, boundsMin, boundsMax, stock);
-                    });
-            }
+        if (m_projectSession && m_projectManager && m_jobRepo && m_cncController) {
+            m_directCarveRunEffectAdapter =
+                std::make_unique<DirectCarveRunEffectAdapter>(
+                    *m_projectSession, *m_projectManager, *m_jobRepo, *m_cncController);
         }
 
         // Set CncController on CNC panels
@@ -255,7 +143,7 @@ void Application::wireCncPanels() {
 
         CncCallbacks cncCb;
         cncCb.onConnectionChanged =
-            [this, gcp, csp, jogp, conp, wcsp, jobp, safetyp, settsp, macrop, dcarvep, vpp](
+            [this, gcp, csp, jogp, conp, wcsp, jobp, safetyp, settsp, macrop, vpp](
                 bool connected, const std::string& version) {
             gcp->onGrblConnected(connected, version);
             if (csp) csp->onConnectionChanged(connected, version);
@@ -270,11 +158,6 @@ void Application::wireCncPanels() {
             }
             if (settsp) settsp->onConnectionChanged(connected, version);
             if (macrop) macrop->onConnectionChanged(connected, version);
-            if (dcarvep && !connected) {
-                dcarvep->onRunFailure(
-                    run_coordination::RunFailure::ControllerDisconnected);
-            }
-            if (dcarvep) dcarvep->onConnectionChanged(connected);
             if (vpp) vpp->setCncConnected(connected);
             m_uiManager->setCncConnected(connected);
             m_uiManager->setCncSimulating(m_cncController->isSimulating());
@@ -285,7 +168,7 @@ void Application::wireCncPanels() {
             }
         };
         cncCb.onStatusUpdate =
-            [gcp, csp, jogp, wcsp, jobp, ctp, safetyp, settsp, macrop, dcarvep, vpp](
+            [gcp, csp, jogp, wcsp, jobp, ctp, safetyp, settsp, macrop, vpp](
                 const MachineStatus& status) {
             gcp->onGrblStatus(status);
             if (csp) csp->onStatusUpdate(status);
@@ -299,20 +182,16 @@ void Application::wireCncPanels() {
             if (safetyp) safetyp->onStatusUpdate(status);
             if (settsp) settsp->onStatusUpdate(status);
             if (macrop) macrop->onStatusUpdate(status);
-            if (dcarvep) dcarvep->onStatusUpdate(status);
             if (vpp) vpp->onCncStatusUpdate(status);
         };
         cncCb.onLineAcked = [gcp](const LineAck& ack) {
             gcp->onGrblLineAcked(ack);
         };
         cncCb.onProgressUpdate =
-            [this, gcp, jobp, safetyp, dcarvep](const StreamProgress& progress) {
-            if (dcarvep) dcarvep->onRunProgress(progress);
+            [this, gcp, jobp, safetyp](const StreamProgress& progress) {
             gcp->onGrblProgress(progress);
             const bool streaming = progress.streaming;
-            const auto origin = dcarvep && dcarvep->hasActiveProtectedRun()
-                                    ? CncStreamOrigin::DirectCarve
-                                    : CncStreamOrigin::ExternalGCode;
+            const auto origin = CncStreamOrigin::ExternalGCode;
             m_uiManager->setCncStreaming(streaming, origin);
             if (jobp) {
                 jobp->onProgressUpdate(progress);
@@ -326,10 +205,7 @@ void Application::wireCncPanels() {
                 }
             }
         };
-        cncCb.onAlarm = [gcp, csp, conp, dcarvep](int code, const std::string& desc) {
-            if (dcarvep) {
-                dcarvep->onRunFailure(run_coordination::RunFailure::ControllerAlarm);
-            }
+        cncCb.onAlarm = [gcp, csp, conp](int code, const std::string& desc) {
             gcp->onGrblAlarm(code, desc);
             if (csp) csp->onAlarm(code, desc);
             if (conp) conp->onAlarm(code, desc);
@@ -339,23 +215,18 @@ void Application::wireCncPanels() {
             if (conp) conp->onError(message);
         };
         cncCb.onStreamingError =
-            [gcp, conp, dcarvep](const StreamingError& error) {
-                if (dcarvep) {
-                    dcarvep->onRunFailure(
-                        run_coordination::RunFailure::InvalidMachineResponse);
-                }
+            [gcp, conp](const StreamingError& error) {
                 const std::string message =
                     "Streaming stopped at line " + std::to_string(error.lineIndex + 1) +
                     ": " + error.errorMessage;
                 gcp->onGrblError(message);
                 if (conp) conp->onError(message);
             };
-        cncCb.onRawLine = [this, gcp, conp, wcsp, settsp, dcarvep](
+        cncCb.onRawLine = [this, gcp, conp, wcsp, settsp](
             const std::string& line, bool isSent) {
             gcp->onGrblRawLine(line, isSent);
             if (conp) conp->onRawLine(line, isSent);
             if (wcsp) wcsp->onRawLine(line, isSent);
-            if (dcarvep) dcarvep->onRawLine(line, isSent);
             if (settsp) {
                 settsp->onRawLine(line, isSent);
                 if (!isSent && line == "ok" && settsp->hasSettings()) {
@@ -415,10 +286,6 @@ void Application::wireCncPanels() {
 
         m_uiManager->setOnPanicStop([this]() {
             m_cncController->feedHold();
-            if (m_uiManager && m_uiManager->directCarvePanel()) {
-                m_uiManager->directCarvePanel()->onRunFailure(
-                    run_coordination::RunFailure::OperatorEmergencyStop);
-            }
             if (m_cncController->isStreaming()) m_cncController->stopStream();
             ToastManager::instance().show(
                 ToastType::Warning, "PANIC STOP", "Feed hold sent — job aborted", 5.0f);

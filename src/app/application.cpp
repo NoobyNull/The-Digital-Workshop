@@ -24,7 +24,6 @@
 #include "app/library_workflow_coordinator.h"
 #include "app/workspace.h"
 #include "core/ai/ollama_runtime.h"
-#include "core/carve/carve_job.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/gamepad_input.h"
 #include "core/cnc/macro_manager.h"
@@ -385,9 +384,6 @@ bool Application::init(bool diagnosticMode) {
         // CNC gamepad input (SDL_GameController for jog/actions)
         m_gamepadInput = std::make_unique<GamepadInput>();
         m_gamepadInput->setCncController(m_cncController.get());
-
-        // Direct Carve job (heightmap, analysis, toolpath generation, streaming)
-        m_carveJob = std::make_unique<carve::CarveJob>();
 
         m_importQueue = std::make_unique<ImportQueue>(*m_connectionPool,
                                                       m_libraryManager.get(),

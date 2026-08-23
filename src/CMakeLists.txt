@@ -29,11 +29,8 @@ set(DW_SOURCES
     app/application_project_session.cpp
     app/application_project_resume.cpp
     app/application_runtime.cpp
-    app/application_river_sign_study.cpp
     app/application_library_picker.cpp
     app/application_carve_preparation.cpp
-    app/river_sign_study_command.cpp
-    app/river_sign_study_fixture.cpp
     app/library_workflow_adapter.cpp
     app/library_workflow_coordinator.cpp
     app/carve_preparation_adapter.cpp
@@ -342,15 +339,6 @@ set(DW_SOURCES
     ui/dialogs/tagger_shutdown_dialog.cpp
 )
 
-if(DW_ENABLE_UX_CAPTURE)
-    list(APPEND DW_SOURCES
-        app/application_ux_capture.cpp
-        app/ux_capture_fixture.cpp
-        app/ux_capture_scenario.cpp
-        ui/panels/direct_carve_ux_capture.cpp
-    )
-endif()
-
 # Windows application icon resource
 if(WIN32)
     set(DW_WIN_RESOURCE "${CMAKE_SOURCE_DIR}/resources/app.rc")
@@ -361,13 +349,6 @@ add_executable(digital_workshop ${DW_SOURCES} ${DW_WIN_RESOURCE})
 
 # Apply compiler flags
 dw_configure_target(digital_workshop)
-
-if(DW_ENABLE_UX_CAPTURE)
-    target_compile_definitions(digital_workshop PRIVATE
-        DW_ENABLE_UX_CAPTURE=1
-        DW_UX_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures/ux/river_sign"
-    )
-endif()
 
 # Link dependencies
 target_link_libraries(digital_workshop PRIVATE

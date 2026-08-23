@@ -163,23 +163,3 @@ TEST(GuidedAccessibilityArchitecture, GuidedLibraryUsesLiveExperienceAndHidesPro
     EXPECT_EQ(wiring.find("workshop::ExperienceMode::Advanced"), std::string::npos);
 }
 
-TEST(GuidedAccessibilityArchitecture,
-     UxCaptureKeepsTheReadyFrameStableForTheExternalScreenshot) {
-    const auto capture = readSource("src/app/application_ux_capture.cpp");
-    const auto ready = capture.find("DW_UX_CAPTURE_READY=");
-    const auto hold = capture.find("const auto hold", ready);
-    ASSERT_NE(ready, std::string::npos);
-    ASSERT_NE(hold, std::string::npos);
-
-    const auto stableHold = capture.substr(hold);
-    expectContains(capture, "glReadBuffer(GL_BACK)");
-    expectContains(capture, "glReadPixels");
-    expectContains(capture, "stbi_write_png");
-    const auto runtime = readSource("src/app/application_runtime.cpp");
-    expectContains(runtime, "writeUxCaptureBackBuffer");
-    expectContains(runtime, "m_pendingUxCaptureOutput.reset()");
-    expectContains(stableHold, "processEvents();");
-    expectContains(stableHold, "SDL_Delay(8);");
-    EXPECT_EQ(stableHold.find("frame();"), std::string::npos);
-    EXPECT_EQ(stableHold.find("render();"), std::string::npos);
-}

@@ -223,15 +223,6 @@ void Application::render() {
     glClearColor(bgColor.x, bgColor.y, bgColor.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-#ifdef DW_ENABLE_UX_CAPTURE
-    if (m_pendingUxCaptureOutput) {
-        m_uxCaptureWriteError.clear();
-        m_uxCaptureWriteSucceeded = writeUxCaptureBackBuffer(
-            *m_pendingUxCaptureOutput, m_uxCaptureWriteError);
-        m_uxCaptureWriteComplete = true;
-        m_pendingUxCaptureOutput.reset();
-    }
-#endif
     SDL_GL_SwapWindow(m_window);
 
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {

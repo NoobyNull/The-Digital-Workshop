@@ -69,26 +69,6 @@ assert_resources_match() {
     fi
 }
 
-run_study_preflight() {
-    local binary=$1
-    local participant=$2
-    local study_root=$3
-    local log_file=$4
-
-    xvfb-run -a -s '-screen 0 1366x768x24 -dpi 96' \
-        python3 "$repo_root/scripts/run_river_sign_study.py" "$participant" \
-        --binary "$binary" \
-        --fixture-dir "$repo_root/tests/fixtures/ux/river_sign" \
-        --study-root "$study_root" \
-        --attempt 1 \
-        --ui-scale 1.0 \
-        --preflight-only \
-        >"$log_file" 2>&1
-    grep -Fqx "STUDY_ATTEMPT_READY=$participant-A01" \
-        <(grep '^STUDY_ATTEMPT_READY=' "$log_file")
-    test -s "$study_root/$participant/attempt-01/preflight.json"
-}
-
 for artifact in "$tgz" "$run"; do
     if [[ ! -s "$artifact" ]]; then
         echo "Missing package: $artifact" >&2
@@ -121,14 +101,6 @@ xvfb-run -a -s '-screen 0 1366x768x24 -dpi 96' \
 xvfb-run -a -s '-screen 0 1366x768x24 -dpi 96' \
     "$script_dir/smoke-settings-app.sh" "$tar_settings" \
     "$evidence_dir/tgz-settings-startup.log"
-
-# Prove the TGZ application—not only the build-tree binary—can enter the exact
-# fresh, fixture-only, Virtual CNC study state without creating a project.
-run_study_preflight \
-    "$tar_binary" \
-    P01 \
-    "$work/river-sign-study-tgz" \
-    "$evidence_dir/tgz-river-sign-study-preflight.log"
 
 run_home="$work/run-home"
 mkdir -p "$run_home"
@@ -164,14 +136,6 @@ xvfb-run -a -s '-screen 0 1366x768x24 -dpi 96' \
 xvfb-run -a -s '-screen 0 1366x768x24 -dpi 96' \
     "$script_dir/smoke-settings-app.sh" "$run_settings" \
     "$evidence_dir/run-settings-startup.log"
-
-# Exercise the independently installed .run payload through the same exact
-# study preflight, using a separate cohort root and participant slot.
-run_study_preflight \
-    "$run_binary" \
-    P02 \
-    "$work/river-sign-study-run" \
-    "$evidence_dir/run-river-sign-study-preflight.log"
 
 HOME="$run_home" "$run_uninstaller" >"$evidence_dir/run-uninstall.log" 2>&1
 for removed in \

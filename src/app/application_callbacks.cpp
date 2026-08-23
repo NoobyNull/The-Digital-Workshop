@@ -23,7 +23,6 @@
 
 #include "managers/ui_manager.h"
 #include "render/texture.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/library_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/properties_panel.h"
@@ -172,17 +171,6 @@ void Application::onModelSelected(int64_t modelId,
                     modelId, purpose != ModelLoadPurpose::LibraryPreview);
                 if (m_uiManager->materialsPanel())
                     m_uiManager->materialsPanel()->setModelLoaded(true);
-                if (purpose != ModelLoadPurpose::LibraryPreview &&
-                    m_uiManager->directCarvePanel() && mesh) {
-                    GLuint thumb = 0;
-                    if (m_uiManager->libraryPanel())
-                        thumb = m_uiManager->libraryPanel()->getThumbnailTextureForModel(modelId);
-                    const bool notifyFitPreview = m_uiManager->showDirectCarve();
-                    m_uiManager->directCarvePanel()->onModelLoaded(
-                        mesh->vertices(), mesh->indices(),
-                        mesh->bounds().min, mesh->bounds().max,
-                        name, filePath, thumb, notifyFitPreview);
-                }
                 if (completion)
                     completion(ModelSelectionStatus::Loaded);
             });

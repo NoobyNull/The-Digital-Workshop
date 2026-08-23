@@ -88,7 +88,7 @@ void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Machine Settings", dockCenter);
     ImGui::DockBuilderDockWindow("Macros", dockCenter);
     ImGui::DockBuilderDockWindow("Job Progress", dockCenter);
-    ImGui::DockBuilderDockWindow("Direct Carve", dockCenter);
+    ImGui::DockBuilderDockWindow("CAM", dockCenter);
 
     ImGui::DockBuilderFinish(dockspaceId);
 }

@@ -32,9 +32,6 @@ endif()
 option(DW_BUILD_TESTS "Build test suite" ON)
 option(DW_BUILD_TOOLS "Build developer tools (matgen, etc.)" OFF)
 option(DW_ENABLE_GRAPHQLITE "Enable GraphQLite extension for graph queries" ON)
-option(DW_ENABLE_UX_CAPTURE
-       "Build the isolated real-application UX capture harness"
-       OFF)
 
 # Explicit, non-ALL architecture ratchet. Source archives without Git metadata
 # can still build normally; developers and CI invoke this target deliberately.
@@ -113,5 +110,4 @@ message(STATUS "  Build Type:   ${CMAKE_BUILD_TYPE}")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Tests:        ${DW_BUILD_TESTS}")
 message(STATUS "  Tools:        ${DW_BUILD_TOOLS}")
-message(STATUS "  UX capture:   ${DW_ENABLE_UX_CAPTURE}")
 message(STATUS "")

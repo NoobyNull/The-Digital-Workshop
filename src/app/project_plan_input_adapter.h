@@ -4,7 +4,6 @@
 #include <string_view>
 #include <vector>
 
-#include "core/carve/direct_carve_workflow.h"
 #include "core/database/project_repository.h"
 #include "modules/carve_preparation/preparation_identity.h"
 #include "modules/project_plan/project_plan.h"
@@ -22,9 +21,10 @@ toProjectPlanItemState(ProjectOpenItemStatus status) noexcept;
     const std::vector<ProjectOpenItem>& items,
     std::optional<workshop::ProjectItemRef> focusedItem = std::nullopt);
 
+// Live facts for the operation being prepared. Carve-stage evidence stays
+// absent (Evidence::Unknown) until the CAM rebuild supplies it again.
 [[nodiscard]] project_plan::OperationFacts makeLiveProjectPlanOperationFacts(
     const carve_preparation::PrepareCarvePin& pin,
-    const carve::DirectCarveWorkflowState& workflow,
     bool blankSpecified);
 
 } // namespace dw

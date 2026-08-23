@@ -23,7 +23,6 @@
 #include "ui/dialogs/message_dialog.h"
 #include "ui/panels/cost_panel.h"
 #include "ui/panels/cut_optimizer_panel.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/project_panel.h"
@@ -63,11 +62,7 @@ void Application::initializeProjectSession() {
                     "The project is open, but Digital Workshop could not remember it for the next launch.");
             }
         },
-        ProjectSessionIntegration::SaveCallback{},
-        [this]() {
-            return m_uiManager && m_uiManager->directCarvePanel() &&
-                   m_uiManager->directCarvePanel()->savePreparation();
-        });
+        ProjectSessionIntegration::SaveCallback{});
 }
 
 void Application::initializeFileIOManager() {
@@ -114,9 +109,7 @@ void Application::requestProjectActivation(std::shared_ptr<Project> project,
         return;
     }
     const bool machineActionActive =
-        (m_cncController && m_cncController->isStreaming()) ||
-        (m_uiManager && m_uiManager->directCarvePanel() &&
-         m_uiManager->directCarvePanel()->hasActiveMachineAction());
+        m_cncController && m_cncController->isStreaming();
     if (machineActionActive) {
         ToastManager::instance().show(
             ToastType::Warning,
@@ -153,9 +146,7 @@ void Application::requestProjectClose(workshop::ProjectClosePurpose purpose,
         return;
     }
     const bool machineActionActive =
-        (m_cncController && m_cncController->isStreaming()) ||
-        (m_uiManager && m_uiManager->directCarvePanel() &&
-         m_uiManager->directCarvePanel()->hasActiveMachineAction());
+        m_cncController && m_cncController->isStreaming();
     if (machineActionActive) {
         ToastManager::instance().show(
             ToastType::Warning,
@@ -383,8 +374,6 @@ void Application::invalidateProjectFocus() {
             panel->clear();
         if (auto* panel = m_uiManager->cutOptimizerPanel())
             panel->clear();
-        if (auto* panel = m_uiManager->directCarvePanel())
-            panel->clearProjectContext();
     }
     m_activeMaterialTexture.reset();
     m_activeMaterialId = -1;

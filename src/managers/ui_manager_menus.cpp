@@ -289,7 +289,7 @@ void UIManager::renderSenderSubmenu() {
     if (ImGui::MenuItem("Macros", nullptr, isWindowVisible("cnc_macros")))
         toggleWindow("cnc_macros");
     ImGui::Separator();
-    if (ImGui::MenuItem("Direct Carve", nullptr, isWindowVisible("direct_carve")))
+    if (ImGui::MenuItem("CAM", nullptr, isWindowVisible("direct_carve")))
         toggleWindow("direct_carve");
     ImGui::Separator();
     if (ImGui::BeginMenu("Live Overlay")) {

@@ -56,9 +56,6 @@ set(DW_TEST_SOURCES
     test_viewport_presentation.cpp
     test_viewport_ui_architecture.cpp
     test_guided_accessibility_architecture.cpp
-    test_river_sign_study_fixture.cpp
-    test_river_sign_study_command.cpp
-    test_river_sign_study_architecture.cpp
     test_archive.cpp
     test_library_manager.cpp
     test_library_source_deletion.cpp
@@ -335,8 +332,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/app/library_workflow_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/library_workflow_coordinator.cpp
     ${CMAKE_SOURCE_DIR}/src/app/direct_carve_run_effect_adapter.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/river_sign_study_command.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/river_sign_study_fixture.cpp
 )
 
 # Create test executable

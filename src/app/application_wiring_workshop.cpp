@@ -29,7 +29,6 @@
 #include "modules/workshop/project_workshop_controller.h"
 #include "ui/panels/cost_panel.h"
 #include "ui/panels/cut_optimizer_panel.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/library_panel.h"
 #include "ui/panels/materials_panel.h"
@@ -53,9 +52,7 @@ void Application::wireWorkshop() {
         if (!m_projectSession || !m_projectWorkshopController)
             return;
         const bool machineActionActive =
-            (m_cncController && m_cncController->isStreaming()) ||
-            (m_uiManager && m_uiManager->directCarvePanel() &&
-             m_uiManager->directCarvePanel()->hasActiveMachineAction());
+            m_cncController && m_cncController->isStreaming();
         if (machineActionActive) {
             ToastManager::instance().show(
                 ToastType::Warning,
@@ -182,12 +179,6 @@ void Application::wireProjectPanel() {
                                           project->name(),
                                           items,
                                           context.activeProjectItem);
-        if (const auto* carvePanel = m_uiManager->directCarvePanel()) {
-            if (const auto live = carvePanel->projectPlanSnapshot()) {
-                input.liveOperation = makeLiveProjectPlanOperationFacts(
-                    live->pin, live->workflow, live->blankSpecified);
-            }
-        }
         std::optional<ProjectPlanRunSourceSnapshot> protectedRun;
         if (m_directCarveRunEffectAdapter) {
             const auto& run = m_directCarveRunEffectAdapter->snapshot();

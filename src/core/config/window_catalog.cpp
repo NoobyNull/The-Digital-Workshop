@@ -62,7 +62,7 @@ const std::vector<WindowCatalogEntry>& windowCatalogEntries() {
          {"cnc_settings", "firmware_settings"}},
         {"cnc_macros",      "cnc_macros",      "Macros",            "Macros",
          WindowRole::Sender, WindowType::DockablePanel, "center", false, true, true, {}},
-        {"direct_carve",    "direct_carve",    "Direct Carve",      "Direct Carve",
+        {"direct_carve",    "direct_carve",    "CAM",               "CAM",
          WindowRole::Shared, WindowType::DockablePanel, "center", false, true, true, {}},
 
         {"file_dialog",     "",                "File Dialog",       "File Dialog",

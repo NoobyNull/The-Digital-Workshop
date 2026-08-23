@@ -178,9 +178,6 @@ TEST(ProjectPlanUiArchitecture, ApplicationOverlaysLivePreparationAndExactRunTru
     EXPECT_NE(preparation.find("DirectCarvePanel::projectPlanSnapshot"),
               std::string::npos);
     EXPECT_NE(preparation.find("workflowState()"), std::string::npos);
-    EXPECT_NE(wiring.find("input.liveOperation"), std::string::npos);
-    EXPECT_NE(wiring.find("makeLiveProjectPlanOperationFacts"),
-              std::string::npos);
     EXPECT_NE(wiring.find("m_directCarveRunEffectAdapter->snapshot()"),
               std::string::npos);
     EXPECT_NE(wiring.find("gcodePanel->projectPlanRunSnapshot()"),

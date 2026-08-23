@@ -198,7 +198,7 @@ TEST(ProjectPlanInputAdapter, FocusRequiresExactProjectItemMembership) {
     EXPECT_FALSE(input.liveRun.has_value());
 }
 
-TEST(ProjectPlanInputAdapter, MapsLivePreparationAndMachineFactsToExactOperation) {
+TEST(ProjectPlanInputAdapter, LiveFactsCarryIdentityAndBlankOnly) {
     const carve_preparation::PrepareCarvePin pin(
         workshop::ProjectId(9),
         {workshop::ProjectId(9), workshop::ProjectItemId(1)},
@@ -206,42 +206,22 @@ TEST(ProjectPlanInputAdapter, MapsLivePreparationAndMachineFactsToExactOperation
         {workshop::ProjectId(9), workshop::ProjectItemId(2)},
         carve_preparation::PreparationToken{7},
         carve_preparation::PreparationRevision{8});
-    carve::DirectCarveWorkflowState workflow;
-    workflow.modelLoaded = true;
-    workflow.modelFitsBlank = true;
-    workflow.modelFitsMachine = true;
-    workflow.materialSelected = true;
-    workflow.finishingToolSelected = true;
-    workflow.toolSetupConfirmed = true;
-    workflow.toolpathGenerated = true;
-    workflow.toolpathFresh = true;
-    workflow.machineConnected = true;
-    workflow.machineIdle = true;
-    workflow.machineAlarmClear = true;
-    workflow.machineProfileConfigured = true;
-    workflow.homingSkipped = true;
-    workflow.limitSwitchesClear = true;
-    workflow.safeZVerified = true;
-    workflow.zeroVerified = true;
-    workflow.outlineSkipped = true;
-    workflow.finalConfirmed = true;
 
-    const auto facts = makeLiveProjectPlanOperationFacts(pin, workflow, true);
+    const auto facts = makeLiveProjectPlanOperationFacts(pin, true);
 
     EXPECT_EQ(facts.operation, pin.operationItem());
-    EXPECT_EQ(facts.modelLoaded, Evidence::Satisfied);
     EXPECT_EQ(facts.blankSpecified, Evidence::Satisfied);
-    EXPECT_EQ(facts.toolpathFresh, Evidence::Satisfied);
-    EXPECT_EQ(facts.machineHomedOrSkipped, Evidence::Satisfied);
-    EXPECT_EQ(facts.outlineCompletedOrSkipped, Evidence::Satisfied);
-    EXPECT_EQ(facts.finalConfirmed, Evidence::Satisfied);
+    // Carve-stage evidence is absent until the CAM rebuild supplies it.
+    EXPECT_EQ(facts.modelLoaded, Evidence::Unknown);
+    EXPECT_EQ(facts.materialSelected, Evidence::Unknown);
+    EXPECT_EQ(facts.toolpathGenerated, Evidence::Unknown);
+    EXPECT_EQ(facts.toolpathFresh, Evidence::Unknown);
+    EXPECT_EQ(facts.machineHomedOrSkipped, Evidence::Unknown);
+    EXPECT_EQ(facts.zeroVerified, Evidence::Unknown);
+    EXPECT_EQ(facts.finalConfirmed, Evidence::Unknown);
 
-    workflow.modelFitsBlank = false;
-    workflow.zeroVerified = false;
-    const auto blocked = makeLiveProjectPlanOperationFacts(pin, workflow, false);
-    EXPECT_EQ(blocked.modelFitsBlank, Evidence::Unsatisfied);
+    const auto blocked = makeLiveProjectPlanOperationFacts(pin, false);
     EXPECT_EQ(blocked.blankSpecified, Evidence::Unsatisfied);
-    EXPECT_EQ(blocked.zeroVerified, Evidence::Unsatisfied);
 }
 
 } // namespace

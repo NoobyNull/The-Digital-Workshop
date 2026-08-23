@@ -98,19 +98,6 @@ TEST(WorkspaceStreamPolicy, OnlyGuidedDirectCarvePreservesWorkshopShell) {
               CncStreamShell::Sender);
 }
 
-TEST(WorkspaceStreamPolicy, ApplicationMarksOnlyProtectedDirectCarveRuns) {
-    std::ifstream file(
-        std::string(CMAKE_SOURCE_DIR) + "/src/app/application_wiring_cnc.cpp");
-    ASSERT_TRUE(file.is_open());
-    std::ostringstream source;
-    source << file.rdbuf();
-
-    EXPECT_NE(source.str().find("hasActiveProtectedRun()"), std::string::npos);
-    EXPECT_NE(source.str().find("CncStreamOrigin::DirectCarve"), std::string::npos);
-    EXPECT_NE(source.str().find("CncStreamOrigin::ExternalGCode"), std::string::npos);
-    EXPECT_NE(source.str().find("setCncStreaming(streaming, origin)"), std::string::npos);
-}
-
 TEST(WindowCatalog, DockableLayoutKeysExistInBuiltInPresets) {
     const auto guided = LayoutPreset::guidedDefault();
     const auto workshop = LayoutPreset::modelDefault();

@@ -63,10 +63,6 @@ class Texture;
 class OllamaRuntime;
 enum class ThumbnailView;
 
-namespace carve {
-class CarveJob;
-}
-
 namespace carve_preparation {
 class PrepareCarvePin;
 }
@@ -125,22 +121,8 @@ class Application {
         m_terminationSignalFlag = flag;
     }
 
-    // Explicit facilitator-only River Sign setup followed by the ordinary
-    // interactive run loop. Normal launches never enter this path.
-    int runRiverSignStudy(const Path& fixtureDirectory);
-
     // Request application to quit
     void quit();
-
-#ifdef DW_ENABLE_UX_CAPTURE
-    // Capture-only entry point. This member is absent from normal and packaged
-    // binaries because the owning translation units are conditionally built.
-    int runUxCapture(const std::string& scenarioName,
-                     int holdMilliseconds,
-                     const Path& outputPath);
-    bool writeUxCaptureBackBuffer(const Path& outputPath,
-                                  std::string& error);
-#endif
 
     // Accessors
     auto isRunning() const -> bool { return m_running; }
@@ -322,8 +304,6 @@ class Application {
     // CNC gamepad input (SDL_GameController for jog/actions)
     std::unique_ptr<GamepadInput> m_gamepadInput;
 
-    // Direct Carve job (heightmap, analysis, toolpath, streaming)
-    std::unique_ptr<carve::CarveJob> m_carveJob;
     std::unique_ptr<DirectCarveRunEffectAdapter> m_directCarveRunEffectAdapter;
     std::unique_ptr<ProjectPlanRunTruthAdapter> m_projectPlanRunTruthAdapter;
     uint64_t m_nextPreparationToken = 1;
@@ -351,13 +331,6 @@ class Application {
     u64 m_lastPortScanMs = 0;
     bool m_wasRealConnection = false;
     std::string m_lastConnectedPort;
-
-#ifdef DW_ENABLE_UX_CAPTURE
-    std::optional<Path> m_pendingUxCaptureOutput;
-    std::string m_uxCaptureWriteError;
-    bool m_uxCaptureWriteComplete = false;
-    bool m_uxCaptureWriteSucceeded = false;
-#endif
 
     static constexpr int DEFAULT_WIDTH = 1280;
     static constexpr int DEFAULT_HEIGHT = 720;

@@ -49,7 +49,7 @@ class CutOptimizerPanel;
 class MaterialsPanel;
 class StartPage;
 class ToolBrowserPanel;
-class DirectCarvePanel;
+class CamPlaceholderPanel;
 class GroupPanel;
 
 // Forward declarations - dialogs
@@ -169,7 +169,7 @@ class UIManager {
     CncSafetyPanel* cncSafetyPanel() { return m_cncSafetyPanel.get(); }
     CncSettingsPanel* cncSettingsPanel() { return m_cncSettingsPanel.get(); }
     CncMacroPanel* cncMacroPanel() { return m_cncMacroPanel.get(); }
-    DirectCarvePanel* directCarvePanel() { return m_directCarvePanel.get(); }
+    CamPlaceholderPanel* camPlaceholderPanel() { return m_camPlaceholderPanel.get(); }
     FileDialog* fileDialog() { return m_fileDialog.get(); }
     LightingDialog* lightingDialog() { return m_lightingDialog.get(); }
     ImportSummaryDialog* importSummaryDialog() { return m_importSummaryDialog.get(); }
@@ -315,7 +315,7 @@ class UIManager {
     std::unique_ptr<CncSafetyPanel> m_cncSafetyPanel;
     std::unique_ptr<CncSettingsPanel> m_cncSettingsPanel;
     std::unique_ptr<CncMacroPanel> m_cncMacroPanel;
-    std::unique_ptr<DirectCarvePanel> m_directCarvePanel;
+    std::unique_ptr<CamPlaceholderPanel> m_camPlaceholderPanel;
 
     // Panel visibility
     bool m_showViewport = true;

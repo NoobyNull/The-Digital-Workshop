@@ -23,7 +23,6 @@
 #include "modules/design_library/library_picker_flow.h"
 #include "modules/project_session/project_session.h"
 #include "modules/workshop/project_workshop_controller.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/library_panel.h"
 #include "ui/panels/project_panel.h"
 #include "ui/panels/start_page.h"
@@ -65,9 +64,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
     }
 
     const bool machineActionActive =
-        (m_cncController && m_cncController->isStreaming()) ||
-        (m_uiManager->directCarvePanel() &&
-         m_uiManager->directCarvePanel()->hasActiveMachineAction());
+        m_cncController && m_cncController->isStreaming();
     if (machineActionActive) {
         ToastManager::instance().show(
             ToastType::Warning,
