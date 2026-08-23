@@ -9,6 +9,10 @@ namespace dw::lmstudio {
 // POST JSON to a URL, return response body. Empty string on failure.
 std::string curlPost(const std::string& url, const std::string& body);
 
+// GET a URL, return response body. Empty string on failure.
+// timeoutSeconds bounds the whole transfer (connect + response).
+std::string curlGet(const std::string& url, long timeoutSeconds = 5);
+
 // Base64 decode (standard alphabet, RFC 4648)
 std::vector<uint8_t> base64Decode(const std::string& encoded);
 
