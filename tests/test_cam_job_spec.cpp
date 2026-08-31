@@ -32,6 +32,27 @@ TEST(CamJobSpec, BuildsDefaultSurfacingSpecForMesh) {
     EXPECT_FALSE(parsed.contains("saveProjectPath"));
 }
 
+TEST(CamJobSpec, EmitsAxisSwapForMeshFeature) {
+    CamJobRequest request;
+    request.modelName = "Odin";
+    request.meshPath = "/tmp/odin.stl";
+    request.axisSwap = "yz";
+
+    const auto parsed = nlohmann::json::parse(buildDefaultSurfacingJobSpec(request));
+    EXPECT_EQ(parsed.at("features")[0].at("axisSwap"), "yz");
+}
+
+TEST(CamJobSpec, LayFlatPicksSwapMinimizingHeight) {
+    // Standing dagger: tall Z, shallow Y depth -> lay onto its back via yz.
+    EXPECT_EQ(layFlatAxisSwap(80, 25, 400), "yz");
+    // Long thin X-dominant part standing on end -> xz.
+    EXPECT_EQ(layFlatAxisSwap(10, 200, 300), "xz");
+    // Already flat relief -> unchanged.
+    EXPECT_EQ(layFlatAxisSwap(300, 200, 40), "none");
+    // Cube -> no pointless swap.
+    EXPECT_EQ(layFlatAxisSwap(100, 100, 100), "none");
+}
+
 TEST(CamJobSpec, DefaultsToFluidncMachine) {
     CamJobRequest request;
     request.modelName = "Dome";

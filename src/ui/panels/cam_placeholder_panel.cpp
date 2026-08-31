@@ -36,7 +36,8 @@ void CamPlaceholderPanel::setMachinesProvider(std::function<MachineList()> provi
     m_machinesProvider = std::move(provider);
 }
 
-void CamPlaceholderPanel::setOnGenerate(std::function<void(const std::string&)> onGenerate) {
+void CamPlaceholderPanel::setOnGenerate(
+    std::function<void(const std::string&, const std::string&)> onGenerate) {
     m_onGenerate = std::move(onGenerate);
 }
 
@@ -91,9 +92,28 @@ void CamPlaceholderPanel::render() {
         }
     }
 
+    static constexpr std::pair<const char*, const char*> kOrientations[] = {
+        {"auto", "Lay flat (auto)"},
+        {"none", "As imported"},
+        {"yz", "Swap Y/Z"},
+        {"xz", "Swap X/Z"},
+    };
+    const char* orientationLabel = kOrientations[0].second;
+    for (const auto& [id, label] : kOrientations) {
+        if (m_selectedOrientation == id)
+            orientationLabel = label;
+    }
+    if (ImGui::BeginCombo("Orientation", orientationLabel)) {
+        for (const auto& [id, label] : kOrientations) {
+            if (ImGui::Selectable(label, m_selectedOrientation == id))
+                m_selectedOrientation = id;
+        }
+        ImGui::EndCombo();
+    }
+
     ImGui::BeginDisabled(setup.empty());
     if (ImGui::Button("Generate G-code") && m_onGenerate) {
-        m_onGenerate(m_selectedMachineId);
+        m_onGenerate(m_selectedMachineId, m_selectedOrientation);
     }
     ImGui::EndDisabled();
 

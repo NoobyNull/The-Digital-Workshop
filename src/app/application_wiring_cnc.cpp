@@ -356,9 +356,10 @@ void Application::wireCncPanels() {
             return m_camGeneration->message;
         });
         camp->setMachinesProvider([this]() { return m_camMachines; });
-        camp->setOnGenerate([this](const std::string& machineId) {
-            startCamGenerationAsync(machineId);
-        });
+        camp->setOnGenerate(
+            [this](const std::string& machineId, const std::string& orientation) {
+                startCamGenerationAsync(machineId, orientation);
+            });
         camp->setRunHandoffReadyProvider([this]() {
             return m_camGeneratedItemId.has_value();
         });

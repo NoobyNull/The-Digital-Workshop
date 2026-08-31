@@ -81,7 +81,8 @@ void Application::startCamEngineAsync() {
     }).detach();
 }
 
-void Application::startCamGenerationAsync(const std::string& machineId) {
+void Application::startCamGenerationAsync(const std::string& machineId,
+                                          const std::string& orientation) {
     if (!m_camActiveSetup) {
         ToastManager::instance().show(
             ToastType::Warning,
@@ -103,6 +104,12 @@ void Application::startCamGenerationAsync(const std::string& machineId) {
     request.modelName = m_camActiveSetup->modelName;
     request.meshPath = m_camActiveSetup->meshPath;
     request.machineId = machineId.empty() ? "fluidnc" : machineId;
+    // "auto" lays the model flat for top-down carving; anything else is an
+    // explicit engine axisSwap chosen in the panel.
+    const Vec3& extents = m_camActiveSetup->extents;
+    request.axisSwap = (orientation == "auto" || orientation.empty())
+                           ? cam::layFlatAxisSwap(extents.x, extents.y, extents.z)
+                           : orientation;
     const std::string spec = cam::buildDefaultSurfacingJobSpec(request);
     const CamActiveSetup setup = *m_camActiveSetup;
 

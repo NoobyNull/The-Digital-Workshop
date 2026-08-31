@@ -356,6 +356,7 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
         setup.modelName = modelRecord->name;
         setup.meshPath =
             PathResolver::resolve(modelRecord->filePath, PathCategory::Models).string();
+        setup.extents = modelRecord->boundsMax - modelRecord->boundsMin;
         onModelSelected(parentModelId,
                         [this, setup = std::move(setup),
                          completion = std::move(completion)](

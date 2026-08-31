@@ -315,7 +315,8 @@ class Application {
         i64 operationItemId = 0;
         i64 modelId = 0;
         std::string modelName;
-        std::string meshPath; // absolute
+        std::string meshPath;   // absolute
+        Vec3 extents{0, 0, 0}; // raw mesh bounds size, for lay-flat orientation
     };
     struct CamGenerationState {
         std::mutex mutex;
@@ -332,7 +333,8 @@ class Application {
 
     cam::CamEngineRuntime* ensureCamEngineRuntime();
     void startCamEngineAsync();
-    void startCamGenerationAsync(const std::string& machineId);
+    void startCamGenerationAsync(const std::string& machineId,
+                                 const std::string& orientation);
     void persistGeneratedCamGCode(const CamActiveSetup& setup, std::string gcodeText);
     void sendGeneratedCamGCodeToRun();
 

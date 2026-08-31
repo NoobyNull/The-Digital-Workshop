@@ -32,7 +32,11 @@ std::string buildDefaultSurfacingJobSpec(const CamJobRequest& request) {
            {"plungeFeed", 400},
            {"stepdown", 1},
            {"stepover", 0.12}}}},
-        {"features", {{{"type", "mesh"}, {"id", "model"}, {"path", request.meshPath}}}},
+        {"features",
+         {{{"type", "mesh"},
+           {"id", "model"},
+           {"path", request.meshPath},
+           {"axisSwap", request.axisSwap.empty() ? "none" : request.axisSwap}}}},
         {"operations",
          {{{"kind", "rough_surface"},
            {"target", {"model"}},
@@ -46,6 +50,16 @@ std::string buildDefaultSurfacingJobSpec(const CamJobRequest& request) {
            {"pocketAngle", 45}}}},
     };
     return spec.dump();
+}
+
+std::string layFlatAxisSwap(double extentX, double extentY, double extentZ) {
+    // Top-down carving wants the shortest dimension pointing up. 'yz' makes
+    // the Y extent the height; 'xz' makes the X extent the height.
+    if (extentY < extentZ && extentY <= extentX)
+        return "yz";
+    if (extentX < extentZ && extentX < extentY)
+        return "xz";
+    return "none";
 }
 
 } // namespace dw::cam
