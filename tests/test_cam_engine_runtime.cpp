@@ -76,6 +76,9 @@ TEST(CamEngineRuntime, PayloadCompletenessRequiresBothFiles) {
                                  std::filesystem::perm_options::add);
     EXPECT_FALSE(payloadLooksComplete(noManifold.path()));
 
+#ifndef _WIN32
+    // Exec-permission semantics are POSIX; payloadLooksComplete skips the
+    // access(X_OK) check on Windows.
     TempDir notExecutable;
     makePayload(notExecutable.path());
     std::filesystem::permissions(notExecutable.path() / "bun",
@@ -84,6 +87,7 @@ TEST(CamEngineRuntime, PayloadCompletenessRequiresBothFiles) {
                                      std::filesystem::perms::others_exec,
                                  std::filesystem::perm_options::remove);
     EXPECT_FALSE(payloadLooksComplete(notExecutable.path()));
+#endif
 
     TempDir complete;
     makePayload(complete.path());

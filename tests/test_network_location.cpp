@@ -46,6 +46,9 @@ const Path kRuntimeRoot("/run/user/1000");
 
 } // namespace
 
+// KIO-FUSE runtime paths are a POSIX-only concept; their '?' segments are not
+// even representable as Windows paths.
+#ifndef _WIN32
 TEST(NetworkLocation, BuildsGenericDurableUrlAndEncodesRemoteSegments) {
     const Path stale(
         "/run/user/1000/kio-fuse-vOVnSN/smb/workshop-nas.local/Model Share/A&B/#plans?/100%.stl");
@@ -54,6 +57,7 @@ TEST(NetworkLocation, BuildsGenericDurableUrlAndEncodesRemoteSegments) {
     ASSERT_TRUE(url);
     EXPECT_EQ(*url, "smb://workshop-nas.local/Model%20Share/A%26B/%23plans%3F/100%25.stl");
 }
+#endif
 
 TEST(NetworkLocation, AcceptsAllowlistedSchemesUsernamePortsAndIpv6) {
     const std::vector<std::string> urls = {
@@ -101,6 +105,7 @@ TEST(NetworkLocation, RejectsPasswordsTokensUnsafeSchemesAndMalformedEscapes) {
     }
 }
 
+#ifndef _WIN32
 TEST(NetworkLocation, RejectsCredentialBearingAndOutOfRuntimeKioPaths) {
     const Path credential(
         "/run/user/1000/kio-fuse-Ab12Cd/sftp/alice:secret@example.test/home/file.nc");
@@ -111,12 +116,15 @@ TEST(NetworkLocation, RejectsCredentialBearingAndOutOfRuntimeKioPaths) {
     EXPECT_FALSE(network_location::durableUrl(outside, kRuntimeRoot));
     EXPECT_FALSE(network_location::isNetworkLocationCandidate(outside, kRuntimeRoot));
 }
+#endif
 
 TEST(NetworkLocation, CandidateCatchesMalformedUrlAndKioLookalikes) {
     EXPECT_TRUE(network_location::isNetworkLocationCandidate(Path("not a scheme://payload")));
+#ifndef _WIN32
     EXPECT_TRUE(network_location::isNetworkLocationCandidate(
         Path("/run/user/1000/kio-fuse-/smb/nas.local/share/file.stl"), kRuntimeRoot));
     EXPECT_FALSE(network_location::isNetworkLocationCandidate(Path("/home/user/file.stl")));
+#endif
 }
 
 TEST(NetworkLocation, ParentLocationIsUriAwareAndFailsClosed) {

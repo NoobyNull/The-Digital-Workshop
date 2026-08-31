@@ -169,7 +169,12 @@ TEST_F(SelectiveToolImporterTest, OpensReadOnlySupplierWithoutChangingIt) {
 }
 
 TEST_F(SelectiveToolImporterTest, ReadOnlySupplierPathSupportsUriCharacters) {
+#ifdef _WIN32
+    // '?' cannot appear in Windows filenames; keep the other URI-hostile chars.
+    const auto encodedPath = m_root / "supplier #100%.vtdb";
+#else
     const auto encodedPath = m_root / "supplier #100%?.vtdb";
+#endif
     ASSERT_TRUE(std::filesystem::copy_file(m_sourcePath, encodedPath));
 
     dw::SupplierToolCatalog catalog;
