@@ -117,6 +117,7 @@ set(DW_TEST_SOURCES
     # CAM engine
     test_cam_engine_client.cpp
     test_cam_engine_runtime.cpp
+    test_cam_job_spec.cpp
     # Carve (Direct Carve pipeline)
     test_model_fitter.cpp
     test_preparation_identity.cpp
@@ -291,6 +292,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/carve/model_fitter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cam/cam_engine_client.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cam/cam_engine_runtime.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cam/cam_job_spec.cpp
     ${CMAKE_SOURCE_DIR}/src/render/camera.cpp
     ${CMAKE_SOURCE_DIR}/src/app/workspace.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_session_integration.cpp

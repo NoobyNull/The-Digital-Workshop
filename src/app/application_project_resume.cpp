@@ -343,18 +343,30 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
         if (pinResult.status != PrepareCarveAdapterStatus::Ready || !pinResult.pin)
             return ProjectItemContentStatus::Unavailable;
         const i64 parentModelId = pinResult.pin->modelSource().item.value;
-        if (!m_modelRepo || !m_modelRepo->findById(parentModelId))
+        const auto modelRecord =
+            m_modelRepo ? m_modelRepo->findById(parentModelId) : std::nullopt;
+        if (!modelRecord)
             return ProjectItemContentStatus::Unavailable;
-        // CAM rebuild: the saved operation setup is no longer restorable, so the
-        // item resolves to its parent model and opens the CAM placeholder.
+        // The saved operation resolves to its parent model, opens the CAM
+        // window, and becomes the CAM panel's active setup.
+        CamActiveSetup setup;
+        setup.projectId = item.projectId;
+        setup.operationItemId = item.id;
+        setup.modelId = parentModelId;
+        setup.modelName = modelRecord->name;
+        setup.meshPath =
+            PathResolver::resolve(modelRecord->filePath, PathCategory::Models).string();
         onModelSelected(parentModelId,
-                        [this, completion = std::move(completion)](
+                        [this, setup = std::move(setup),
+                         completion = std::move(completion)](
                             ModelSelectionStatus status) mutable {
                             if (status == ModelSelectionStatus::Superseded)
                                 return;
                             const bool opened = status == ModelSelectionStatus::Loaded;
-                            if (opened && m_uiManager)
+                            if (opened && m_uiManager) {
+                                m_camActiveSetup = std::move(setup);
                                 m_uiManager->openWindow("direct_carve");
+                            }
                             if (completion)
                                 completion(opened);
                         },
