@@ -1,4 +1,5 @@
 #include "core/cam/cam_engine_runtime.h"
+#include "test_env_util.h"
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -113,14 +114,14 @@ TEST(CamEngineRuntime, PayloadDirPrefersEnvironmentOverride) {
     const char* previous = std::getenv("DW_CAM_ENGINE_DIR");
     const std::string saved = previous ? previous : "";
 
-    setenv("DW_CAM_ENGINE_DIR", dev.path().string().c_str(), 1);
+    test::setEnv("DW_CAM_ENGINE_DIR", dev.path().string().c_str());
     EXPECT_EQ(locatePayloadDir("/opt/dw/bin"), dev.path());
 
-    unsetenv("DW_CAM_ENGINE_DIR");
+    test::unsetEnv("DW_CAM_ENGINE_DIR");
     EXPECT_FALSE(locatePayloadDir("/opt/dw/bin").empty());
 
     if (previous)
-        setenv("DW_CAM_ENGINE_DIR", saved.c_str(), 1);
+        test::setEnv("DW_CAM_ENGINE_DIR", saved.c_str());
 }
 
 } // namespace dw::cam
