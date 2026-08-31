@@ -30,6 +30,7 @@ set(DW_SOURCES
     app/application_project_resume.cpp
     app/application_runtime.cpp
     app/application_library_picker.cpp
+    app/application_cam_workflow.cpp
     app/application_carve_preparation.cpp
     app/carve_preparation_adapter.cpp
     app/library_workflow_adapter.cpp
@@ -81,6 +82,7 @@ set(DW_SOURCES
     core/config/layout_preset.cpp
     core/config/layout_migration.cpp
     core/config/window_catalog.cpp
+    core/config/window_mode_policy.cpp
     core/config/settings_archive.cpp
 
     # Database
@@ -209,6 +211,8 @@ set(DW_SOURCES
     # CAM engine
     core/cam/cam_engine_client.cpp
     core/cam/cam_engine_runtime.cpp
+    core/cam/cam_job_spec.cpp
+    core/cam/cam_tool_mapping.cpp
 
     # Archive
     core/archive/archive.cpp

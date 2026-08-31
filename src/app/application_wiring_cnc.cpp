@@ -325,12 +325,19 @@ void Application::wireCncPanels() {
         ctp->setMaterialManager(m_materialManager.get());
     }
 
-    // Wire CAM placeholder panel's engine status surface (v0.8.0 rebuild).
+    // Wire the CAM panel's early workflow surface (v0.8.0 slice): async
+    // engine lifecycle, default-surfacing generation, and Run handoff.
     if (auto* camp = m_uiManager->camPlaceholderPanel()) {
         camp->setEngineStatusProvider([this]() -> std::string {
+            {
+                std::lock_guard<std::mutex> lock(m_camGeneration->mutex);
+                if (m_camGeneration->running && !m_camGeneration->message.empty())
+                    return m_camGeneration->message;
+            }
             if (!m_camEngineStatus)
                 return "Engine not started";
-            // Don't keep reporting "ready" after the owned child dies.
+            // Don't keep reporting "ready" after the owned child dies. Only
+            // probed while no worker owns the runtime.
             if (m_camEngineStatus->ready && m_camEngineRuntime &&
                 m_camEngineRuntime->ownedChildExited()) {
                 m_camEngineStatus->ready = false;
@@ -340,18 +347,24 @@ void Application::wireCncPanels() {
                        ? "Engine ready at " + m_camEngineStatus->endpoint
                        : m_camEngineStatus->reason;
         });
-        camp->setOnStartEngine([this]() {
-            if (!m_camEngineRuntime) {
-                cam::CamEngineConfig cfg;
-                cfg.port = cam::bridgePortFromEnv(cfg.port);
-                cfg.payloadDir = cam::locatePayloadDir(paths::getExeDir());
-                m_camEngineRuntime = std::make_unique<cam::CamEngineRuntime>(cfg);
-            }
-            // Synchronous on the UI thread: the accepted Phase 2 manual
-            // verification path (bounded by the runtime's ~10s reachability
-            // wait). Phase 3 replaces this with an async/managed start.
-            m_camEngineStatus = m_camEngineRuntime->ensureReady();
+        camp->setOnStartEngine([this]() { startCamEngineAsync(); });
+        camp->setActiveSetupProvider([this]() -> std::string {
+            return m_camActiveSetup ? m_camActiveSetup->modelName : std::string{};
         });
+        camp->setJobStatusProvider([this]() -> std::string {
+            std::lock_guard<std::mutex> lock(m_camGeneration->mutex);
+            return m_camGeneration->message;
+        });
+        camp->setMachinesProvider([this]() { return m_camMachines; });
+        camp->setToolChoicesProvider([this]() { return camToolChoices(); });
+        camp->setOnGenerate([this](const CamPlaceholderPanel::GenerateOptions& options) {
+            startCamGenerationAsync(options.machineId, options.orientation,
+                                    options.roughingToolId, options.finishingToolId);
+        });
+        camp->setRunHandoffReadyProvider([this]() {
+            return m_camGeneratedItemId.has_value();
+        });
+        camp->setOnSendToRun([this]() { sendGeneratedCamGCodeToRun(); });
     }
 }
 
