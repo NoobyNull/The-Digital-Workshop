@@ -16,8 +16,17 @@ OUT="$(realpath -m "$OUT")"
 case "$OUT" in
     "$REPO_ROOT"|"$HOME"|/) echo "refusing to build into $OUT"; exit 1 ;;
 esac
-PLATFORM="${3:-linux-x64}"
-[ "${2:-}" = "--platform" ] && PLATFORM="$3"
+# Only clobber a dir that doesn't exist, is empty, or is a previous payload.
+if [ -d "$OUT" ] && [ -n "$(ls -A "$OUT")" ] && [ ! -f "$OUT/dw-cam-engine.js" ]; then
+    echo "refusing to delete $OUT: not empty and not a previous cam-engine payload"
+    exit 1
+fi
+PLATFORM="linux-x64"
+if [ "${2:-}" = "--platform" ]; then
+    PLATFORM="${3:?--platform requires a value}"
+elif [ -n "${2:-}" ]; then
+    echo "unknown argument: $2"; exit 1
+fi
 
 command -v bun >/dev/null || { echo "bun is required (https://bun.sh)"; exit 1; }
 [ -d "$CAMBRIDGE/node_modules/manifold-3d" ] || { echo "run npm install in cambridge/ first"; exit 1; }

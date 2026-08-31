@@ -37,7 +37,10 @@ class CamEngineClient {
   public:
     explicit CamEngineClient(std::string baseUrl);
 
-    [[nodiscard]] std::optional<EngineHealth> health() const;
+    // quiet + short timeout suit liveness probes that are expected to fail
+    // while the engine is still starting.
+    [[nodiscard]] std::optional<EngineHealth> health(long timeoutSeconds = 5,
+                                                     bool quiet = false) const;
     [[nodiscard]] std::vector<EngineMachine> machines() const;
     [[nodiscard]] EngineJobResult submitJob(const std::string& jobSpecJson) const;
     [[nodiscard]] const std::string& baseUrl() const noexcept { return m_baseUrl; }

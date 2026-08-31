@@ -47,7 +47,7 @@ Updating the engine later: `git -C vendor/purecutcnc pull`, then
 ## Run
 
 ```bash
-cd /data/DW/cambridge
+cd cambridge
 
 # HTTP sidecar (default http://127.0.0.1:8973, override with DW_BRIDGE_PORT)
 npm run bridge

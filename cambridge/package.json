@@ -1,0 +1,22 @@
+{
+  "name": "dw-cambridge",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Isolated CAM sidecar environment: PureCutCNC engine (vendored pristine) + dw-bridge JSON/HTTP API for Digital Workshop",
+  "scripts": {
+    "bridge": "tsx bridge/server.ts",
+    "cli": "tsx bridge/cli.ts",
+    "smoke": "tsx bridge/test/smoke.ts",
+    "verify": "tsx bridge/test/verify-camj.ts",
+    "ui": "npm --prefix vendor/purecutcnc run dev"
+  },
+  "dependencies": {
+    "clipper-lib": "^6.4.2",
+    "delaunator": "^5.1.0",
+    "manifold-3d": "^3.3.2",
+    "three": "^0.183.2",
+    "tsx": "^4.21.0",
+    "zod": "^4.3.6"
+  }
+}

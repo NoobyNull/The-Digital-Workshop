@@ -36,6 +36,7 @@ enum class DirectCarveRunEffectError {
     GCodeHierarchyMismatch,
     GCodeSnapshotInvalid,
     GCodeFileMissing,
+    GCodeFileEmpty,
     GCodeFingerprintMismatch,
     StreamStartFailed,
     JobRecordInsertFailed,

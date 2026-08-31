@@ -171,7 +171,9 @@ export async function runJob(spec: JobSpec): Promise<JobResult> {
       files.gcode = spec.outputPath
     }
     if (spec.saveProjectPath) {
-      writeFileSync(spec.saveProjectPath, JSON.stringify(project, null, 2))
+      // Compact: .camj is machine-read and embeds serialized mesh assets, so
+      // pretty-printing only inflates multi-MB files.
+      writeFileSync(spec.saveProjectPath, JSON.stringify(project))
       files.camj = spec.saveProjectPath
     }
 

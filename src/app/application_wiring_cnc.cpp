@@ -20,6 +20,7 @@
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
 #include "core/materials/material_manager.h"
+#include "core/paths/app_paths.h"
 #include "core/paths/path_resolver.h"
 #include "core/threading/main_thread_queue.h"
 #include "managers/ui_manager.h"
@@ -329,26 +330,21 @@ void Application::wireCncPanels() {
         camp->setEngineStatusProvider([this]() -> std::string {
             if (!m_camEngineStatus)
                 return "Engine not started";
+            // Don't keep reporting "ready" after the owned child dies.
+            if (m_camEngineStatus->ready && m_camEngineRuntime &&
+                m_camEngineRuntime->ownedChildExited()) {
+                m_camEngineStatus->ready = false;
+                m_camEngineStatus->reason = "CAM engine stopped (process exited)";
+            }
             return m_camEngineStatus->ready
                        ? "Engine ready at " + m_camEngineStatus->endpoint
                        : m_camEngineStatus->reason;
         });
         camp->setOnStartEngine([this]() {
             if (!m_camEngineRuntime) {
-                // Same exeDir resolution as GraphManager's extension lookup
-                // (Application::init): read /proc/self/exe on Linux, else cwd.
-                std::error_code ec;
-                Path exeDir;
-#ifdef __linux__
-                Path exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
-                if (!ec)
-                    exeDir = exePath.parent_path();
-#endif
-                if (exeDir.empty())
-                    exeDir = std::filesystem::current_path();
-
                 cam::CamEngineConfig cfg;
-                cfg.payloadDir = cam::locatePayloadDir(exeDir);
+                cfg.port = cam::bridgePortFromEnv(cfg.port);
+                cfg.payloadDir = cam::locatePayloadDir(paths::getExeDir());
                 m_camEngineRuntime = std::make_unique<cam::CamEngineRuntime>(cfg);
             }
             // Synchronous on the UI thread: the accepted Phase 2 manual

@@ -73,6 +73,9 @@ Path getBundledMaterialsDir();
 // Returns <exe_dir>/resources/icons/
 Path getBundledIconsDir();
 
+// Directory containing the running executable (Windows/macOS/Linux aware).
+Path getExeDir();
+
 // Resolve bundled resources for both build-tree and installed Linux layouts.
 Path findBundledResourceDirForExe(const Path& exeDir, std::string_view leafDir);
 

@@ -68,6 +68,8 @@ Path getHomeDir() {
 #endif
 }
 
+} // namespace
+
 // Directory containing the running executable
 Path getExeDir() {
 #ifdef _WIN32
@@ -91,8 +93,6 @@ Path getExeDir() {
 #endif
     return Path(".");
 }
-
-} // namespace
 
 const char* getAppName() {
     return APP_NAME;

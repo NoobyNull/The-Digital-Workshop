@@ -74,8 +74,8 @@ EngineJobResult parseJobResult(const std::string& json) {
 
 CamEngineClient::CamEngineClient(std::string baseUrl) : m_baseUrl(std::move(baseUrl)) {}
 
-std::optional<EngineHealth> CamEngineClient::health() const {
-    const auto body = lmstudio::curlGet(m_baseUrl + "/api/health");
+std::optional<EngineHealth> CamEngineClient::health(long timeoutSeconds, bool quiet) const {
+    const auto body = lmstudio::curlGet(m_baseUrl + "/api/health", timeoutSeconds, quiet);
     if (body.empty()) return std::nullopt;
     return parseHealth(body);
 }
@@ -87,8 +87,11 @@ std::vector<EngineMachine> CamEngineClient::machines() const {
 }
 
 EngineJobResult CamEngineClient::submitJob(const std::string& jobSpecJson) const {
-    const auto body = lmstudio::curlPost(m_baseUrl + "/api/job", jobSpecJson);
-    if (body.empty()) return EngineJobResult{false, {}, "engine unreachable"};
+    // Heavy jobs (large meshes, fine finishing passes) legitimately run for
+    // minutes; a short timeout here gets misread as a dead engine.
+    const auto body = lmstudio::curlPost(m_baseUrl + "/api/job", jobSpecJson, 600);
+    if (body.empty())
+        return EngineJobResult{false, {}, "engine request failed (unreachable or timed out)"};
     return parseJobResult(body);
 }
 

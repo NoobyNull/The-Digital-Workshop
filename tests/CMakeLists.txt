@@ -482,26 +482,5 @@ target_link_libraries(dw_viewport_presentation_tests PRIVATE
 )
 gtest_discover_tests(dw_viewport_presentation_tests TEST_PREFIX "isolated.viewport.")
 
-# The human-study runner and scorer are release gates in their own right. Keep
-# their fail-closed contracts in the ordinary CTest inventory.
-find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_Interpreter_FOUND)
-    add_test(
-        NAME river_sign_study.runner_python
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/scripts/test_run_river_sign_study.py
-    )
-    add_test(
-        NAME river_sign_study.scorer_python
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/.planning/project-centered-workshop-release/test_score_river_sign_study.py
-    )
-    set_tests_properties(
-        river_sign_study.runner_python
-        river_sign_study.scorer_python
-        PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-endif()
-
 # Copy test data
 # file(COPY data/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/data)

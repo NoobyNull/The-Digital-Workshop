@@ -59,7 +59,7 @@ desktop.ini
 # Generated files
 src/version.h
 imgui.ini
-package.json
+/package.json
 
 # User-specific
 *.user

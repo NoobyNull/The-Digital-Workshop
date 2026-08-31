@@ -21,7 +21,13 @@ async function main(): Promise<void> {
   const outIdx = args.indexOf('--out')
   const camjIdx = args.indexOf('--camj')
 
-  const spec = JSON.parse(readFileSync(jobPath, 'utf8')) as JobSpec
+  let spec: JobSpec
+  try {
+    spec = JSON.parse(readFileSync(jobPath, 'utf8')) as JobSpec
+  } catch (err) {
+    console.error(`cannot read job spec ${jobPath}: ${err instanceof Error ? err.message : err}`)
+    process.exit(2)
+  }
   if (outIdx !== -1 && args[outIdx + 1]) spec.outputPath = args[outIdx + 1]
   if (camjIdx !== -1 && args[camjIdx + 1]) spec.saveProjectPath = args[camjIdx + 1]
 
@@ -47,4 +53,7 @@ async function main(): Promise<void> {
   }
 }
 
-void main()
+main().catch((err: unknown) => {
+  console.error(`job failed: ${err instanceof Error ? err.message : err}`)
+  process.exit(1)
+})

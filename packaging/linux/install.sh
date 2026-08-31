@@ -76,7 +76,10 @@ install -m 644 "$SCRIPT_DIR/bin/$GRAPHQLITE_LIB" "$BIN_DIR/$GRAPHQLITE_LIB"
 # so no host-level symlinks or environment changes are required.
 rm -rf "$RESOURCE_DIR"
 mkdir -p "$APP_DIR"
-cp -R "$RESOURCE_SRC" "$RESOURCE_DIR"
+# --preserve=mode: a plain cp filters modes through the invoking umask, which
+# under a root umask like 077 strips the exec bit from cam-engine/bun and
+# read access for the desktop user.
+cp -R --preserve=mode "$RESOURCE_SRC" "$RESOURCE_DIR"
 install -m 755 "$SCRIPT_DIR/uninstall.sh" "$UNINSTALL_PATH"
 
 # Install icons

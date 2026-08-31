@@ -3,14 +3,18 @@
 #include <chrono>
 #include <cstdlib>
 #include <thread>
+#include <vector>
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
 #ifndef _WIN32
 #include <csignal>
+#include <cstring>
 #include <sys/wait.h>
 #include <unistd.h>
+
+extern char** environ;
 #endif
 
 #include "../utils/log.h"
@@ -169,20 +173,60 @@ OllamaRuntimeStatus OllamaRuntime::ensureReady() {
     return status;
 }
 
+#ifndef _WIN32
+namespace {
+
+// Copy of the environment with `entry` ("NAME=value") replacing any existing
+// NAME. Built before fork() so the child never allocates. `entry` must
+// outlive the returned vector's use.
+std::vector<char*> childEnvWith(const std::string& entry) {
+    const auto eq = entry.find('=');
+    const size_t nameLen = (eq == std::string::npos ? entry.size() : eq + 1);
+    std::vector<char*> env;
+    for (char** e = environ; *e != nullptr; ++e) {
+        if (std::strncmp(*e, entry.c_str(), nameLen) != 0)
+            env.push_back(*e);
+    }
+    env.push_back(const_cast<char*>(entry.c_str()));
+    env.push_back(nullptr);
+    return env;
+}
+
+} // namespace
+#endif
+
 bool OllamaRuntime::startOwnedProcess() {
 #ifdef _WIN32
     return false;
 #else
-    if (m_pid > 0)
-        return true;
+    if (m_pid > 0) {
+        if (waitpid(m_pid, nullptr, WNOHANG) == 0) {
+            // Alive but unreachable (this is only called when probes fail):
+            // a wedged child would block restart forever.
+            log::warningf("Ollama",
+                          "server pid=%d is alive but unreachable; restarting it",
+                          m_pid);
+            stopOwnedProcess();
+        } else {
+            // Already exited: reap so the pid does not block a restart.
+            m_pid = -1;
+        }
+    }
+
+    // Built before fork(): allocating (setenv included) between fork and
+    // exec can deadlock a multithreaded parent on the malloc lock.
+    const std::string hostEnv =
+        "OLLAMA_HOST=" + m_config.host + ":" + std::to_string(m_config.port);
+    std::vector<char*> childEnv = childEnvWith(hostEnv);
+    char* childArgv[] = {const_cast<char*>("ollama"), const_cast<char*>("serve"),
+                         nullptr};
 
     pid_t pid = fork();
     if (pid < 0)
         return false;
     if (pid == 0) {
-        std::string host = m_config.host + ":" + std::to_string(m_config.port);
-        setenv("OLLAMA_HOST", host.c_str(), 1);
-        execlp("ollama", "ollama", "serve", static_cast<char*>(nullptr));
+        environ = childEnv.data();
+        execvp("ollama", childArgv);
         _exit(127);
     }
 
@@ -215,13 +259,19 @@ bool OllamaRuntime::pullModel() const {
 #ifdef _WIN32
     return false;
 #else
+    // Built before fork() — see startOwnedProcess.
+    const std::string hostEnv =
+        "OLLAMA_HOST=" + m_config.host + ":" + std::to_string(m_config.port);
+    std::vector<char*> childEnv = childEnvWith(hostEnv);
+    char* childArgv[] = {const_cast<char*>("ollama"), const_cast<char*>("pull"),
+                         const_cast<char*>(m_config.model.c_str()), nullptr};
+
     pid_t pid = fork();
     if (pid < 0)
         return false;
     if (pid == 0) {
-        std::string host = m_config.host + ":" + std::to_string(m_config.port);
-        setenv("OLLAMA_HOST", host.c_str(), 1);
-        execlp("ollama", "ollama", "pull", m_config.model.c_str(), static_cast<char*>(nullptr));
+        environ = childEnv.data();
+        execvp("ollama", childArgv);
         _exit(127);
     }
 

@@ -79,17 +79,34 @@ else
     fail "/api/machines did not return an array containing grbl ($machines)"
 fi
 
-if [[ -f "$JOBSPEC" ]]; then
+if [[ -f "$JOBSPEC" ]] && command -v python3 >/dev/null; then
+    # The committed example uses cambridge-relative feature paths; the bridge
+    # resolves paths against its own cwd (the payload dir), so rewrite them to
+    # absolute and strip any file-writing fields before POSTing.
+    RESOLVED_JOBSPEC=$(mktemp)
+    trap 'cleanup; rm -f "$RESOLVED_JOBSPEC"' EXIT
+    python3 - "$JOBSPEC" "$SCRIPT_DIR/../cambridge" > "$RESOLVED_JOBSPEC" << 'PY'
+import json, os, sys
+spec = json.load(open(sys.argv[1]))
+cambridge = os.path.realpath(sys.argv[2])
+for feature in spec.get("features", []):
+    path = feature.get("path")
+    if path and not os.path.isabs(path):
+        feature["path"] = os.path.join(cambridge, path)
+spec.pop("outputPath", None)
+spec.pop("saveProjectPath", None)
+json.dump(spec, sys.stdout)
+PY
     job_response=$(curl -sf -X POST "$BASE_URL/api/job" \
         -H 'Content-Type: application/json' \
-        --data-binary @"$JOBSPEC" 2>/dev/null)
+        --data-binary @"$RESOLVED_JOBSPEC" 2>/dev/null)
     if grep -Fq '"ok":true' <<<"$job_response" && grep -Fq '"gcode"' <<<"$job_response"; then
         pass "POST /api/job returns ok:true with gcode"
     else
         fail "POST /api/job did not return ok:true/gcode ($job_response)"
     fi
 else
-    echo "SKIP: POST /api/job (no jobspec found at $JOBSPEC)"
+    echo "SKIP: POST /api/job (no jobspec at $JOBSPEC, or python3 unavailable)"
 fi
 
 if [[ "$STATUS" -eq 0 ]]; then

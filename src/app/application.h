@@ -64,10 +64,6 @@ class Texture;
 class OllamaRuntime;
 enum class ThumbnailView;
 
-namespace carve_preparation {
-class PrepareCarvePin;
-}
-
 // Managers (extracted from Application)
 class UIManager;
 class FileIOManager;

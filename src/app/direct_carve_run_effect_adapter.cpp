@@ -43,13 +43,25 @@ std::vector<std::string> readRunnableLines(const Path& path) {
         return lines;
     std::string raw;
     while (std::getline(in, raw)) {
-        while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\r'))
+        while (!raw.empty() &&
+               (raw.back() == ' ' || raw.back() == '\t' || raw.back() == '\r'))
             raw.pop_back();
-        if (raw.empty() || raw.front() == ';' || raw.front() == '(')
+        // Trim leading whitespace so indented comment lines ("  ; note")
+        // don't survive as whitespace-only entries inflating totalLines.
+        const auto firstVisible = raw.find_first_not_of(" \t");
+        if (firstVisible == std::string::npos)
+            continue;
+        raw.erase(0, firstVisible);
+        if (raw.front() == ';' || raw.front() == '(')
             continue;
         const auto semi = raw.find(';');
-        if (semi != std::string::npos)
+        if (semi != std::string::npos) {
             raw = raw.substr(0, semi);
+            while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\t'))
+                raw.pop_back();
+            if (raw.empty())
+                continue;
+        }
         lines.push_back(raw);
     }
     return lines;
@@ -191,7 +203,9 @@ DirectCarveRunEffectResult DirectCarveRunEffectAdapter::handle(
 
     const std::vector<std::string> lines = readRunnableLines(resolvedPath);
     if (lines.empty())
-        return rejected(DirectCarveRunEffectError::GCodeFileMissing);
+        // The file exists and hash-matched; it just has no runnable commands
+        // (comment/blank-only). "Missing" would misdirect diagnosis.
+        return rejected(DirectCarveRunEffectError::GCodeFileEmpty);
 
     m_snapshot.package = effect.package;
     m_snapshot.persistedGCodePath = storedPathText;
@@ -215,8 +229,12 @@ DirectCarveRunEffectResult DirectCarveRunEffectAdapter::handle(
 
     m_snapshot.jobId = *jobId;
     (void)m_projectManager.listOpenItems(gcodeRef.project.value);
-    if (!streamStarted)
+    if (!streamStarted) {
+        // No stream exists: leaving the snapshot in Streaming would publish
+        // a phantom active run. Mirror the insert-failure teardown.
+        m_snapshot.state = DirectCarveRunControlState::Aborting;
         return rejected(DirectCarveRunEffectError::StreamStartFailed);
+    }
     return applied();
 }
 

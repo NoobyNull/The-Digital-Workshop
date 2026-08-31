@@ -1,5 +1,5 @@
 {
-  "name": "dome-example",
+  "name": "pyramid-example",
   "units": "mm",
   "machine": "fluidnc",
   "stock": "auto",
@@ -9,12 +9,10 @@
     { "id": "finish", "type": "ball_endmill", "diameter": 3, "flutes": 2, "rpm": 18000, "feed": 1200, "plungeFeed": 400, "stepdown": 1, "stepover": 0.12 }
   ],
   "features": [
-    { "type": "mesh", "id": "model", "path": "/data/DW/cambridge/bridge/test/out/dome.stl" }
+    { "type": "mesh", "id": "model", "path": "bridge/examples/pyramid.stl" }
   ],
   "operations": [
     { "kind": "rough_surface", "target": ["model"], "tool": "rough", "stockToLeaveAxial": 0.5, "stockToLeaveRadial": 0.5 },
     { "kind": "finish_surface", "target": ["model"], "tool": "finish", "pocketPattern": "parallel", "pocketAngle": 45 }
-  ],
-  "outputPath": "/data/DW/cambridge/bridge/examples/dome-example.nc",
-  "saveProjectPath": "/data/DW/cambridge/bridge/examples/dome-example.camj"
+  ]
 }

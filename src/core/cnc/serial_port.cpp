@@ -77,7 +77,9 @@ SerialPort& SerialPort::operator=(SerialPort&& other) noexcept {
 bool SerialPort::open(const std::string& device, int baudRate) {
     close();
 
-    m_fd = ::open(device.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+    // O_CLOEXEC: forked sidecars (CAM engine, ollama) must not inherit the
+    // tty, or a "closed" port stays busy for as long as they live.
+    m_fd = ::open(device.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
     if (m_fd < 0) {
         log::errorf("Serial", "Failed to open %s: %s", device.c_str(), strerror(errno));
         return false;
