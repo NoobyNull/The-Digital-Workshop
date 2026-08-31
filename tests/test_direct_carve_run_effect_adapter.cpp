@@ -256,7 +256,8 @@ TEST_F(DirectCarveRunEffectAdapterTest, FailedStreamCanFinalizeHistoryAndRelease
     const auto started = m_adapter->execute(StartStream{run});
     EXPECT_EQ(started.error, DirectCarveRunEffectError::StreamStartFailed);
     ASSERT_TRUE(started.jobId.has_value());
-    EXPECT_EQ(m_adapter->snapshot().state, DirectCarveRunControlState::Streaming);
+    // No stream exists, so the snapshot must not claim an active run.
+    EXPECT_EQ(m_adapter->snapshot().state, DirectCarveRunControlState::Aborting);
 
     EXPECT_TRUE(m_adapter->execute(AbortStream{run.identity()}).succeeded());
     const auto released = m_adapter->execute(

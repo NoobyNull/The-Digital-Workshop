@@ -39,6 +39,8 @@ void writeFile(const Path& path, const char* contents) {
 
 void makePayload(const Path& dir) {
     writeFile(dir / "dw-cam-engine.js", "// engine\n");
+    // manifold-3d ships unbundled beside the engine; completeness requires it.
+    std::filesystem::create_directories(dir / "node_modules" / "manifold-3d");
     writeFile(dir / "bun", "#!/bin/sh\n");
     std::filesystem::permissions(dir / "bun",
                                  std::filesystem::perms::owner_all,
@@ -65,9 +67,16 @@ TEST(CamEngineRuntime, PayloadCompletenessRequiresBothFiles) {
     writeFile(scriptOnly.path() / "dw-cam-engine.js", "// engine\n");
     EXPECT_FALSE(payloadLooksComplete(scriptOnly.path()));
 
+    TempDir noManifold;
+    writeFile(noManifold.path() / "dw-cam-engine.js", "// engine\n");
+    writeFile(noManifold.path() / "bun", "#!/bin/sh\n");
+    std::filesystem::permissions(noManifold.path() / "bun",
+                                 std::filesystem::perms::owner_all,
+                                 std::filesystem::perm_options::add);
+    EXPECT_FALSE(payloadLooksComplete(noManifold.path()));
+
     TempDir notExecutable;
-    writeFile(notExecutable.path() / "dw-cam-engine.js", "// engine\n");
-    writeFile(notExecutable.path() / "bun", "#!/bin/sh\n");
+    makePayload(notExecutable.path());
     std::filesystem::permissions(notExecutable.path() / "bun",
                                  std::filesystem::perms::owner_exec |
                                      std::filesystem::perms::group_exec |

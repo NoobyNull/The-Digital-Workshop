@@ -86,7 +86,7 @@ uint16_t bridgePortFromEnv(uint16_t fallback) {
     char* end = nullptr;
     const long parsed = std::strtol(override, &end, 10);
     if (end == override || *end != '\0' || parsed < 1 || parsed > 65535) {
-        log::warnf("CamEngine", "ignoring invalid DW_BRIDGE_PORT=%s", override);
+        log::warningf("CamEngine", "ignoring invalid DW_BRIDGE_PORT=%s", override);
         return fallback;
     }
     return static_cast<uint16_t>(parsed);
@@ -146,7 +146,7 @@ bool CamEngineRuntime::startOwnedProcess() {
             // Still alive, yet ensureReady() only reaches here when the
             // engine is unreachable: the child is wedged. Kill and replace
             // it instead of short-circuiting on the hung pid forever.
-            log::warnf("CamEngine",
+            log::warningf("CamEngine",
                        "engine pid=%d is alive but unreachable; restarting it",
                        m_pid);
             stopOwnedProcess();
