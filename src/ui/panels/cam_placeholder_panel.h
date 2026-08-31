@@ -33,11 +33,18 @@ class CamPlaceholderPanel : public Panel {
     void setJobStatusProvider(std::function<std::string()> provider);
     // Machines known to the engine; empty until first engine contact.
     void setMachinesProvider(std::function<MachineList()> provider);
-    // Generate G-code for the active setup with the chosen machine id and
-    // orientation ("auto" = lay flat from bounds, else an engine axisSwap).
-    void setOnGenerate(std::function<void(const std::string& machineId,
-                                          const std::string& orientation)>
-                           onGenerate);
+    // Everything the user chose for a generation run. Empty tool ids mean
+    // "pick automatically from the tool library".
+    struct GenerateOptions {
+        std::string machineId;
+        std::string orientation; // "auto" or an engine axisSwap
+        std::string roughingToolId;
+        std::string finishingToolId;
+    };
+
+    // Tools offered by the app's .vtdb library as {id, display name}.
+    void setToolChoicesProvider(std::function<MachineList()> provider);
+    void setOnGenerate(std::function<void(const GenerateOptions&)> onGenerate);
     // True once a generated G-code project item is ready to hand to Run.
     void setRunHandoffReadyProvider(std::function<bool()> provider);
     void setOnSendToRun(std::function<void()> onSendToRun);
@@ -55,11 +62,14 @@ class CamPlaceholderPanel : public Panel {
     std::function<std::string()> m_activeSetupProvider;
     std::function<std::string()> m_jobStatusProvider;
     std::function<MachineList()> m_machinesProvider;
-    std::function<void(const std::string&, const std::string&)> m_onGenerate;
+    std::function<MachineList()> m_toolChoicesProvider;
+    std::function<void(const GenerateOptions&)> m_onGenerate;
     std::function<bool()> m_runHandoffReadyProvider;
     std::function<void()> m_onSendToRun;
     std::string m_selectedMachineId = "fluidnc";
     std::string m_selectedOrientation = "auto";
+    std::string m_selectedRoughingToolId;  // empty = auto
+    std::string m_selectedFinishingToolId; // empty = auto
 };
 
 } // namespace dw

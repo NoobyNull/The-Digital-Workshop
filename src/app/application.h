@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "../core/cam/cam_engine_runtime.h"
+#include "../core/cam/cam_tool_mapping.h"
 #include "../core/threading/loading_state.h"
 #include "../core/types.h"
 
@@ -329,12 +330,18 @@ class Application {
     std::shared_ptr<CamGenerationState> m_camGeneration =
         std::make_shared<CamGenerationState>();
     std::vector<std::pair<std::string, std::string>> m_camMachines;
+    std::vector<cam::EngineTool> m_camTools; // .vtdb projections, lazy-loaded
+    std::vector<std::pair<std::string, std::string>> m_camToolChoices;
+    bool m_camToolsLoaded = false;
     std::optional<i64> m_camGeneratedItemId;
 
     cam::CamEngineRuntime* ensureCamEngineRuntime();
     void startCamEngineAsync();
+    const std::vector<std::pair<std::string, std::string>>& camToolChoices();
     void startCamGenerationAsync(const std::string& machineId,
-                                 const std::string& orientation);
+                                 const std::string& orientation,
+                                 const std::string& roughingToolId,
+                                 const std::string& finishingToolId);
     void persistGeneratedCamGCode(const CamActiveSetup& setup, std::string gcodeText);
     void sendGeneratedCamGCodeToRun();
 

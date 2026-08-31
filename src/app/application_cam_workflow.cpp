@@ -12,6 +12,8 @@
 #include "core/cam/cam_engine_client.h"
 #include "core/cam/cam_engine_runtime.h"
 #include "core/cam/cam_job_spec.h"
+#include "core/cam/cam_tool_mapping.h"
+#include "core/database/tool_database.h"
 #include "core/config/config.h"
 #include "core/database/gcode_repository.h"
 #include "core/gcode/gcode_document.h"
@@ -81,8 +83,75 @@ void Application::startCamEngineAsync() {
     }).detach();
 }
 
+const std::vector<std::pair<std::string, std::string>>& Application::camToolChoices() {
+    if (m_camToolsLoaded || !m_toolDatabase)
+        return m_camToolChoices;
+    m_camToolsLoaded = true;
+    for (const auto& geometry : m_toolDatabase->findAllGeometries()) {
+        const VtdbCuttingData* cutting = nullptr;
+        std::optional<VtdbCuttingData> cuttingStorage;
+        const auto entities = m_toolDatabase->findEntitiesForGeometry(geometry.id);
+        if (!entities.empty()) {
+            // ponytail: first cutting-data row; per-material/machine choice
+            // arrives with the Phase 4 interpreter mapping table.
+            cuttingStorage =
+                m_toolDatabase->findCuttingDataById(entities.front().tool_cutting_data_id);
+            if (cuttingStorage)
+                cutting = &*cuttingStorage;
+        }
+        if (auto tool = cam::toEngineTool(geometry, cutting)) {
+            m_camToolChoices.emplace_back(tool->id, tool->name);
+            m_camTools.push_back(std::move(*tool));
+        }
+    }
+    return m_camToolChoices;
+}
+
+namespace {
+
+const cam::EngineTool* findToolById(const std::vector<cam::EngineTool>& tools,
+                                    const std::string& id) {
+    for (const auto& tool : tools) {
+        if (tool.id == id)
+            return &tool;
+    }
+    return nullptr;
+}
+
+// Auto policy: biggest usable flat endmill clears fastest; a ball nose
+// leaves the best 3D finish. Fall back across types when a library only
+// has one kind.
+const cam::EngineTool* autoRoughingTool(const std::vector<cam::EngineTool>& tools) {
+    const cam::EngineTool* best = nullptr;
+    for (const auto& tool : tools) {
+        if (tool.type != "flat_endmill")
+            continue;
+        if (!best || tool.diameter > best->diameter)
+            best = &tool;
+    }
+    return best;
+}
+
+const cam::EngineTool* autoFinishingTool(const std::vector<cam::EngineTool>& tools,
+                                         const cam::EngineTool* roughing) {
+    const cam::EngineTool* best = nullptr;
+    for (const auto& tool : tools) {
+        if (tool.type != "ball_endmill")
+            continue;
+        if (roughing && tool.diameter > roughing->diameter)
+            continue; // finishing coarser than clearing makes no sense
+        if (!best || tool.diameter > best->diameter)
+            best = &tool;
+    }
+    return best;
+}
+
+} // namespace
+
 void Application::startCamGenerationAsync(const std::string& machineId,
-                                          const std::string& orientation) {
+                                          const std::string& orientation,
+                                          const std::string& roughingToolId,
+                                          const std::string& finishingToolId) {
     if (!m_camActiveSetup) {
         ToastManager::instance().show(
             ToastType::Warning,
@@ -110,12 +179,34 @@ void Application::startCamGenerationAsync(const std::string& machineId,
     request.axisSwap = (orientation == "auto" || orientation.empty())
                            ? cam::layFlatAxisSwap(extents.x, extents.y, extents.z)
                            : orientation;
+
+    // Tools from the .vtdb library: explicit panel choice, else auto policy,
+    // else the builder's conservative fallbacks.
+    (void)camToolChoices();
+    const cam::EngineTool* rough = findToolById(m_camTools, roughingToolId);
+    if (rough == nullptr)
+        rough = autoRoughingTool(m_camTools);
+    const cam::EngineTool* finish = findToolById(m_camTools, finishingToolId);
+    if (finish == nullptr)
+        finish = autoFinishingTool(m_camTools, rough);
+    if (rough != nullptr)
+        request.roughingTool = *rough;
+    if (finish != nullptr)
+        request.finishingTool = *finish;
+
+    std::string plan = "Tools: " +
+                       (rough ? rough->name : std::string("6mm flat (fallback)")) +
+                       " clearing, " +
+                       (finish ? finish->name : std::string("3mm ball (fallback)")) +
+                       " finishing";
+    if (request.axisSwap != "none")
+        plan += "; laid flat (" + request.axisSwap + " swap)";
     const std::string spec = cam::buildDefaultSurfacingJobSpec(request);
     const CamActiveSetup setup = *m_camActiveSetup;
 
     auto* runtime = ensureCamEngineRuntime();
     auto* queue = m_mainThreadQueue.get();
-    std::thread([this, runtime, queue, state, spec, setup]() {
+    std::thread([this, runtime, queue, state, spec, setup, plan]() {
         auto status = runtime->ensureReady();
         if (!status.ready) {
             setGenerationMessage(*state, status.reason);
@@ -124,7 +215,7 @@ void Application::startCamGenerationAsync(const std::string& machineId,
             return;
         }
 
-        setGenerationMessage(*state, "Generating toolpaths...");
+        setGenerationMessage(*state, "Generating toolpaths... " + plan);
         const auto result = cam::CamEngineClient(cam::baseUrl(runtime->config())).submitJob(spec);
         if (!result.ok || result.gcode.empty()) {
             setGenerationMessage(*state,

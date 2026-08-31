@@ -211,6 +211,7 @@ set(DW_SOURCES
     core/cam/cam_engine_client.cpp
     core/cam/cam_engine_runtime.cpp
     core/cam/cam_job_spec.cpp
+    core/cam/cam_tool_mapping.cpp
 
     # Archive
     core/archive/archive.cpp

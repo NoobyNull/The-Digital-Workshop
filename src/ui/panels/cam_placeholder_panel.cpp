@@ -36,8 +36,12 @@ void CamPlaceholderPanel::setMachinesProvider(std::function<MachineList()> provi
     m_machinesProvider = std::move(provider);
 }
 
+void CamPlaceholderPanel::setToolChoicesProvider(std::function<MachineList()> provider) {
+    m_toolChoicesProvider = std::move(provider);
+}
+
 void CamPlaceholderPanel::setOnGenerate(
-    std::function<void(const std::string&, const std::string&)> onGenerate) {
+    std::function<void(const GenerateOptions&)> onGenerate) {
     m_onGenerate = std::move(onGenerate);
 }
 
@@ -75,7 +79,8 @@ void CamPlaceholderPanel::render() {
 
     const MachineList machines = m_machinesProvider ? m_machinesProvider() : MachineList{};
     if (machines.empty()) {
-        ImGui::TextDisabled("Machine: %s (engine defaults)", m_selectedMachineId.c_str());
+        ImGui::TextDisabled("Post-processor: %s (start the engine to list machines)",
+                            m_selectedMachineId.c_str());
     } else {
         const auto* selected = &m_selectedMachineId;
         std::string preview = *selected;
@@ -83,13 +88,41 @@ void CamPlaceholderPanel::render() {
             if (id == *selected)
                 preview = name;
         }
-        if (ImGui::BeginCombo("Machine", preview.c_str())) {
+        if (ImGui::BeginCombo("Post-processor", preview.c_str())) {
             for (const auto& [id, name] : machines) {
                 if (ImGui::Selectable(name.c_str(), id == m_selectedMachineId))
                     m_selectedMachineId = id;
             }
             ImGui::EndCombo();
         }
+    }
+
+    // Tool choices from the app's .vtdb library; "Auto" picks the largest
+    // usable flat endmill for clearing and a ball nose for finishing.
+    const MachineList tools =
+        m_toolChoicesProvider ? m_toolChoicesProvider() : MachineList{};
+    auto toolCombo = [&tools](const char* label, std::string& selectedId) {
+        std::string preview = selectedId.empty() ? "Auto (from library)" : selectedId;
+        for (const auto& [id, name] : tools) {
+            if (id == selectedId)
+                preview = name;
+        }
+        if (ImGui::BeginCombo(label, preview.c_str())) {
+            if (ImGui::Selectable("Auto (from library)", selectedId.empty()))
+                selectedId.clear();
+            for (const auto& [id, name] : tools) {
+                if (ImGui::Selectable(name.c_str(), id == selectedId))
+                    selectedId = id;
+            }
+            ImGui::EndCombo();
+        }
+    };
+    if (tools.empty()) {
+        ImGui::TextDisabled("Tools: none usable in the tool library — fallback "
+                            "6mm flat / 3mm ball will be used");
+    } else {
+        toolCombo("Clearing tool", m_selectedRoughingToolId);
+        toolCombo("Finishing tool", m_selectedFinishingToolId);
     }
 
     static constexpr std::pair<const char*, const char*> kOrientations[] = {
@@ -113,7 +146,12 @@ void CamPlaceholderPanel::render() {
 
     ImGui::BeginDisabled(setup.empty());
     if (ImGui::Button("Generate G-code") && m_onGenerate) {
-        m_onGenerate(m_selectedMachineId, m_selectedOrientation);
+        GenerateOptions options;
+        options.machineId = m_selectedMachineId;
+        options.orientation = m_selectedOrientation;
+        options.roughingToolId = m_selectedRoughingToolId;
+        options.finishingToolId = m_selectedFinishingToolId;
+        m_onGenerate(options);
     }
     ImGui::EndDisabled();
 
