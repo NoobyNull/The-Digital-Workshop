@@ -27,7 +27,9 @@ ProjectOpenItem newDirectCarveOperation(const ProjectOpenItem& model,
     operation.sourceKey = "direct_carve:model_item:" + std::to_string(model.id);
     operation.parentItemId = model.id;
     operation.status = ProjectOpenItemStatus::Planned;
-    operation.displayName = "Direct Carve: " + source.name;
+    // User-facing label says CAM; identifiers keep the direct_carve keys so
+    // existing projects resume against the same operation rows.
+    operation.displayName = "CAM: " + source.name;
     operation.intentJson = nlohmann::json{
         {"operation_kind", "direct_carve"},
         {"description", "Prepared from this exact project design."},
