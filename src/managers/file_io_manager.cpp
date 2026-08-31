@@ -61,9 +61,6 @@ void FileIOManager::importModel() {
         m_fileDialog->showNativeOpenMulti("Import Models",
                                           FileDialog::modelFilters(),
                                           [this](const std::vector<std::string>& paths) {
-                                        if (paths.empty())
-                                            return;
-
                                         std::vector<Path> importPaths;
                                         for (const auto& p : paths) {
                                             Path path{p};
@@ -74,12 +71,15 @@ void FileIOManager::importModel() {
                                                                collected.end());
                                         }
 
-                                        if (!importPaths.empty()) {
-                                            if (m_importOptionsDialog) {
-                                                m_importOptionsDialog->open(importPaths);
-                                            } else if (m_importQueue) {
-                                                m_importQueue->enqueue(importPaths);
-                                            }
+                                        if (importPaths.empty()) {
+                                            if (m_onImportSelectionAbandoned)
+                                                m_onImportSelectionAbandoned();
+                                            return;
+                                        }
+                                        if (m_importOptionsDialog) {
+                                            m_importOptionsDialog->open(importPaths);
+                                        } else if (m_importQueue) {
+                                            m_importQueue->enqueue(importPaths);
                                         }
                                     });
     }
@@ -90,14 +90,19 @@ void FileIOManager::importFolder() {
         return;
 
     m_fileDialog->showNativeFolder("Import Folder", [this](const std::string& path) {
-        if (path.empty())
+        if (path.empty()) {
+            if (m_onImportSelectionAbandoned)
+                m_onImportSelectionAbandoned();
             return;
+        }
 
         if (!m_mainThreadQueue || !m_progressDialog) {
             auto importPaths = import_paths::collectSupportedModelFiles(Path(path));
             if (importPaths.empty()) {
                 MessageDialog::warning("No Models Found",
                                        "No supported model files were found in that folder.");
+                if (m_onImportSelectionAbandoned)
+                    m_onImportSelectionAbandoned();
                 return;
             }
 
@@ -114,6 +119,7 @@ void FileIOManager::importFolder() {
         auto* progressDialog = m_progressDialog;
         auto* importOptionsDialog = m_importOptionsDialog;
         auto* importQueue = m_importQueue;
+        auto onAbandoned = m_onImportSelectionAbandoned;
 
         progressDialog->start("Scanning Import Folder", 0, true);
         progressDialog->setStatus(folderPath.string());
@@ -122,7 +128,8 @@ void FileIOManager::importFolder() {
                              mainThreadQueue,
                              progressDialog,
                              importOptionsDialog,
-                             importQueue]() {
+                             importQueue,
+                             onAbandoned]() {
             auto importPaths = import_paths::collectSupportedModelFiles(
                 folderPath, [progressDialog](const import_paths::ScanProgress& progress) {
                     if (progressDialog->isCancelled()) {
@@ -144,6 +151,7 @@ void FileIOManager::importFolder() {
                                       importOptionsDialog,
                                       importQueue,
                                       cancelled,
+                                      onAbandoned,
                                       importPaths = std::move(importPaths)]() mutable {
                 progressDialog->finish();
 
@@ -151,6 +159,8 @@ void FileIOManager::importFolder() {
                     ToastManager::instance().show(ToastType::Info,
                                                   "Folder Import Cancelled",
                                                   "Stopped scanning before import.");
+                    if (onAbandoned)
+                        onAbandoned();
                     return;
                 }
 
@@ -158,6 +168,8 @@ void FileIOManager::importFolder() {
                     MessageDialog::warning(
                         "No Models Found",
                         "No supported model files were found in that folder.");
+                    if (onAbandoned)
+                        onAbandoned();
                     return;
                 }
 

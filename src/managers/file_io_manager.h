@@ -99,6 +99,12 @@ class FileIOManager {
     void importFolder();
     void exportModel();
     void onFilesDropped(const std::vector<std::string>& paths);
+
+    // Fired when an import flow ends with nothing enqueued (picker cancelled,
+    // empty selection, scan cancelled) so callers can drop pending intent.
+    void setOnImportSelectionAbandoned(std::function<void()> callback) {
+        m_onImportSelectionAbandoned = std::move(callback);
+    }
     using ImportsReadyCallback =
         std::function<void(const std::vector<ImportedLibraryItem>& items)>;
     void processCompletedImports(ViewportPanel* viewport,
@@ -139,6 +145,7 @@ class FileIOManager {
     ImportQueue* m_importQueue;
     Workspace* m_workspace;
     FileDialog* m_fileDialog;
+    std::function<void()> m_onImportSelectionAbandoned;
     ThumbnailGenerator* m_thumbnailGenerator;
 
     // Pending completions queue for throttled processing (one per frame)

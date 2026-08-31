@@ -67,13 +67,13 @@ UIManager::~UIManager() {
 }
 
 void UIManager::init(LibraryManager* libraryManager,
-                     ProjectManager* projectManager,
+                     ProjectManager* /*projectManager*/,
                      MaterialManager* materialManager,
                      CostRepository* costRepo,
                      RateCategoryRepository* rateCatRepo,
-                     ModelRepository* modelRepo,
-                     GCodeRepository* gcodeRepo,
-                     CutPlanRepository* cutPlanRepo) {
+                     ModelRepository* /*modelRepo*/,
+                     GCodeRepository* /*gcodeRepo*/,
+                     CutPlanRepository* /*cutPlanRepo*/) {
     m_viewportPanel = std::make_unique<ViewportPanel>();
     m_libraryPanel = std::make_unique<LibraryPanel>(libraryManager);
     m_propertiesPanel = std::make_unique<PropertiesPanel>();

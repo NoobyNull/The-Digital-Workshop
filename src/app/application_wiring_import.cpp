@@ -76,6 +76,11 @@ void Application::wireImportPipeline() {
             });
         m_uiManager->importOptionsDialog()->setOnCancel(
             [this]() { m_pendingImportLibraryPurpose.reset(); });
+        // The dialog never opens when the picker is cancelled or the
+        // selection collects nothing; drop the pending purpose there too so
+        // a later unrelated import isn't routed into the Start Project flow.
+        m_fileIOManager->setOnImportSelectionAbandoned(
+            [this]() { m_pendingImportLibraryPurpose.reset(); });
     }
     if (m_uiManager->importSummaryDialog()) {
         m_uiManager->importSummaryDialog()->setOnReimport(

@@ -106,8 +106,12 @@ void Application::initializeProjectResume() {
                 m_projectManager->validateProjectStorage(projectId.value) ==
                     ProjectStorageValidationStatus::Ready &&
                 current && current->id() == projectId.value && directory &&
+                // record->filePath may be a durable network URL (smb://...)
+                // while root() is the mounted local path; resolve before
+                // comparing or network projects never match.
                 normalizedProjectPath(directory->root()) ==
-                    normalizedProjectPath(record->filePath);
+                    normalizedProjectPath(PathResolver::resolve(
+                        record->filePath, PathCategory::Projects));
             if (!storageMatches) {
                 (void)m_projectSessionIntegration->closeProject();
                 return workshop::ResumeActivationStatus::Rejected;
