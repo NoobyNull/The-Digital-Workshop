@@ -82,6 +82,7 @@ set(DW_SOURCES
     core/config/layout_preset.cpp
     core/config/layout_migration.cpp
     core/config/window_catalog.cpp
+    core/config/window_mode_policy.cpp
     core/config/settings_archive.cpp
 
     # Database

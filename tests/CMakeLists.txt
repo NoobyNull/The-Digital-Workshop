@@ -50,6 +50,7 @@ set(DW_TEST_SOURCES
     test_camera.cpp
     test_status_tips.cpp
     test_window_catalog.cpp
+    test_window_mode_policy.cpp
     test_layout_migration.cpp
     test_navigation_style.cpp
     test_view_cube_orientation.cpp
@@ -284,6 +285,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/config/layout_preset.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/layout_migration.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/window_catalog.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/config/window_mode_policy.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/app_paths.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/network_location.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/path_resolver.cpp
