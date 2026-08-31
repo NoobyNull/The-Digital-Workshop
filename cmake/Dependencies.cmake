@@ -232,6 +232,15 @@ if(TARGET nfd)
     target_include_directories(nfd SYSTEM INTERFACE ${nfd_SOURCE_DIR}/src/include)
 endif()
 
+# KIO-FUSE exposes durable network URLs as local filesystem paths over its
+# session D-Bus API. Digital Workshop calls that API directly on Linux so a
+# saved smb:// (or other KIO) location can be remounted after the KIO-FUSE
+# session token changes.
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(DW_DBUS REQUIRED IMPORTED_TARGET dbus-1)
+endif()
+
 # GoogleTest (for testing only)
 if(DW_BUILD_TESTS)
     FetchContent_Declare(

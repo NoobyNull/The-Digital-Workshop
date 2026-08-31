@@ -86,6 +86,7 @@ class ToolDatabase {
     Database& database() { return m_db; }
 
   private:
+    static bool migrateSchema(Database& db);
     Database m_db;
 };
 

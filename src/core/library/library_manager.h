@@ -94,6 +94,9 @@ class LibraryManager {
                            float cameraPitch = 30.0f,
                            float cameraYaw = 45.0f);
 
+    // Convert an existing image into the library thumbnail cache and update DB record.
+    bool setThumbnailFromImage(i64 modelId, const Path& imagePath);
+
     // G-code operations
     std::vector<GCodeRecord> getAllGCodeFiles();
     std::vector<GCodeRecord> searchGCodeFiles(const std::string& query);

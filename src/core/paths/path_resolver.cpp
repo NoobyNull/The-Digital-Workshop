@@ -2,27 +2,10 @@
 
 #include "../config/config.h"
 #include "app_paths.h"
-
-#include <string>
+#include "network_location.h"
 
 namespace dw {
 namespace PathResolver {
-
-namespace {
-
-Path remapStaleKioFuseSmbPath(const Path& path) {
-    std::string raw = path.string();
-    constexpr std::string_view marker = "/smb/synology.local/STL/";
-    auto pos = raw.find(marker);
-    if (pos == std::string::npos || raw.rfind("/run/user/", 0) != 0) {
-        return path;
-    }
-
-    std::string relative = raw.substr(pos + marker.size());
-    return Path("/mnt/synology-stl") / relative;
-}
-
-} // namespace
 
 Path categoryRoot(PathCategory cat) {
     auto& cfg = Config::instance();
@@ -45,13 +28,18 @@ Path resolve(const Path& storedPath, PathCategory cat) {
     if (storedPath.empty()) {
         return storedPath;
     }
+
+    if (network_location::isNetworkLocationCandidate(storedPath)) {
+        return network_location::isNetworkLocation(storedPath)
+                   ? network_location::resolve(storedPath)
+                   : Path{};
+    }
+
     if (storedPath.is_absolute()) {
-        if (!std::filesystem::exists(storedPath)) {
-            return remapStaleKioFuseSmbPath(storedPath);
-        }
         return storedPath;
     }
-    Path resolved = categoryRoot(cat) / storedPath;
+
+    Path resolved = network_location::resolve(categoryRoot(cat) / storedPath);
 
     // Materials live in two directories: user dir and bundled dir.
     // Check user dir first so user overrides take priority.
@@ -65,6 +53,12 @@ Path resolve(const Path& storedPath, PathCategory cat) {
 }
 
 Path makeStorable(const Path& absolutePath, PathCategory cat) {
+    if (network_location::isNetworkLocationCandidate(absolutePath)) {
+        if (auto durableUrl = network_location::durableUrl(absolutePath))
+            return Path(*durableUrl);
+        return {};
+    }
+
     if (absolutePath.empty() || !absolutePath.is_absolute()) {
         return absolutePath;
     }
@@ -80,6 +74,28 @@ Path makeStorable(const Path& absolutePath, PathCategory cat) {
         return absolutePath;
     }
     return relative;
+}
+
+Path durableLocation(const Path& storedPath, PathCategory cat) {
+    if (storedPath.empty()) {
+        return storedPath;
+    }
+
+    if (network_location::isNetworkLocationCandidate(storedPath)) {
+        if (auto durableUrl = network_location::durableUrl(storedPath))
+            return Path(*durableUrl);
+        return {};
+    }
+
+    Path resolved = resolve(storedPath, cat);
+    if (auto durableUrl = network_location::durableUrl(resolved)) {
+        return Path(*durableUrl);
+    }
+    return resolved;
+}
+
+Path fileManagerParent(const Path& storedPath, PathCategory cat) {
+    return network_location::parentLocation(durableLocation(storedPath, cat));
 }
 
 } // namespace PathResolver

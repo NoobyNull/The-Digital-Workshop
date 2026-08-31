@@ -11,6 +11,7 @@
 #include "../../core/carve/model_fitter.h"
 #include "../../core/database/model_repository.h"
 #include "../../core/gcode/gcode_types.h"
+#include "../../modules/viewport/viewport_presentation.h"
 #include "../../render/camera.h"
 #include "../../render/framebuffer.h"
 #include "../../render/renderer.h"
@@ -25,6 +26,12 @@ class Mesh;
 using MeshPtr = std::shared_ptr<Mesh>;
 class ContextMenuManager;
 enum class ViewCubeFace;
+
+enum class ViewportGCodeSource {
+    None,
+    FileBackedProgram,
+    DirectCarvePreview,
+};
 
 // 3D viewport panel
 class ViewportPanel : public Panel {
@@ -72,9 +79,15 @@ class ViewportPanel : public Panel {
     void setSenderWorkspaceActive(bool active) { m_senderWorkspaceActive = active; }
 
     // G-code line rendering
-    void setGCodeProgram(const gcode::Program& program);
+    void setGCodeProgram(
+        gcode::Program program,
+        ViewportGCodeSource source = ViewportGCodeSource::FileBackedProgram);
     void clearGCodeProgram();
+    bool clearGCodeProgramIfSource(ViewportGCodeSource source);
     bool hasGCode() const { return !m_gcodeProgram.path.empty(); }
+    [[nodiscard]] ViewportGCodeSource gcodeSource() const noexcept {
+        return m_gcodeSource;
+    }
 
     // Simulation playback
     void updateSimulation(float dt);
@@ -90,6 +103,13 @@ class ViewportPanel : public Panel {
     // Context menu manager integration
     void setContextMenuManager(ContextMenuManager* manager) { m_contextMenuManager = manager; }
 
+    // Presentation identity is supplied by the application boundary. The
+    // viewport renders the label but owns no Project or Library routing policy.
+    void setPresentationIdentity(viewport::PresentationIdentity identity);
+    [[nodiscard]] const viewport::PresentationIdentity& presentationIdentity() const {
+        return m_presentationIdentity;
+    }
+
   private:
     void registerContextMenuEntries();
     void handleInput();
@@ -97,7 +117,12 @@ class ViewportPanel : public Panel {
     void renderToolbar();
     void renderViewCube();
     void renderCncDro();
+    void renderIdentityOverlay();
     void snapCameraToView(ViewCubeFace face);
+    void rotateViewByQuarterTurns(int quarterTurns);
+    void tiltViewByQuarterTurns(int quarterTurns);
+    std::optional<Vec3> visibleModelCenter() const;
+    void centerCameraOnVisibleModel();
 
     // ViewCube geometry cache — invalidated when camera orientation changes
     struct ViewCubeCache {
@@ -144,6 +169,8 @@ class ViewportPanel : public Panel {
 
     // Context menu manager (not owned — managed by UIManager)
     ContextMenuManager* m_contextMenuManager = nullptr;
+    viewport::PresentationIdentity m_presentationIdentity =
+        viewport::PresentationIdentity::none();
 
     // FitParams model matrix (identity when no alignment active)
     Mat4 m_modelMatrix{1.0f};
@@ -178,6 +205,7 @@ class ViewportPanel : public Panel {
     void renderGCodeLines();
 
     gcode::Program m_gcodeProgram;
+    ViewportGCodeSource m_gcodeSource = ViewportGCodeSource::None;
     GLuint m_gcodeVAO = 0;
     GLuint m_gcodeVBO = 0;
     u32 m_gcRapidStart = 0, m_gcRapidCount = 0;

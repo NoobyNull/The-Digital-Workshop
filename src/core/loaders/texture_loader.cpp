@@ -9,7 +9,7 @@
 
 namespace dw {
 
-std::optional<TextureData> TextureLoader::loadPNG(const Path& path) {
+std::optional<TextureData> TextureLoader::loadImage(const Path& path) {
     int width = 0;
     int height = 0;
     int srcChannels = 0;
@@ -19,7 +19,7 @@ std::optional<TextureData> TextureLoader::loadPNG(const Path& path) {
         stbi_load(path.string().c_str(), &width, &height, &srcChannels, STBI_rgb_alpha);
     if (!raw) {
         log::errorf("TextureLoader",
-                    "Failed to load PNG '%s': %s",
+                    "Failed to load image '%s': %s",
                     path.string().c_str(),
                     stbi_failure_reason());
         return std::nullopt;
@@ -34,6 +34,10 @@ std::optional<TextureData> TextureLoader::loadPNG(const Path& path) {
     stbi_image_free(raw);
 
     return data;
+}
+
+std::optional<TextureData> TextureLoader::loadPNG(const Path& path) {
+    return loadImage(path);
 }
 
 std::optional<TextureData> TextureLoader::loadPNGFromMemory(const uint8_t* data, size_t size) {

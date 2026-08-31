@@ -1,121 +1,100 @@
 #pragma once
 
 #include <functional>
-#include <memory>
-#include <unordered_set>
+#include <optional>
+#include <string>
+#include <utility>
 
-#include "../../core/project/project.h"
-#include "../../core/types.h"
+#include "modules/project_plan/project_plan.h"
 #include "panel.h"
 
 namespace dw {
 
-// Forward declarations for repository types
-class ModelRepository;
-class GCodeRepository;
-class CutPlanRepository;
-class CostRepository;
+struct ProjectPanelSnapshot {
+    std::int64_t projectId = 0;
+    std::string projectName;
+    std::string description;
+    std::string notes;
+    bool modified = false;
+    bool hasModels = false;
+    project_plan::ProjectPlan plan;
+    std::optional<workshop::ProjectItemId> activeItem;
+};
 
-// Project panel for managing current project and its assets
+// Project is the persistent workshop context. This panel renders one Project
+// Plan snapshot and emits intents; it does not query asset repositories or own
+// preparation policy.
 class ProjectPanel : public Panel {
   public:
-    ProjectPanel(ProjectManager* projectManager,
-                 ModelRepository* modelRepo,
-                 GCodeRepository* gcodeRepo,
-                 CutPlanRepository* cutPlanRepo,
-                 CostRepository* costRepo);
+    ProjectPanel();
     ~ProjectPanel() override = default;
 
     void render() override;
-
-    // Callback when a project model is selected
-    using ModelSelectedCallback = std::function<void(int64_t modelId)>;
-    void setOnModelSelected(ModelSelectedCallback callback) {
-        m_onModelSelected = std::move(callback);
+    void clearSelection() {
+        m_notesProjectId = -1;
+        m_notesChanged = false;
     }
 
-    // Navigation callbacks for asset sections
-    using GCodeSelectedCallback = std::function<void(int64_t gcodeId)>;
-    using MaterialSelectedCallback = std::function<void(int64_t materialId)>;
-    using CostSelectedCallback = std::function<void(int64_t estimateId)>;
-    using CutPlanSelectedCallback = std::function<void(int64_t planId)>;
-    using OperationSelectedCallback = std::function<void(const ProjectOpenItem& item)>;
+    using ProjectPlanProvider = std::function<std::optional<ProjectPanelSnapshot>()>;
+    using ProjectPlanActionCallback =
+        std::function<void(const project_plan::NextAction&)>;
+    using ProjectItemActivatedCallback =
+        std::function<void(workshop::ProjectItemRef)>;
 
-    void setOnGCodeSelected(GCodeSelectedCallback cb) { m_onGCodeSelected = std::move(cb); }
-    void setOnMaterialSelected(MaterialSelectedCallback cb) {
-        m_onMaterialSelected = std::move(cb);
+    void setProjectPlanProvider(ProjectPlanProvider provider) {
+        m_projectPlanProvider = std::move(provider);
     }
-    void setOnCostSelected(CostSelectedCallback cb) { m_onCostSelected = std::move(cb); }
-    void setOnCutPlanSelected(CutPlanSelectedCallback cb) {
-        m_onCutPlanSelected = std::move(cb);
+    void setOnProjectPlanAction(ProjectPlanActionCallback callback) {
+        m_onProjectPlanAction = std::move(callback);
     }
-    void setOnOperationSelected(OperationSelectedCallback cb) {
-        m_onOperationSelected = std::move(cb);
+    void setOnProjectItemActivated(ProjectItemActivatedCallback callback) {
+        m_onProjectItemActivated = std::move(callback);
     }
 
-    // Callback when Open Project button is clicked in the panel
-    using OpenProjectCallback = std::function<void()>;
-    void setOpenProjectCallback(OpenProjectCallback callback) {
-        m_openProjectCallback = std::move(callback);
+    using OpenHomeCallback = std::function<void()>;
+    void setOpenHomeCallback(OpenHomeCallback callback) {
+        m_openHomeCallback = std::move(callback);
     }
 
-    // Callback when Save Project button is clicked in the panel
-    using SaveProjectCallback = std::function<void()>;
+    using CloseProjectCallback = std::function<void()>;
+    void setCloseProjectCallback(CloseProjectCallback callback) {
+        m_closeProjectCallback = std::move(callback);
+    }
+
+    using SaveProjectCallback = std::function<bool()>;
     void setSaveProjectCallback(SaveProjectCallback callback) {
         m_saveProjectCallback = std::move(callback);
     }
 
-    // Callback when Export .dwproj button is clicked
     using ExportProjectCallback = std::function<void()>;
-    void setExportProjectCallback(ExportProjectCallback cb) {
-        m_exportProjectCallback = std::move(cb);
+    void setExportProjectCallback(ExportProjectCallback callback) {
+        m_exportProjectCallback = std::move(callback);
     }
 
-    // Callback when a recent project is clicked
-    using RecentProjectCallback = std::function<void(const Path&)>;
-    void setOnOpenRecentProject(RecentProjectCallback cb) {
-        m_onOpenRecentProject = std::move(cb);
+    using UpdateNotesCallback =
+        std::function<void(std::int64_t projectId, std::string notes)>;
+    void setUpdateNotesCallback(UpdateNotesCallback callback) {
+        m_updateNotesCallback = std::move(callback);
     }
 
   private:
-    // Section renderers
-    void renderProjectInfo();
-    void renderWarningsSection(const std::vector<ProjectOpenItem>& items);
-    void renderOpenItemsSection();
-    void renderModelsSection();
-    void renderGCodeSection();
-    void renderMaterialsSection();
-    void renderCostsSection();
-    void renderCutPlansSection();
-    void renderNotesSection();
+    void renderProjectHeader(const ProjectPanelSnapshot& snapshot);
+    void renderProjectPlan(const ProjectPanelSnapshot& snapshot);
+    void renderProjectDetails(const ProjectPanelSnapshot& snapshot);
     void renderNoProject();
 
-    // Core
-    ProjectManager* m_projectManager;
-    int64_t m_selectedModelId = -1;
-
-    // Repositories
-    ModelRepository* m_modelRepo;
-    GCodeRepository* m_gcodeRepo;
-    CutPlanRepository* m_cutPlanRepo;
-    CostRepository* m_costRepo;
-
-    // Callbacks
-    ModelSelectedCallback m_onModelSelected;
-    GCodeSelectedCallback m_onGCodeSelected;
-    MaterialSelectedCallback m_onMaterialSelected;
-    CostSelectedCallback m_onCostSelected;
-    CutPlanSelectedCallback m_onCutPlanSelected;
-    OperationSelectedCallback m_onOperationSelected;
-    OpenProjectCallback m_openProjectCallback;
+    ProjectPlanProvider m_projectPlanProvider;
+    ProjectPlanActionCallback m_onProjectPlanAction;
+    ProjectItemActivatedCallback m_onProjectItemActivated;
+    OpenHomeCallback m_openHomeCallback;
+    CloseProjectCallback m_closeProjectCallback;
     SaveProjectCallback m_saveProjectCallback;
     ExportProjectCallback m_exportProjectCallback;
-    RecentProjectCallback m_onOpenRecentProject;
+    UpdateNotesCallback m_updateNotesCallback;
 
-    // Notes editing state
     char m_notesBuf[4096] = {};
     bool m_notesChanged = false;
-    int64_t m_notesProjectId = -1; // track which project notes are loaded for
+    std::int64_t m_notesProjectId = -1;
 };
 
 } // namespace dw

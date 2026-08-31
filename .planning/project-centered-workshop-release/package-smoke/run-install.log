@@ -1,0 +1,11 @@
+Verifying archive integrity...     0%     7%    14%    21%    28%    36%    43%    50%    57%    65%    72%    79%    86%    93%  100%   MD5 checksums are OK. All good.
+Uncompressing Digital Workshop 0.7.0 Installer     0%     7%    14%    21%    28%    36%    43%    50%    57%    65%    72%    79%    86%    93%  100%  
+Installing Digital Workshop to /tmp/tmp.WuQYTkxyJl/run-home/.local...
+
+Digital Workshop installed successfully.
+  Binaries:  /tmp/tmp.WuQYTkxyJl/run-home/.local/bin/digital_workshop
+             /tmp/tmp.WuQYTkxyJl/run-home/.local/bin/dw_settings
+  Desktop:   /tmp/tmp.WuQYTkxyJl/run-home/.local/share/applications/digitalworkshop.desktop
+  Uninstall: /tmp/tmp.WuQYTkxyJl/run-home/.local/share/digitalworkshop/uninstall.sh
+
+Make sure /tmp/tmp.WuQYTkxyJl/run-home/.local/bin is in your PATH.

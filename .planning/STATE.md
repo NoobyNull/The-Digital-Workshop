@@ -1,86 +1,133 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.5.0
-milestone_name: Codebase Cleanup & Simplification (COMPLETE)
-status: idle
-stopped_at: v0.5.0, v0.5.5, v0.6.0 all complete; open question = whether to spin a new phase for 8 oversized panel files
-last_updated: "2026-04-18T08:30:00.000Z"
-last_activity: 2026-04-18
+milestone: v0.8.0
+milestone_name: PureCutCNC CAM Integration
+status: phase-2-complete
+stopped_at: Phase 2 (Sidecar) complete; Phase 3 (bridge session API) next
+last_updated: "2026-08-23T00:00:00-07:00"
+last_activity: 2026-08-23
 progress:
-  total_phases: 29
-  completed_phases: 29
-  total_plans: 48
-  completed_plans: 48
+  total_phases: 7
+  completed_phases: 2
 ---
 
 # Project State
 
-## Project Reference
+## Previous milestone
 
-See: .planning/PROJECT.md (updated 2026-03-28)
+v0.7.0 (Project-Centered Workshop) is frozen as an engineering candidate at
+`d8c4763`. Its human-study release gate (the five-person novice River Sign
+protocol) was retired without being run: the guided carve flow it was meant
+to validate was removed as part of the v0.8.0 CAM rebuild described below.
 
-**Core value:** A woodworker can go from selecting a piece of wood and a cutting tool to safely running a CNC job with optimized feeds and speeds -- all without leaving the application.
-**Current focus:** None active. Open question: new phase for 8 oversized panel files?
+## Current Focus
+
+- **Milestone:** v0.8.0 PureCutCNC CAM Integration
+- **Design:** `.planning/CAM-INTEGRATION-DESIGN.md`
+- **Phase 1 plan:** `.planning/plans/2026-08-23-cam-phase1-yank.md`
+- **Requirements:** `.planning/REQUIREMENTS.md`
+- **Roadmap:** `.planning/ROADMAP.md`
+
+## Core Outcome
+
+Digital Workshop's internal CAM (Direct Carve toolpath generation) is
+replaced by the PureCutCNC engine, integrated as a sidecar process behind a
+fully native Dear ImGui "CAM" workspace — no webview, no browser UI. DW's
+GRBL sender, protected Run boundary, tool database, and machine profiles are
+unchanged; the engine only produces G-code for DW to stream.
 
 ## Current Position
 
-Phase: (none active)
-Plan: (none)
-Status: All planned phases complete. v0.5.0, v0.5.5, v0.6.0 milestones all closed.
-Last activity: 2026-04-18 (resume session — closed v0.5.0 Phase 30 + back-filled tracking for 27/28/29/35)
+- **Phase:** 2 of 7 — Sidecar (complete)
+- **Next phase:** 3 — Bridge session API
 
-Progress: v0.6.0 ✓ complete · v0.5.0 ✓ complete (all 4 phases) · v0.5.5 ✓ complete (all 5 phases)
+Phase 1 removed Digital Workshop's internal CAM outright, in dependency
+order, keeping the build and full suite green at every step:
 
-## Accumulated Context
+- Deleted the dead-in-production CAM leaves (4 analysis/recommendation
+  units with no remaining callers).
+- Cut the application over: `CamPlaceholderPanel` now owns the `direct_carve`
+  window ID (retitled "CAM"), and the UX-capture and River Sign study
+  machinery tied to the old guided flow were removed.
+- Deleted the Direct Carve panel family (26 files) and the Direct Carve CAM
+  core (32 files), while keeping `model_fitter` and `alignment_validator`
+  for the viewport, which do not belong to CAM.
+- Hardened the Run boundary ahead of the core deletion:
+  `DirectCarveRunEffectAdapter` now streams the fingerprint-verified
+  persisted G-code file directly via `CncController::startStream`
+  (`CarveJob` is gone), and run modal-state scanning uses the same filtered
+  lines that were actually streamed.
+- Kept, untouched, for the Phase 2+ rebuild: the `dw_carve_preparation`
+  module and `carve_preparation_adapter` (still live in resume/workshop
+  wiring), `RunCoordinator`/`RunPackage`, the GRBL controller, the tool
+  database, materials, and the viewport.
+- Pruned `cmake/SourceSizeCaps.cmake` of one dead entry
+  (`src/core/carve/toolpath_generator.cpp`, deleted with the CAM core) and
+  ratcheted `gcode_panel.cpp`'s cap down to its current (shrunk) size; the
+  source-size policy passes across all remaining production files.
+- Full suite: 1,485 tests passing, 2 env-gated skips, zero failures.
+  Sequential `ctest` is 100% pass (1,710 run / 2 skipped, including both
+  `river_sign_study` script tests, which still pass standalone against the
+  scripts on disk). Diagnostic-mode launch (`--diagnostic`) initializes
+  cleanly end to end, including the CNC simulator.
 
-### Decisions (carried forward)
+## Phase 2 (Sidecar) — complete
 
-- Unified viewport (Option B) — merge all 3D rendering into ViewportPanel
-- FitParams as alignment source of truth for model-gcode overlay
-- Coordinate swap centralization via `gcodeToRenderer()` helper (Phase 37)
-- GL state management via RAII guard pattern (GLStateScope in renderer.cpp, Phase 38)
-- CncController dedup via private `initializeConnection()` helper (Phase 39)
-- m_savedViewport zeroed on moved-from Framebuffer objects since viewport state is only valid between bind/unbind
+The biggest identified risk (Bun-compile of `manifold-3d`) resolved negative:
+single-file `bun build --compile` is not viable — the bundler breaks
+manifold's emscripten glue, and a compiled binary cannot resolve external
+packages at runtime. The sidecar instead ships as the Bun runtime plus a
+bundled `dw-cam-engine.js` (`bun build --target=bun --external manifold-3d`)
+plus `node_modules/manifold-3d` alongside it: ~103 MB payload on disk, ~98 MB
+compressed into the Linux `.run` installer (171 MB staged total).
+`packaging/build-cam-engine.sh` builds the payload; `packaging/smoke-cam-engine.sh`
+smokes it end to end (health check, `/api/machines`, a real toolpath job).
 
-### Milestone Status Reconciliation (2026-04-18)
+C++ side: `dw::cam::CamEngineClient` is a pure, never-throw response parser
+(adversarially verified and regression-tested), and `dw::cam::CamEngineRuntime`
+mirrors the existing `OllamaRuntime` pattern — fork/exec with cwd set to the
+payload directory, typed status reporting, SIGTERM-then-SIGKILL teardown.
+Unlike the template, a dead child is reaped with a WNOHANG waitpid before
+spawning, so a crashed engine restarts on the next start request (verified
+live: SIGKILL the child, `ensureReady()` respawns and reports ready; the
+same stale-pid flaw still exists in `OllamaRuntime` and is noted for a
+future pass). Windows process management is left unmanaged, matching the
+template's current scope. In the app, the runtime is lazily constructed on the CAM
+placeholder panel's "Start engine" button (synchronous `ensureReady()` for
+now; Phase 3 replaces this with the async bridge session API), and torn down
+in `Application::shutdown()`.
 
-- **v0.6.0 Technical Debt Cleanup — COMPLETE** — Phases 36, 37, 38, 39 all finished 2026-03-29 (ROADMAP ✓, VERIFICATION passed for Phase 36)
-- **v0.5.0 Codebase Cleanup — RESIDUAL** — Phase 29 executed 2026-03-04 (3 SUMMARY.md files, real code changes — ui_colors.h centralization, ImGui helpers, edit buffer util). ROADMAP still shows P29 unchecked — verification-and-tick pending. Phases 27, 28, 30 never executed. No phase directory exists for 28 or 30.
-- **v0.5.5 Unified 3D Viewport — RESIDUAL** — Phases 31, 32, 33, 34 complete. Phase 35 has a plan (35-01-PLAN.md) but never executed.
+Linux packaging installs the payload to
+`$PREFIX/share/digitalworkshop/resources/cam-engine`, where it's found by
+the existing bundled-resource fallback path with zero C++ changes. Full
+package smoke is green, including a real job run through the installed
+payload.
 
-### Known Fix Locations (from prior audits, still relevant)
+**Known gaps (recorded honestly, not yet closed):**
+- The TGZ/CPack package does **not** ship the cam-engine payload — it's
+  staged through a separate CMake `install()` mechanism than the `.run`
+  installer uses. This needs a design decision, targeted at the
+  packaging/CI phase, not Phase 3.
+- Windows/macOS payload staging is deferred to CI; `packaging/build-cam-engine.sh`
+  has a `--platform` flag stubbed for this but unimplemented.
+- The GUI "Start engine" button click itself is manually verifiable only —
+  no automated UI-level test exercises it.
 
-- Phase 27-01: raw `new`/`delete` in `ImportQueue` → `std::unique_ptr`
-- Phase 27-02: `file::move()` cross-filesystem fallback (copy+unlink) when rename() returns EXDEV
-- Phase 35-01: strip rendering infrastructure from `GCodePanel` (rendering now lives in `ViewportPanel` post-v0.5.5)
+## Next Action
 
-### Resume Sequence (2026-04-18 plan)
+Start Phase 3 (bridge session API): the full CAMJ surface exposed as bridge
+session endpoints, a parity checklist derived against the existing web UI,
+a schema-export endpoint to drive generated parameter forms, and contract
+tests against the sidecar.
 
-1. Reconcile STATE.md (this commit)
-2. Verify Phase 29 in code; tick ROADMAP if real; write 29-VERIFICATION.md
-3. Execute Phase 27 (2 plans)
-4. Execute Phase 35 (1 plan)
-5. Plan + execute Phase 30 (no directory yet)
-6. Plan + execute Phase 28 (no directory yet; includes viewport_panel.cpp 1654-line split)
-7. Emergent "mode confusion" UX findings — report after 3-6
-
-### Pending Todos
-
-- 2026-03-01: center progress-bar overlay text in direct-carve panel
-- 2026-03-08: improve visual distinction between model and toolpath in viewport
-
-### Blockers/Concerns
-
-- ROADMAP.md Phase 29 checkbox is stale (code shows done, box shows pending) — fixed in Step 2 of resume sequence
-- Phase 28 and Phase 30 have no planning directory yet — will be created via `/gsd-plan-phase` in sequence
-
-## Session Continuity
-
-Last session: 2026-04-18T07:40:00.000Z
-Stopped at: STATE.md reconciled; next action = Step 2 (verify Phase 29, update ROADMAP)
-Resume file: None
-Next action: Verify Phase 29 completion in code, then execute Phase 27
+Carried into Phase 3 from the Phase 2 final review: expose
+`paths::getExeDir()` in `app_paths.h` instead of the copied `/proc/self/exe`
+idiom in `application_wiring_cnc.cpp`; move the generic HTTP helpers out of
+the `dw::lmstudio` namespace once the session client widens their use;
+hoist the hardcoded 10 s reachability wait into `CamEngineConfig` if any
+synchronous path survives; revisit `curlPost`'s 120 s timeout before real
+jobs stream through the client.
 
 ---
-*State initialized: 2026-02-27*
-*Last reconciled: 2026-04-18 — v0.6.0 complete acknowledged, v0.5.0 residual reopened*
+*v0.8.0 Phase 1 (Yank) completed: 2026-08-23*
+*v0.8.0 Phase 2 (Sidecar) completed: 2026-08-23*

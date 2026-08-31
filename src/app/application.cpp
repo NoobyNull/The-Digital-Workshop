@@ -3,6 +3,8 @@
 // Panel/callback wiring lives in application_wiring.cpp.
 
 #include "app/application.h"
+#include "app/direct_carve_run_effect_adapter.h"
+#include "app/project_plan_run_truth_adapter.h"
 
 #include <cmath>
 #include <cstdio>
@@ -17,27 +19,28 @@
 #include <imgui_internal.h>
 #include <SDL.h>
 
+#include "app/project_session_integration.h"
+#include "app/project_resume_file_store.h"
+#include "app/library_workflow_coordinator.h"
 #include "app/workspace.h"
 #include "core/ai/ollama_runtime.h"
+#include "core/cnc/cnc_controller.h"
+#include "core/cnc/gamepad_input.h"
+#include "core/cnc/macro_manager.h"
+#include "core/cnc/serial_port.h"
 #include "core/config/config.h"
 #include "core/database/connection_pool.h"
 #include "core/database/cost_repository.h"
-#include "core/database/rate_category_repository.h"
 #include "core/database/cut_plan_repository.h"
-#include "core/optimizer/cut_list_file.h"
 #include "core/database/database.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/job_repository.h"
 #include "core/database/model_repository.h"
+#include "core/database/rate_category_repository.h"
+#include "core/database/schema.h"
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
-#include "core/database/schema.h"
 #include "core/export/project_export_manager.h"
-#include "core/cnc/cnc_controller.h"
-#include "core/cnc/serial_port.h"
-#include "core/cnc/gamepad_input.h"
-#include "core/carve/carve_job.h"
-#include "core/cnc/macro_manager.h"
 #include "core/graph/graph_manager.h"
 #include "core/import/background_tagger.h"
 #include "core/import/import_log.h"
@@ -47,6 +50,7 @@
 #include "core/materials/lmstudio_descriptor_service.h"
 #include "core/materials/lmstudio_material_service.h"
 #include "core/materials/material_manager.h"
+#include "core/optimizer/cut_list_file.h"
 #include "core/paths/app_paths.h"
 #include "core/project/project.h"
 #include "core/storage/storage_manager.h"
@@ -59,6 +63,9 @@
 #include "managers/config_manager.h"
 #include "managers/file_io_manager.h"
 #include "managers/ui_manager.h"
+#include "modules/project_session/project_session.h"
+#include "modules/workshop/project_resume.h"
+#include "modules/workshop/project_workshop_controller.h"
 #include "render/thumbnail_generator.h"
 #include "ui/dialogs/message_dialog.h"
 #include "ui/panels/gcode_panel.h"
@@ -80,13 +87,12 @@ void setWindowIcon(SDL_Window* window) {
     if (!icon || icon->pixels.empty() || icon->width <= 0 || icon->height <= 0)
         return;
 
-    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(
-        icon->pixels.data(),
-        icon->width,
-        icon->height,
-        32,
-        icon->width * 4,
-        SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(icon->pixels.data(),
+                                                              icon->width,
+                                                              icon->height,
+                                                              32,
+                                                              icon->width * 4,
+                                                              SDL_PIXELFORMAT_RGBA32);
     if (surface == nullptr) {
         log::warningf("Application", "Failed to create window icon surface: %s", SDL_GetError());
         return;
@@ -100,7 +106,6 @@ void initializeLoggingFiles(Config& cfg) {
     Path appLogPath = cfg.getLogFilePath().empty() ? paths::getLogPath() : cfg.getLogFilePath();
     (void)file::touch(appLogPath);
     (void)file::touch(paths::getDataDir() / "tagger.log");
-    (void)file::touch(cfg.getSupportDir() / ".import-log");
 
     if (cfg.getLogToFile()) {
         if (cfg.getLogFilePath().empty())
@@ -298,24 +303,30 @@ bool Application::init(bool diagnosticMode) {
 
     {
         TIME_STARTUP(timer, "Managers and Repositories");
-        m_libraryManager = std::make_unique<LibraryManager>(*m_database);
-        m_libraryManager->setGraphManager(m_graphManager.get());
-        m_projectManager = std::make_unique<ProjectManager>(*m_database);
+        initializeLibraryWorkflow();
         m_materialManager = std::make_unique<MaterialManager>(*m_database);
         m_materialManager->seedDefaults();
-        m_modelRepo = std::make_unique<ModelRepository>(*m_database);
-        m_gcodeRepo = std::make_unique<GCodeRepository>(*m_database);
         m_jobRepo = std::make_unique<JobRepository>(*m_database);
+        m_projectPlanRunTruthAdapter =
+            std::make_unique<ProjectPlanRunTruthAdapter>();
         m_cutPlanRepo = std::make_unique<CutPlanRepository>(*m_database);
         // Mark any 'running' jobs as interrupted (app crashed during previous session)
         {
             auto running = m_jobRepo->findByStatus("running");
             for (auto& job : running) {
-                m_jobRepo->finishJob(
-                    job.id, "interrupted", job.lastAckedLine, job.elapsedSeconds, job.errorCount, job.modalState);
+                if (m_jobRepo->finishJob(job.id,
+                                         "interrupted",
+                                         job.lastAckedLine,
+                                         job.elapsedSeconds,
+                                         job.errorCount,
+                                         job.modalState)) {
+                    m_projectPlanRunTruthAdapter->rememberInterruptedJob(job.id);
+                }
             }
             if (!running.empty())
-                log::infof("App", "Marked %zu interrupted job(s) from prior session", running.size());
+                log::infof("App",
+                           "Marked %zu interrupted job(s) from prior session",
+                           running.size());
         }
     }
 
@@ -336,13 +347,15 @@ bool Application::init(bool diagnosticMode) {
         }
 
         // Content-addressable blob store (STOR-01/02/03)
-        m_storageManager = std::make_unique<StorageManager>(
-            Config::instance().getSupportDir() / "blobs");
+        m_storageManager =
+            std::make_unique<StorageManager>(Config::instance().getSupportDir() / "blobs");
 
         // Clean up orphaned temp files from prior crashes (STOR-03)
         int orphansCleaned = m_storageManager->cleanupOrphanedTempFiles();
         if (orphansCleaned > 0) {
-            log::infof("App", "Cleaned up %d orphaned temp file(s) from prior session", orphansCleaned);
+            log::infof("App",
+                       "Cleaned up %d orphaned temp file(s) from prior session",
+                       orphansCleaned);
         }
 
         // Project export/import manager (.dwproj archives) (EXPORT-01/02)
@@ -372,54 +385,37 @@ bool Application::init(bool diagnosticMode) {
         m_gamepadInput = std::make_unique<GamepadInput>();
         m_gamepadInput->setCncController(m_cncController.get());
 
-        // Direct Carve job (heightmap, analysis, toolpath generation, streaming)
-        m_carveJob = std::make_unique<carve::CarveJob>();
-
         m_importQueue = std::make_unique<ImportQueue>(*m_connectionPool,
                                                       m_libraryManager.get(),
                                                       m_storageManager.get());
 
-        m_importLog = std::make_unique<ImportLog>(Config::instance().getSupportDir() / ".import-log");
+        m_importLog =
+            std::make_unique<ImportLog>(Config::instance().getSupportDir() / ".import-log");
         m_importQueue->setImportLog(m_importLog.get());
 
-        m_backgroundTagger = std::make_unique<BackgroundTagger>(
-            *m_connectionPool, m_libraryManager.get(), m_descriptorService.get());
-        m_backgroundTagger->setThumbnailViewCallback(
-            [this](int64_t modelId, ThumbnailView view) {
-                return regenerateSmartTagThumbnail(modelId, view);
-            });
+        m_backgroundTagger = std::make_unique<BackgroundTagger>(*m_connectionPool,
+                                                                m_libraryManager.get(),
+                                                                m_descriptorService.get());
+        m_backgroundTagger->setThumbnailViewCallback([this](int64_t modelId, ThumbnailView view) {
+            return regenerateSmartTagThumbnail(modelId, view);
+        });
     }
 
     {
         TIME_STARTUP(timer, "UI and File IO Managers");
         // Initialize managers
         m_uiManager = std::make_unique<UIManager>();
-        m_uiManager->init(
-            m_libraryManager.get(), m_projectManager.get(), m_materialManager.get(),
-            m_costRepo.get(), m_rateCatRepo.get(), m_modelRepo.get(), m_gcodeRepo.get(),
-            m_cutPlanRepo.get());
+        m_uiManager->init(m_libraryManager.get(),
+                          m_projectManager.get(),
+                          m_materialManager.get(),
+                          m_costRepo.get(),
+                          m_rateCatRepo.get(),
+                          m_modelRepo.get(),
+                          m_gcodeRepo.get(),
+                          m_cutPlanRepo.get());
 
-        m_fileIOManager = std::make_unique<FileIOManager>(m_database.get(),
-                                                          m_libraryManager.get(),
-                                                          m_projectManager.get(),
-                                                          m_importQueue.get(),
-                                                          m_workspace.get(),
-                                                          m_uiManager->fileDialog(),
-                                                          m_thumbnailGenerator.get(),
-                                                          m_projectExportManager.get());
-        m_fileIOManager->setProgressDialog(m_uiManager->progressDialog());
-        m_fileIOManager->setMainThreadQueue(m_mainThreadQueue.get());
-
-        m_fileIOManager->setThumbnailCallback(
-            [this](int64_t modelId, Mesh& mesh) { return generateMaterialThumbnail(modelId, mesh); });
-
-        m_fileIOManager->setGCodeCallback([this](const std::string& path) {
-            m_uiManager->setWorkspaceMode(WorkspaceMode::CNC);
-            if (auto* gcp = m_uiManager->gcodePanel()) {
-                gcp->setOpen(true);
-                gcp->loadFile(path);
-            }
-        });
+        initializeProjectSession();
+        initializeFileIOManager();
 
         m_configManager = std::make_unique<ConfigManager>(m_uiManager.get());
         m_configManager->init(m_window);
@@ -433,15 +429,7 @@ bool Application::init(bool diagnosticMode) {
 
         // Restore workspace state
         m_uiManager->restoreVisibilityFromConfig();
-        i64 lastModelId = cfg.getLastSelectedModelId();
-        if (lastModelId > 0 && m_libraryManager) {
-            auto record = m_libraryManager->getModel(lastModelId);
-            if (record) {
-                onModelSelected(lastModelId);
-                if (m_uiManager->libraryPanel())
-                    m_uiManager->libraryPanel()->setSelectedModelId(lastModelId);
-            }
-        }
+        (void)restoreProjectResume();
 
         // Detect incomplete import from prior session
         if (m_importLog->exists()) {
@@ -457,7 +445,7 @@ bool Application::init(bool diagnosticMode) {
     timer.printReport();
 
     m_initialized = true;
-    std::printf("Digital Workshop %s initialized\n", VERSION);
+    std::printf("Digital Workshop %s (%s) initialized\n", VERSION, GIT_HASH);
 
     if (diagnosticMode) {
         std::printf("Diagnostic mode: Exiting after initialization\n");
@@ -465,194 +453,6 @@ bool Application::init(bool diagnosticMode) {
     }
 
     return true;
-}
-
-int Application::run() {
-    if (!m_initialized) {
-        std::fprintf(stderr, "Application not initialized\n");
-        return 1;
-    }
-    m_running = true;
-    while (m_running) {
-        processEvents();
-        update();
-        render();
-    }
-    return 0;
-}
-
-void Application::quit() {
-    if (m_backgroundTagger && m_backgroundTagger->isActive()) {
-        m_backgroundTagger->stop();
-        m_uiManager->showTaggerShutdownDialog(&m_backgroundTagger->progress());
-        return;
-    }
-
-    // Check for unsaved temporary project
-    auto project = m_projectManager ? m_projectManager->currentProject() : nullptr;
-    if (project && project->isTemporary()) {
-        SavePromptDialog::prompt(
-            "Unsaved Project",
-            "The project \"" + project->name() +
-                "\" has not been saved. Save before quitting?",
-            [this](DialogResult result) {
-                if (result == DialogResult::Yes) {
-                    if (m_projectManager->saveTemporaryProject())
-                        m_running = false;
-                    // If save failed, stay open
-                } else if (result == DialogResult::No) {
-                    m_projectManager->discardTemporaryProject();
-                    m_running = false;
-                }
-                // Cancel: do nothing, stay running
-            });
-        return;
-    }
-
-    m_running = false;
-}
-
-auto Application::mainThreadQueue() -> MainThreadQueue& {
-    return *m_mainThreadQueue;
-}
-
-void Application::processEvents() {
-    std::vector<std::string> droppedFiles;
-    SDL_Event event;
-    while (SDL_PollEvent(&event) != 0) {
-        ImGui_ImplSDL2_ProcessEvent(&event);
-        if (event.type == SDL_QUIT)
-            quit();
-        if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
-            event.window.windowID == SDL_GetWindowID(m_window))
-            quit();
-        // Detect monitor change for DPI scaling
-        if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_MOVED) {
-            int newDisplay = SDL_GetWindowDisplayIndex(m_window);
-            if (newDisplay != m_displayIndex) {
-                m_displayIndex = newDisplay;
-                float newDpi = detectDpiScale();
-                if (std::abs(newDpi - m_dpiScale) > 0.01f) {
-                    m_dpiScale = newDpi;
-                    float newScale = m_dpiScale * Config::instance().getUiScale();
-                    rebuildFontAtlas(newScale);
-                }
-            }
-        }
-        if (event.type == SDL_DROPFILE && event.drop.file != nullptr) {
-            droppedFiles.emplace_back(event.drop.file);
-            SDL_free(event.drop.file);
-        }
-    }
-    if (!droppedFiles.empty())
-        m_fileIOManager->onFilesDropped(droppedFiles);
-}
-
-void Application::update() {
-    if (m_mainThreadQueue)
-        m_mainThreadQueue->processAll();
-    m_fileIOManager->processCompletedImports(m_uiManager->viewportPanel(),
-                                             m_uiManager->propertiesPanel(),
-                                             m_uiManager->libraryPanel(),
-                                             [this](bool show) {
-                                                 m_uiManager->showStartPage() = show;
-                                             });
-    // Update simulation in viewport panel each frame
-    if (m_uiManager && m_uiManager->viewportPanel())
-        m_uiManager->viewportPanel()->updateSimulation(ImGui::GetIO().DeltaTime);
-
-    // Poll gamepad input each frame
-    if (m_gamepadInput)
-        m_gamepadInput->update(ImGui::GetIO().DeltaTime);
-
-    // Periodic serial port scan — update available ports for menu bar Connect button
-    u64 ticks = SDL_GetTicks64();
-    if (ticks - m_lastPortScanMs >= 2000) {
-        m_lastPortScanMs = ticks;
-        auto detailedPorts = listSerialPortsDetailed();
-
-        // Build simple port list for existing UI (Connect dropdown)
-        std::vector<std::string> ports;
-        for (const auto& p : detailedPorts)
-            ports.push_back(p.device);
-        m_uiManager->setAvailablePorts(ports);
-
-        // Only toast for devices that look like CNC controllers
-        if (m_cncController->isSimulating() && m_lastConnectedPort.empty()) {
-            for (const auto& p : detailedPorts) {
-                if (!p.likelyCnc) continue;
-                std::string desc = p.device;
-                if (!p.product.empty()) desc += " (" + p.product + ")";
-                ToastManager::instance().show(
-                    ToastType::Info, "CNC Controller Detected", desc, 5.0f);
-                m_lastConnectedPort = "__notified__";
-                break; // Only toast once
-            }
-        }
-        if (ports.empty() && m_lastConnectedPort == "__notified__") {
-            m_lastConnectedPort.clear();
-        }
-    }
-
-    m_configManager->poll(ticks);
-}
-
-void Application::render() {
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
-    ImGui::NewFrame();
-
-    // Manual dockspace that reserves space for the status bar at the bottom
-    auto* viewport = ImGui::GetMainViewport();
-    float statusBarH = ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2;
-
-    ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, viewport->WorkSize.y - statusBarH));
-    ImGui::SetNextWindowViewport(viewport->ID);
-
-    ImGuiWindowFlags dockHostFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
-                                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-                                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
-                                     ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("DockSpaceHost", nullptr, dockHostFlags);
-    ImGui::PopStyleVar(3);
-
-    ImGuiID dockspaceId = ImGui::GetID("MainDockSpace");
-    ImGui::DockSpace(dockspaceId);
-    ImGui::End();
-    if (m_uiManager->isFirstFrame()) {
-        m_uiManager->clearFirstFrame();
-        if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr ||
-            ImGui::DockBuilderGetNode(dockspaceId)->IsLeafNode())
-            m_uiManager->setupDefaultDockLayout(dockspaceId);
-    }
-
-    m_uiManager->handleKeyboardShortcuts();
-    m_uiManager->renderMenuBar();
-    m_uiManager->renderPanels();
-    m_uiManager->renderBackgroundUI(ImGui::GetIO().DeltaTime, &m_loadingState);
-    m_uiManager->renderRestartPopup([this]() { m_configManager->relaunchApp(); });
-    m_uiManager->renderAboutDialog();
-
-    ImGui::Render();
-    int displayW = 0, displayH = 0;
-    SDL_GL_GetDrawableSize(m_window, &displayW, &displayH);
-    glViewport(0, 0, displayW, displayH);
-    auto& bgColor = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-    glClearColor(bgColor.x, bgColor.y, bgColor.z, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    SDL_GL_SwapWindow(m_window);
-
-    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-        SDL_GL_MakeCurrent(m_window, m_glContext);
-    }
 }
 
 void Application::shutdown() {
@@ -678,6 +478,12 @@ void Application::shutdown() {
     m_configManager.reset();
     m_fileIOManager.reset();
     m_uiManager.reset();
+    m_projectDisplayFacts.reset();
+    m_projectResumeCoordinator.reset();
+    m_projectResumeStore.reset();
+    m_projectWorkshopController.reset();
+    m_projectSessionIntegration.reset();
+    m_projectSession.reset();
 
     // Stop background tagger cleanly
     if (m_backgroundTagger) {
@@ -688,10 +494,11 @@ void Application::shutdown() {
     m_importLog.reset();
 
     // Destroy core systems
-    m_gamepadInput.reset();  // Must be destroyed before CncController
+    m_gamepadInput.reset(); // Must be destroyed before CncController
     m_toolboxRepo.reset();
     m_toolDatabase.reset();
     m_cncController.reset();
+    m_camEngineRuntime.reset();
     m_descriptorService.reset();
     m_ollamaRuntime.reset();
     m_lmStudioService.reset();
@@ -699,7 +506,9 @@ void Application::shutdown() {
     m_rateCatRepo.reset();
     m_cutPlanRepo.reset();
     m_cutListFile.reset();
+    m_projectPlanRunTruthAdapter.reset();
     m_jobRepo.reset();
+    m_libraryWorkflow.reset();
     m_gcodeRepo.reset();
     m_modelRepo.reset();
     m_importQueue.reset();

@@ -8,6 +8,23 @@
 
 namespace dw {
 
+namespace {
+
+f32 upper3x3Determinant(const Mat4& matrix) {
+    return matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[2][1] * matrix[1][2]) -
+           matrix[1][0] * (matrix[0][1] * matrix[2][2] - matrix[2][1] * matrix[0][2]) +
+           matrix[2][0] * (matrix[0][1] * matrix[1][2] - matrix[1][1] * matrix[0][2]);
+}
+
+Mat4 repairReflectedOrientation(Mat4 matrix) {
+    if (upper3x3Determinant(matrix) < -1e-6f) {
+        matrix = glm::scale(Mat4(1.0f), Vec3{1.0f, 1.0f, -1.0f}) * matrix;
+    }
+    return matrix;
+}
+
+} // namespace
+
 Mesh::Mesh(std::vector<Vertex> vertices, std::vector<u32> indices)
     : m_vertices(std::move(vertices)), m_indices(std::move(indices)) {
     recalculateBounds();
@@ -169,7 +186,9 @@ f32 Mesh::autoOrient() {
         }
     }
 
-    // Build permutation matrix: widthAxis->X, heightAxis->Y, depthAxis->Z
+    // Build an orientation matrix: widthAxis->X, heightAxis->Y, depthAxis->Z.
+    // A single axis swap is a reflection, so flip only the depth axis when the
+    // permutation is odd. That preserves the visible face's X/Y text layout.
     bool needsPermute = (widthAxis != 0 || heightAxis != 1 || depthAxis != 2);
     if (needsPermute) {
         Mat4 perm = Mat4(1.0f);
@@ -177,9 +196,19 @@ f32 Mesh::autoOrient() {
             for (int c = 0; c < 3; c++)
                 perm[c][r] = 0.0f;
 
+        int inversions = 0;
+        int axes[3] = {widthAxis, heightAxis, depthAxis};
+        for (int i = 0; i < 3; ++i) {
+            for (int j = i + 1; j < 3; ++j) {
+                if (axes[i] > axes[j])
+                    ++inversions;
+            }
+        }
+        f32 depthSign = (inversions % 2 == 0) ? 1.0f : -1.0f;
+
         perm[widthAxis][0] = 1.0f;
         perm[heightAxis][1] = 1.0f;
-        perm[depthAxis][2] = 1.0f;
+        perm[depthAxis][2] = depthSign;
 
         transform(perm);
         m_orientMatrix = perm;
@@ -214,11 +243,13 @@ void Mesh::applyStoredOrient(const Mat4& matrix) {
         return;
     }
 
+    Mat4 repaired = repairReflectedOrientation(matrix);
+
     // Only apply if not identity
-    if (matrix != Mat4(1.0f)) {
-        transform(matrix);
+    if (repaired != Mat4(1.0f)) {
+        transform(repaired);
     }
-    m_orientMatrix = matrix;
+    m_orientMatrix = repaired;
     m_autoOriented = true;
 }
 
@@ -227,7 +258,7 @@ void Mesh::revertAutoOrient() {
         return;
     }
 
-    // Inverse of a permutation matrix is its transpose
+    // Inverse of a signed axis-orientation matrix is its transpose.
     Mat4 inv = Mat4(1.0f);
     for (int r = 0; r < 3; r++)
         for (int c = 0; c < 3; c++)

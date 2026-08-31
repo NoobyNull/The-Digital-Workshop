@@ -11,6 +11,7 @@
 #include "core/export/project_export_manager.h"
 #include "core/import/import_queue.h"
 #include "core/import/import_task.h"
+#include "core/import/thumbnail_sidecar.h"
 #include "core/library/library_manager.h"
 #include "core/loaders/loader_factory.h"
 #include "core/project/project.h"
@@ -44,16 +45,22 @@ FileIOManager::FileIOManager(Database* database,
       m_importQueue(importQueue), m_workspace(workspace), m_fileDialog(fileDialog),
       m_thumbnailGenerator(thumbnailGenerator), m_projectExportManager(projectExportManager) {}
 
-FileIOManager::~FileIOManager() = default;
+FileIOManager::~FileIOManager() {
+    for (auto& thread : m_backgroundThreads) {
+        if (thread.joinable())
+            thread.join();
+    }
+}
+
+void FileIOManager::startBackgroundTask(std::function<void()> task) {
+    m_backgroundThreads.emplace_back(std::move(task));
+}
 
 void FileIOManager::importModel() {
     if (m_fileDialog) {
         m_fileDialog->showNativeOpenMulti("Import Models",
                                           FileDialog::modelFilters(),
                                           [this](const std::vector<std::string>& paths) {
-                                        if (paths.empty())
-                                            return;
-
                                         std::vector<Path> importPaths;
                                         for (const auto& p : paths) {
                                             Path path{p};
@@ -64,12 +71,15 @@ void FileIOManager::importModel() {
                                                                collected.end());
                                         }
 
-                                        if (!importPaths.empty()) {
-                                            if (m_importOptionsDialog) {
-                                                m_importOptionsDialog->open(importPaths);
-                                            } else if (m_importQueue) {
-                                                m_importQueue->enqueue(importPaths);
-                                            }
+                                        if (importPaths.empty()) {
+                                            if (m_onImportSelectionAbandoned)
+                                                m_onImportSelectionAbandoned();
+                                            return;
+                                        }
+                                        if (m_importOptionsDialog) {
+                                            m_importOptionsDialog->open(importPaths);
+                                        } else if (m_importQueue) {
+                                            m_importQueue->enqueue(importPaths);
                                         }
                                     });
     }
@@ -80,14 +90,19 @@ void FileIOManager::importFolder() {
         return;
 
     m_fileDialog->showNativeFolder("Import Folder", [this](const std::string& path) {
-        if (path.empty())
+        if (path.empty()) {
+            if (m_onImportSelectionAbandoned)
+                m_onImportSelectionAbandoned();
             return;
+        }
 
         if (!m_mainThreadQueue || !m_progressDialog) {
             auto importPaths = import_paths::collectSupportedModelFiles(Path(path));
             if (importPaths.empty()) {
                 MessageDialog::warning("No Models Found",
                                        "No supported model files were found in that folder.");
+                if (m_onImportSelectionAbandoned)
+                    m_onImportSelectionAbandoned();
                 return;
             }
 
@@ -104,15 +119,17 @@ void FileIOManager::importFolder() {
         auto* progressDialog = m_progressDialog;
         auto* importOptionsDialog = m_importOptionsDialog;
         auto* importQueue = m_importQueue;
+        auto onAbandoned = m_onImportSelectionAbandoned;
 
         progressDialog->start("Scanning Import Folder", 0, true);
         progressDialog->setStatus(folderPath.string());
 
-        std::thread([folderPath,
-                     mainThreadQueue,
-                     progressDialog,
-                     importOptionsDialog,
-                     importQueue]() {
+        startBackgroundTask([folderPath,
+                             mainThreadQueue,
+                             progressDialog,
+                             importOptionsDialog,
+                             importQueue,
+                             onAbandoned]() {
             auto importPaths = import_paths::collectSupportedModelFiles(
                 folderPath, [progressDialog](const import_paths::ScanProgress& progress) {
                     if (progressDialog->isCancelled()) {
@@ -134,6 +151,7 @@ void FileIOManager::importFolder() {
                                       importOptionsDialog,
                                       importQueue,
                                       cancelled,
+                                      onAbandoned,
                                       importPaths = std::move(importPaths)]() mutable {
                 progressDialog->finish();
 
@@ -141,6 +159,8 @@ void FileIOManager::importFolder() {
                     ToastManager::instance().show(ToastType::Info,
                                                   "Folder Import Cancelled",
                                                   "Stopped scanning before import.");
+                    if (onAbandoned)
+                        onAbandoned();
                     return;
                 }
 
@@ -148,6 +168,8 @@ void FileIOManager::importFolder() {
                     MessageDialog::warning(
                         "No Models Found",
                         "No supported model files were found in that folder.");
+                    if (onAbandoned)
+                        onAbandoned();
                     return;
                 }
 
@@ -157,7 +179,7 @@ void FileIOManager::importFolder() {
                     importQueue->enqueue(importPaths);
                 }
             });
-        }).detach();
+        });
     });
 }
 
@@ -198,6 +220,7 @@ void FileIOManager::onFilesDropped(const std::vector<std::string>& paths) {
     if (!m_importQueue)
         return;
 
+    const auto expectedProjectGeneration = captureProjectGeneration();
     std::vector<Path> importPaths;
     int skippedFiles = 0;
     for (const auto& p : paths) {
@@ -211,8 +234,12 @@ void FileIOManager::onFilesDropped(const std::vector<std::string>& paths) {
                 auto* exportMgr = m_projectExportManager;
                 auto* projMgr = m_projectManager;
                 auto* mtq = m_mainThreadQueue;
+                auto activationCallback = m_projectActivationCallback;
 
-                std::thread([archivePath, progressDlg, exportMgr, projMgr, mtq]() {
+                startBackgroundTask(
+                    [archivePath, progressDlg, exportMgr, projMgr, mtq,
+                     expectedProjectGeneration,
+                     activationCallback = std::move(activationCallback)]() mutable {
                     if (progressDlg)
                         progressDlg->start("Importing Project...", 1, true);
 
@@ -223,7 +250,9 @@ void FileIOManager::onFilesDropped(const std::vector<std::string>& paths) {
                                 progressDlg->advance(item);
                         });
 
-                    mtq->enqueue([result, progressDlg, projMgr, archivePath]() {
+                    mtq->enqueue([result, progressDlg, projMgr, archivePath,
+                                  expectedProjectGeneration,
+                                  activationCallback = std::move(activationCallback)]() mutable {
                         if (progressDlg)
                             progressDlg->finish();
 
@@ -231,9 +260,10 @@ void FileIOManager::onFilesDropped(const std::vector<std::string>& paths) {
                             // Auto-open the imported project
                             if (result.importedProjectId) {
                                 auto project = projMgr->open(*result.importedProjectId);
-                                if (project) {
-                                    projMgr->setCurrentProject(project);
-                                }
+                                if (project && activationCallback)
+                                    activationCallback(std::move(project),
+                                                       expectedProjectGeneration,
+                                                       {});
                             }
 
                             ToastManager::instance().show(ToastType::Success,
@@ -247,7 +277,7 @@ void FileIOManager::onFilesDropped(const std::vector<std::string>& paths) {
                                                           result.error);
                         }
                     });
-                }).detach();
+                    });
             }
             continue;
         }
@@ -296,9 +326,10 @@ void FileIOManager::onFilesDropped(const std::vector<std::string>& paths) {
 void FileIOManager::processCompletedImports(ViewportPanel* viewport,
                                             PropertiesPanel* properties,
                                             LibraryPanel* library,
-                                            std::function<void(bool)> setShowStartPage) {
+                                            ImportsReadyCallback onImportsReady) {
     // viewport param kept for API compatibility; focus does not change on import (user decision)
     (void)viewport;
+    (void)properties;
 
     if (!m_importQueue)
         return;
@@ -306,7 +337,22 @@ void FileIOManager::processCompletedImports(ViewportPanel* viewport,
     // Poll for newly completed tasks and add to pending queue
     auto newlyCompleted = m_importQueue->pollCompleted();
     if (!newlyCompleted.empty()) {
-        setShowStartPage(false);
+        if (onImportsReady) {
+            std::vector<ImportedLibraryItem> importedItems;
+            importedItems.reserve(newlyCompleted.size());
+            for (const auto& completed : newlyCompleted) {
+                const ImportedLibraryItem item{
+                    completed.importType == ImportType::Mesh
+                        ? ImportedLibraryItemKind::Model
+                        : ImportedLibraryItemKind::GCode,
+                    completed.importType == ImportType::Mesh ? completed.modelId
+                                                             : completed.gcodeId};
+                if (item.valid())
+                    importedItems.push_back(item);
+            }
+            if (!importedItems.empty())
+                onImportsReady(importedItems);
+        }
         m_pendingCompletions.insert(m_pendingCompletions.end(),
                                     std::make_move_iterator(newlyCompleted.begin()),
                                     std::make_move_iterator(newlyCompleted.end()));
@@ -319,14 +365,19 @@ void FileIOManager::processCompletedImports(ViewportPanel* viewport,
     auto task = std::move(m_pendingCompletions.front());
     m_pendingCompletions.erase(m_pendingCompletions.begin());
 
-    // Generate thumbnail on main thread (needs GL context)
-    if (task.mesh && m_libraryManager) {
+    // Prefer sidecar image thumbnails; fall back to generated GL thumbnails.
+    if (task.importType == ImportType::Mesh && task.mesh && m_libraryManager) {
         bool thumbnailOk = false;
-        if (m_thumbnailCallback) {
-            thumbnailOk = m_thumbnailCallback(task.modelId, *task.mesh);
-        } else if (m_thumbnailGenerator) {
-            m_libraryManager->setThumbnailGenerator(m_thumbnailGenerator);
-            thumbnailOk = m_libraryManager->generateThumbnail(task.modelId, *task.mesh);
+        if (auto sidecar = findSidecarThumbnailForImport(task.sourcePath)) {
+            thumbnailOk = m_libraryManager->setThumbnailFromImage(task.modelId, *sidecar);
+        }
+        if (!thumbnailOk) {
+            if (m_thumbnailCallback) {
+                thumbnailOk = m_thumbnailCallback(task.modelId, *task.mesh);
+            } else if (m_thumbnailGenerator) {
+                m_libraryManager->setThumbnailGenerator(m_thumbnailGenerator);
+                thumbnailOk = m_libraryManager->generateThumbnail(task.modelId, *task.mesh);
+            }
         }
         if (!thumbnailOk) {
             ToastManager::instance().show(ToastType::Warning,
@@ -344,279 +395,10 @@ void FileIOManager::processCompletedImports(ViewportPanel* viewport,
         library->refresh();
     }
 
-    // Set mesh on workspace for properties display (lightweight, not viewport render)
-    if (task.mesh) {
-        m_workspace->setFocusedMesh(task.mesh);
-        if (properties) {
-            properties->setMesh(task.mesh, task.record.name);
-        }
-    }
     if (m_pendingCompletions.empty() && m_importQueue && !m_importQueue->isActive() &&
         m_importPostProcessingCallback) {
         m_importPostProcessingCallback();
     }
-}
-
-void FileIOManager::newProject(std::function<void(bool)> setShowStartPage) {
-    auto current = m_projectManager->currentProject();
-    if (current && current->isModified()) {
-        MessageDialog::question(
-            "Unsaved Changes",
-            "Current project has unsaved changes. Save before creating a new project?",
-            [this, setShowStartPage](DialogResult result) {
-                if (result == DialogResult::Yes) {
-                    saveProject();
-                }
-                if (result != DialogResult::No && result != DialogResult::Yes) {
-                    return; // Dialog closed without answering
-                }
-                auto project = m_projectManager->create("New Project");
-                m_projectManager->setCurrentProject(project);
-                setShowStartPage(false);
-            });
-        return;
-    }
-    auto project = m_projectManager->create("New Project");
-    m_projectManager->setCurrentProject(project);
-    setShowStartPage(false);
-}
-
-void FileIOManager::openProject(std::function<void(bool)> setShowStartPage) {
-    if (!m_fileDialog)
-        return;
-
-    auto current = m_projectManager->currentProject();
-    if (current && current->isModified()) {
-        MessageDialog::question(
-            "Unsaved Changes",
-            "Current project has unsaved changes. Save before opening another project?",
-            [this, setShowStartPage](DialogResult result) {
-                if (result == DialogResult::Yes) {
-                    saveProject();
-                }
-                if (result != DialogResult::No && result != DialogResult::Yes) {
-                    return;
-                }
-                openProject(setShowStartPage);
-            });
-        return;
-    }
-
-    m_fileDialog->showOpen("Open Project",
-                           FileDialog::projectFilters(),
-                           [this, setShowStartPage](const std::string& path) {
-                               if (path.empty())
-                                   return;
-
-                               // Search existing projects for one matching this file path
-                               auto projects = m_projectManager->listProjects();
-                               for (const auto& record : projects) {
-                                   if (record.filePath == Path(path)) {
-                                       auto project = m_projectManager->open(record.id);
-                                       if (project) {
-                                           m_projectManager->setCurrentProject(project);
-                                           Config::instance().addRecentProject(Path(path));
-                                           Config::instance().save();
-                                           setShowStartPage(false);
-                                           return;
-                                       }
-                                   }
-                               }
-
-                               // No existing project found at that path - create a new one
-                               // and associate the file path
-                               Path filePath(path);
-                               std::string name = filePath.stem().string();
-                               auto project = m_projectManager->create(name);
-                               if (project) {
-                                   project->setFilePath(filePath);
-                                   m_projectManager->setCurrentProject(project);
-                                   Config::instance().addRecentProject(filePath);
-                                   Config::instance().save();
-                                   setShowStartPage(false);
-                               }
-                           });
-}
-
-void FileIOManager::saveProject() {
-    auto project = m_projectManager->currentProject();
-    if (!project) {
-        MessageDialog::warning("No Project", "No project is currently open.");
-        return;
-    }
-
-    if (m_projectManager->save(*project) && !project->filePath().empty()) {
-        Config::instance().addRecentProject(project->filePath());
-        Config::instance().save();
-    }
-}
-
-void FileIOManager::openRecentProject(const Path& path,
-                                      std::function<void(bool)> setShowStartPage) {
-    if (!m_projectManager)
-        return;
-
-    auto projects = m_projectManager->listProjects();
-    for (const auto& record : projects) {
-        if (record.filePath == path) {
-            auto project = m_projectManager->open(record.id);
-            if (project) {
-                m_projectManager->setCurrentProject(project);
-                Config::instance().addRecentProject(path);
-                Config::instance().save();
-                setShowStartPage(false);
-                return;
-            }
-        }
-    }
-
-    // Project not found in DB -- create new from path
-    std::string name = path.stem().string();
-    auto project = m_projectManager->create(name);
-    if (project) {
-        project->setFilePath(path);
-        m_projectManager->setCurrentProject(project);
-        Config::instance().addRecentProject(path);
-        Config::instance().save();
-        setShowStartPage(false);
-    }
-}
-
-void FileIOManager::exportProjectArchive() {
-    if (!m_projectExportManager) {
-        MessageDialog::warning("Export Unavailable", "Project export is not available.");
-        return;
-    }
-
-    auto project = m_projectManager->currentProject();
-    if (!project) {
-        MessageDialog::warning("No Project", "No project is currently open.");
-        return;
-    }
-
-    if (project->modelIds().empty()) {
-        MessageDialog::warning("No Models", "Add models to the project before exporting.");
-        return;
-    }
-
-    if (!m_fileDialog)
-        return;
-
-    std::string defaultName = project->name() + ".dwproj";
-
-    m_fileDialog->showSave(
-        "Export Project Archive",
-        FileDialog::projectFilters(),
-        defaultName,
-        [this, project](const std::string& path) {
-            if (path.empty())
-                return;
-
-            Path outputPath{path};
-
-            // Ensure .dwproj extension
-            if (outputPath.extension() != ".dwproj") {
-                outputPath += ".dwproj";
-            }
-
-            auto* progressDlg = m_progressDialog;
-            auto* exportMgr = m_projectExportManager;
-            auto* mtq = m_mainThreadQueue;
-            int modelCount = project->modelCount();
-
-            if (progressDlg)
-                progressDlg->start("Exporting Project...", modelCount, true);
-
-            std::thread([project, outputPath, progressDlg, exportMgr, mtq]() {
-                auto result = exportMgr->exportProject(
-                    *project,
-                    outputPath,
-                    [progressDlg](int /*current*/, int /*total*/, const std::string& item) {
-                        if (progressDlg)
-                            progressDlg->advance(item);
-                    });
-
-                mtq->enqueue([result, progressDlg, outputPath]() {
-                    if (progressDlg)
-                        progressDlg->finish();
-
-                    if (result.success) {
-                        ToastManager::instance().show(ToastType::Success,
-                                                      "Project Exported",
-                                                      outputPath.filename().string() + " (" +
-                                                          std::to_string(result.modelCount) +
-                                                          " models)");
-                    } else {
-                        ToastManager::instance().show(ToastType::Error,
-                                                      "Export Failed",
-                                                      result.error);
-                    }
-                });
-            }).detach();
-        });
-}
-
-void FileIOManager::importProjectArchive(std::function<void(bool)> setShowStartPage) {
-    if (!m_projectExportManager) {
-        MessageDialog::warning("Import Unavailable", "Project import is not available.");
-        return;
-    }
-
-    if (!m_fileDialog)
-        return;
-
-    m_fileDialog->showOpen(
-        "Import Project Archive",
-        FileDialog::projectFilters(),
-        [this, setShowStartPage](const std::string& path) {
-            if (path.empty())
-                return;
-
-            Path archivePath{path};
-            auto* progressDlg = m_progressDialog;
-            auto* exportMgr = m_projectExportManager;
-            auto* projMgr = m_projectManager;
-            auto* mtq = m_mainThreadQueue;
-
-            if (progressDlg)
-                progressDlg->start("Importing Project...", 1, true);
-
-            std::thread([archivePath, progressDlg, exportMgr, projMgr, mtq, setShowStartPage]() {
-                auto result = exportMgr->importProject(
-                    archivePath,
-                    [progressDlg](int /*current*/, int /*total*/, const std::string& item) {
-                        if (progressDlg)
-                            progressDlg->advance(item);
-                    });
-
-                mtq->enqueue([result, progressDlg, projMgr, archivePath, setShowStartPage]() {
-                    if (progressDlg)
-                        progressDlg->finish();
-
-                    if (result.success) {
-                        setShowStartPage(false);
-
-                        // Auto-open the imported project
-                        if (result.importedProjectId) {
-                            auto project = projMgr->open(*result.importedProjectId);
-                            if (project) {
-                                projMgr->setCurrentProject(project);
-                            }
-                        }
-
-                        ToastManager::instance().show(ToastType::Success,
-                                                      "Project Imported",
-                                                      archivePath.stem().string() + " (" +
-                                                          std::to_string(result.modelCount) +
-                                                          " models)");
-                    } else {
-                        ToastManager::instance().show(ToastType::Error,
-                                                      "Import Failed",
-                                                      result.error);
-                    }
-                });
-            }).detach();
-        });
 }
 
 } // namespace dw

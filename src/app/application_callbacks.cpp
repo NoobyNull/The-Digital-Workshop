@@ -16,13 +16,13 @@
 #include "core/materials/material_archive.h"
 #include "core/materials/material_manager.h"
 #include "core/paths/path_resolver.h"
+#include "core/project/project.h"
 #include "core/threading/main_thread_queue.h"
 #include "core/utils/log.h"
 #include <glad/gl.h>
 
 #include "managers/ui_manager.h"
 #include "render/texture.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/library_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/properties_panel.h"
@@ -31,43 +31,35 @@
 
 namespace dw {
 
-void Application::onModelSelected(int64_t modelId) {
-    if (!m_libraryManager) return;
+void Application::onModelSelected(int64_t modelId,
+                                  std::function<void(ModelSelectionStatus)> completion,
+                                  std::function<bool()> resultGuard,
+                                  ModelLoadPurpose purpose) {
+    if (!m_libraryManager) {
+        if (completion)
+            completion(ModelSelectionStatus::Failed);
+        return;
+    }
 
-    if (m_focusedModelId > 0 && m_uiManager->viewportPanel()) {
+    if (purpose == ModelLoadPurpose::ProjectContent && m_focusedModelId > 0 &&
+        !m_focusedModelIsLibraryPreview &&
+        m_uiManager->viewportPanel()) {
         auto camState = m_uiManager->viewportPanel()->getCameraState();
         ModelRepository repo(*m_database);
         repo.updateCameraState(m_focusedModelId, camState);
     }
 
     auto record = m_libraryManager->getModel(modelId);
-    if (!record) return;
-    m_focusedModelId = modelId;
-
-    if (m_materialManager) {
-        auto assignedMaterial = m_materialManager->getModelMaterial(modelId);
-        if (assignedMaterial) {
-            loadMaterialTextureForModel(modelId);
-            if (m_uiManager->propertiesPanel())
-                m_uiManager->propertiesPanel()->setMaterial(*assignedMaterial);
-        } else {
-            i64 defaultId = Config::instance().getDefaultMaterialId();
-            if (defaultId > 0 && m_materialManager->getMaterial(defaultId)) {
-                assignMaterialToCurrentModel(defaultId);
-            } else {
-                auto allMaterials = m_materialManager->getAllMaterials();
-                if (!allMaterials.empty()) {
-                    assignMaterialToCurrentModel(allMaterials.front().id);
-                } else {
-                    m_activeMaterialTexture.reset();
-                    m_activeMaterialId = -1;
-                    if (m_uiManager->propertiesPanel())
-                        m_uiManager->propertiesPanel()->clearMaterial();
-                }
-            }
-        }
+    if (!record) {
+        if (completion)
+            completion(ModelSelectionStatus::Failed);
+        return;
     }
-
+    if (purpose == ModelLoadPurpose::ProjectContent) {
+        m_focusedModelId = modelId;
+        m_focusedModelIsLibraryPreview = false;
+    }
+    const auto projectIdentity = activeProjectIdentity();
     uint64_t gen = ++m_loadingState.generation;
     m_loadingState.set(record->name);
     if (m_loadThread.joinable()) m_loadThread.join();
@@ -79,7 +71,8 @@ void Application::onModelSelected(int64_t modelId) {
     auto storedCamera = record->cameraState;
 
     m_loadThread = std::thread(
-        [this, filePath, name, gen, modelId, storedOrientYaw, storedOrientMatrix, storedCamera]() {
+        [this, filePath, name, gen, projectIdentity, modelId, storedOrientYaw,
+         storedOrientMatrix, storedCamera, completion, resultGuard, purpose]() {
             auto loadResult = LoaderFactory::load(filePath);
             if (!loadResult) {
                 log::errorf("Application",
@@ -87,21 +80,37 @@ void Application::onModelSelected(int64_t modelId) {
                             name.c_str(),
                             filePath.string().c_str(),
                             loadResult.error.c_str());
-                m_mainThreadQueue->enqueue([this, name, error = loadResult.error, gen]() {
-                    if (gen == m_loadingState.generation.load()) {
-                        m_loadingState.reset();
-                        m_workspace->clearFocusedMesh();
-                        if (m_uiManager->viewportPanel())
-                            m_uiManager->viewportPanel()->setMesh(nullptr);
-                        if (m_uiManager->propertiesPanel())
-                            m_uiManager->propertiesPanel()->clearMesh();
-                        if (m_uiManager->materialsPanel())
-                            m_uiManager->materialsPanel()->setModelLoaded(false);
+                m_mainThreadQueue->enqueue([this, name, error = loadResult.error, gen,
+                                            projectIdentity, modelId, completion, resultGuard,
+                                            purpose]() {
+                    if (!modelLoadStillCurrent(gen, projectIdentity, modelId, purpose)) {
+                        if (completion)
+                            completion(ModelSelectionStatus::Superseded);
+                        return;
                     }
+                    if (resultGuard && !resultGuard()) {
+                        m_loadingState.reset();
+                        if (completion)
+                            completion(ModelSelectionStatus::Superseded);
+                        return;
+                    }
+                    m_loadingState.reset();
+                    m_workspace->clearFocusedMesh();
+                    if (m_uiManager->viewportPanel()) {
+                        m_uiManager->viewportPanel()->setMesh(nullptr);
+                        m_uiManager->viewportPanel()->setPresentationIdentity(
+                            viewport::PresentationIdentity::none());
+                    }
+                    if (m_uiManager->propertiesPanel())
+                        m_uiManager->propertiesPanel()->clearMesh();
+                    if (m_uiManager->materialsPanel())
+                        m_uiManager->materialsPanel()->setModelLoaded(false);
                     ToastManager::instance().show(
                         ToastType::Error,
                         "Model Open Failed",
                         name + ": " + (error.empty() ? "failed to load file" : error));
+                    if (completion)
+                        completion(ModelSelectionStatus::Failed);
                 });
                 return;
             }
@@ -113,34 +122,90 @@ void Application::onModelSelected(int64_t modelId) {
                     orientYaw = *storedOrientYaw;
                 } else {
                     orientYaw = loadResult.mesh->autoOrient();
-                    ScopedConnection conn(*m_connectionPool);
-                    ModelRepository repo(*conn);
-                    repo.updateOrient(modelId, orientYaw, loadResult.mesh->getOrientMatrix());
+                    if (purpose != ModelLoadPurpose::LibraryPreview) {
+                        ScopedConnection conn(*m_connectionPool);
+                        ModelRepository repo(*conn);
+                        repo.updateOrient(modelId, orientYaw, loadResult.mesh->getOrientMatrix());
+                    }
                 }
             }
             auto mesh = loadResult.mesh;
-            m_mainThreadQueue->enqueue([this, mesh, name, filePath, gen, orientYaw, storedCamera]() {
-                if (gen != m_loadingState.generation.load()) return;
+            m_mainThreadQueue->enqueue([this, mesh, name, filePath, gen,
+                                        projectIdentity, modelId, orientYaw,
+                                        storedCamera, completion, resultGuard, purpose]() {
+                if (!modelLoadStillCurrent(gen, projectIdentity, modelId, purpose)) {
+                    if (completion)
+                        completion(ModelSelectionStatus::Superseded);
+                    return;
+                }
+                if (resultGuard && !resultGuard()) {
+                    m_loadingState.reset();
+                    if (completion)
+                        completion(ModelSelectionStatus::Superseded);
+                    return;
+                }
                 m_loadingState.reset();
+                m_focusedModelId = modelId;
+                m_focusedModelIsLibraryPreview =
+                    purpose == ModelLoadPurpose::LibraryPreview;
                 m_workspace->setFocusedMesh(mesh);
-                if (m_uiManager->viewportPanel())
-                    m_uiManager->viewportPanel()->setPreOrientedMesh(mesh, orientYaw, storedCamera);
+                if (auto* viewportPanel = m_uiManager->viewportPanel()) {
+                    viewportPanel->setPreOrientedMesh(mesh, orientYaw, storedCamera);
+                    if (purpose == ModelLoadPurpose::LibraryPreview) {
+                        std::string projectLabel;
+                        const auto project =
+                            m_projectManager ? m_projectManager->currentProject() : nullptr;
+                        if (project)
+                            projectLabel = project->name();
+                        viewportPanel->setPresentationIdentity(
+                            viewport::PresentationIdentity::libraryPreview(
+                                std::move(projectLabel), name));
+                    } else {
+                        viewportPanel->setPresentationIdentity(
+                            viewport::PresentationIdentity::none());
+                    }
+                }
                 if (m_uiManager->propertiesPanel())
                     m_uiManager->propertiesPanel()->setMesh(mesh, name);
+                applySelectedModelMaterial(
+                    modelId, purpose != ModelLoadPurpose::LibraryPreview);
                 if (m_uiManager->materialsPanel())
                     m_uiManager->materialsPanel()->setModelLoaded(true);
-                if (m_uiManager->directCarvePanel() && mesh) {
-                    GLuint thumb = 0;
-                    if (m_uiManager->libraryPanel())
-                        thumb = m_uiManager->libraryPanel()->getThumbnailTextureForModel(
-                            m_focusedModelId);
-                    m_uiManager->directCarvePanel()->onModelLoaded(
-                        mesh->vertices(), mesh->indices(),
-                        mesh->bounds().min, mesh->bounds().max,
-                        name, filePath, thumb);
-                }
+                if (completion)
+                    completion(ModelSelectionStatus::Loaded);
             });
         });
+}
+
+void Application::applySelectedModelMaterial(int64_t modelId,
+                                             bool assignFallbackMaterial) {
+    if (!m_materialManager)
+        return;
+    const auto assignedMaterial = m_materialManager->getModelMaterial(modelId);
+    if (assignedMaterial) {
+        loadMaterialTextureForModel(modelId);
+        if (m_uiManager->propertiesPanel())
+            m_uiManager->propertiesPanel()->setMaterial(*assignedMaterial);
+        return;
+    }
+    if (assignFallbackMaterial) {
+        const i64 defaultId = Config::instance().getDefaultMaterialId();
+        if (defaultId > 0 && m_materialManager->getMaterial(defaultId)) {
+            assignMaterialToCurrentModel(defaultId);
+            return;
+        }
+        const auto allMaterials = m_materialManager->getAllMaterials();
+        if (!allMaterials.empty()) {
+            assignMaterialToCurrentModel(allMaterials.front().id);
+            return;
+        }
+    }
+    m_activeMaterialTexture.reset();
+    m_activeMaterialId = -1;
+    if (m_uiManager->viewportPanel())
+        m_uiManager->viewportPanel()->setMaterialTexture(nullptr);
+    if (m_uiManager->propertiesPanel())
+        m_uiManager->propertiesPanel()->clearMaterial();
 }
 
 void Application::assignMaterialToCurrentModel(int64_t materialId) {
@@ -349,7 +414,8 @@ bool Application::applyAiOrientationCorrection(int64_t modelId, int clockwiseDeg
     f32 orientYaw = record->orientYaw.value_or(0.0f);
     Mat4 baseMatrix(1.0f);
     if (record->orientMatrix) {
-        baseMatrix = *record->orientMatrix;
+        loadResult.mesh->applyStoredOrient(*record->orientMatrix);
+        baseMatrix = loadResult.mesh->getOrientMatrix();
     } else {
         orientYaw = loadResult.mesh->autoOrient();
         baseMatrix = loadResult.mesh->getOrientMatrix();

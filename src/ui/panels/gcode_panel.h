@@ -3,10 +3,12 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "../../core/gcode/gcode_analyzer.h"
+#include "../../core/gcode/gcode_document.h"
 #include "../../core/gcode/gcode_parser.h"
 #include "../../core/gcode/machine_profile.h"
 #include "../../core/cnc/cnc_types.h"
@@ -23,6 +25,13 @@ class ToolDatabase;
 
 // Panel mode — View (text listing), Send (real CNC)
 enum class GCodePanelMode { View, Send };
+
+enum class GCodePanelRunState { Running, Paused };
+
+struct GCodePanelRunSnapshot {
+    i64 jobSourceId = 0;
+    GCodePanelRunState state = GCodePanelRunState::Running;
+};
 
 // Console line entry
 struct ConsoleLine {
@@ -50,12 +59,18 @@ class GCodePanel : public Panel {
     }
 
     // Callback notifications for program load/clear
-    void setOnProgramLoaded(std::function<void(const gcode::Program&)> cb) { m_onProgramLoaded = std::move(cb); }
+    using ProgramLoadedCallback =
+        std::function<void(const gcode::Program&, const gcode::Statistics&)>;
+    void setOnProgramLoaded(ProgramLoadedCallback cb) {
+        m_onProgramLoaded = std::move(cb);
+    }
     void setOnProgramCleared(std::function<void()> cb) { m_onProgramCleared = std::move(cb); }
     void onMachineProfileChanged();
 
     // Load G-code from file
     bool loadFile(const std::string& path);
+    bool loadPreparedFile(const std::string& path,
+                          const gcode::PreparedDocument& document);
     void clear();
     bool hasGCode() const { return m_program.commands.size() > 0; }
 
@@ -75,11 +90,10 @@ class GCodePanel : public Panel {
     void onGrblError(const std::string& message);
     void onGrblRawLine(const std::string& line, bool isSent);
 
-    // Direct Carve streaming — called by DirectCarvePanel
-    void onCarveStreamStart(int totalLines);
-    void onCarveStreamProgress(int currentLine, int totalLines, float elapsedSec);
-    void onCarveStreamComplete();
-    void onCarveStreamAborted();
+    // Reporting-only identity for the Advanced sender. Project Plan resolves
+    // this cnc_jobs ID back through the current project's persisted hierarchy.
+    [[nodiscard]] std::optional<GCodePanelRunSnapshot>
+    projectPlanRunSnapshot() const noexcept;
 
   private:
     // Render sections
@@ -102,16 +116,21 @@ class GCodePanel : public Panel {
     // Helpers
     void addConsoleLine(const std::string& text, ConsoleLine::Type type);
     void buildSendProgram();
+    bool activatePreparedFile(const std::string& path,
+                              gcode::Program program,
+                              gcode::Statistics statistics);
 
     // Program load/clear callbacks
-    std::function<void(const gcode::Program&)> m_onProgramLoaded;
+    ProgramLoadedCallback m_onProgramLoaded;
     std::function<void()> m_onProgramCleared;
 
     FileDialog* m_fileDialog = nullptr;
 
     gcode::Program m_program;
     gcode::Statistics m_stats;
+    // Live materialized path for I/O and durable location for history/reopen.
     std::string m_filePath;
+    std::string m_durableFilePath;
 
     // Persistence
     GCodeRepository* m_gcodeRepo = nullptr;
@@ -180,14 +199,6 @@ class GCodePanel : public Panel {
     void renderSearchBar();
     void findNext();
     void gotoLineNumber(int lineNum);
-
-    // Direct Carve streaming state
-    void renderCarveProgress();
-    bool m_carveStreamActive = false;
-    int m_carveCurrentLine = 0;
-    int m_carveTotalLines = 0;
-    float m_carveElapsedSec = 0.0f;
-    bool m_carveAborted = false;
 };
 
 } // namespace dw

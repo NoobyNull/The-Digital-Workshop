@@ -16,6 +16,10 @@ constexpr f32 FIT_DISTANCE_PADDING = 0.95f;
 f32 fitDistanceForExtent(f32 maxExtent) {
     return std::max(maxExtent * FIT_DISTANCE_PADDING, DEFAULT_DISTANCE);
 }
+
+Vec3 boundsCenter(const Vec3& min, const Vec3& max) {
+    return Vec3{(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, (min.z + max.z) * 0.5f};
+}
 } // namespace
 
 Camera::Camera() {
@@ -90,7 +94,7 @@ void Camera::reset() {
 }
 
 void Camera::fitToBounds(const Vec3& min, const Vec3& max) {
-    Vec3 center{(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, (min.z + max.z) * 0.5f};
+    Vec3 center = boundsCenter(min, max);
 
     Vec3 size = max - min;
     f32 maxExtent = std::max({size.x, size.y, size.z});
@@ -107,8 +111,21 @@ void Camera::fitToBounds(const Vec3& min, const Vec3& max) {
     updateVectors();
 }
 
+void Camera::setTargetToBoundsCenter(const Vec3& min, const Vec3& max) {
+    Vec3 center = boundsCenter(min, max);
+    Vec3 size = max - min;
+    f32 maxExtent = std::max({size.x, size.y, size.z});
+
+    m_lastBoundsCenter = center;
+    m_lastBoundsExtent = maxExtent;
+    m_hasBounds = true;
+    m_target = center;
+
+    updateVectors();
+}
+
 void Camera::fitToBoundsProjected(const Vec3& min, const Vec3& max, f32 viewportFill) {
-    Vec3 center{(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, (min.z + max.z) * 0.5f};
+    Vec3 center = boundsCenter(min, max);
     Vec3 size = max - min;
     f32 maxExtent = std::max({size.x, size.y, size.z});
 

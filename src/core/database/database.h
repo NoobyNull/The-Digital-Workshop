@@ -67,6 +67,9 @@ class Database {
 
     // Open/close database
     [[nodiscard]] bool open(const Path& path);
+    // Open an existing database without creating or changing the source file.
+    // Read-only connections intentionally skip WAL and synchronous pragmas.
+    [[nodiscard]] bool openReadOnly(const Path& path);
     [[nodiscard]] bool openWithFlags(const Path& path, int extraFlags);
     void close();
     bool isOpen() const { return m_db != nullptr; }
@@ -114,11 +117,14 @@ class Transaction {
     Transaction(const Transaction&) = delete;
     Transaction& operator=(const Transaction&) = delete;
 
+    [[nodiscard]] bool started() const { return m_started; }
     [[nodiscard]] bool commit();
-    void rollback();
+    bool rollback();
 
   private:
     Database& m_db;
+    bool m_started = false;
+    bool m_finished = false;
     bool m_committed = false;
 };
 

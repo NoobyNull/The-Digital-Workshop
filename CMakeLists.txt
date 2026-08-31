@@ -10,8 +10,8 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 
 # Project definition (C needed for SQLite3)
 project(DigitalWorkshop
-    VERSION 0.5.3
-    DESCRIPTION "3D model management, G-code analysis, and 2D cut optimization"
+    VERSION 0.8.0
+    DESCRIPTION "Project-centered CNC workshop for hobbyists"
     LANGUAGES CXX C
 )
 
@@ -32,6 +32,16 @@ endif()
 option(DW_BUILD_TESTS "Build test suite" ON)
 option(DW_BUILD_TOOLS "Build developer tools (matgen, etc.)" OFF)
 option(DW_ENABLE_GRAPHQLITE "Enable GraphQLite extension for graph queries" ON)
+
+# Explicit, non-ALL architecture ratchet. Source archives without Git metadata
+# can still build normally; developers and CI invoke this target deliberately.
+add_custom_target(check_source_sizes
+    COMMAND ${CMAKE_COMMAND}
+        -DDW_REPO_ROOT=${CMAKE_SOURCE_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/CheckSourceSizes.cmake
+    COMMENT "Checking production source-size caps"
+    VERBATIM
+)
 
 # Include CMake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

@@ -1,5 +1,7 @@
 #include "machine_profile.h"
 
+#include "machine_rigidity.h"
+
 #include <nlohmann/json.hpp>
 
 namespace dw {
@@ -40,6 +42,7 @@ static const char* driveSystemToString(DriveSystem ds) {
         case DriveSystem::Belt:      return "Belt";
         case DriveSystem::Acme:      return "Acme";
         case DriveSystem::BallScrew: return "BallScrew";
+        case DriveSystem::Custom:    return "Custom";
         default:                     return "LeadScrew";
     }
 }
@@ -48,6 +51,7 @@ static DriveSystem driveSystemFromString(const std::string& s) {
     if (s == "Belt")      return DriveSystem::Belt;
     if (s == "Acme")      return DriveSystem::Acme;
     if (s == "BallScrew") return DriveSystem::BallScrew;
+    if (s == "Custom")    return DriveSystem::Custom;
     return DriveSystem::LeadScrew;
 }
 
@@ -100,6 +104,7 @@ std::string MachineProfile::toJsonString() const {
         {"spindleReverse", spindleReverse},
         // Drive
         {"driveSystem", driveSystemToString(driveSystem)},
+        {"customRigidityFactor", normalizeRigidityFactor(customRigidityFactor)},
         // Homing
         {"homeCorner", homeCornerToString(homeCorner)},
         // Auxiliary
@@ -146,6 +151,9 @@ MachineProfile MachineProfile::fromJsonString(const std::string& jsonStr) {
     if (j.contains("spindleReverse")) p.spindleReverse = j["spindleReverse"].get<bool>();
     // Drive
     if (j.contains("driveSystem")) p.driveSystem = driveSystemFromString(j["driveSystem"].get<std::string>());
+    if (const auto it = j.find("customRigidityFactor"); it != j.end() && it->is_number()) {
+        p.customRigidityFactor = static_cast<f32>(normalizeRigidityFactor(it->get<f64>()));
+    }
     // Homing
     if (j.contains("homeCorner")) p.homeCorner = homeCornerFromString(j["homeCorner"].get<std::string>());
     // Auxiliary

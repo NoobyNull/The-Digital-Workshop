@@ -17,6 +17,7 @@ class ImportOptionsDialog : public Dialog {
   public:
     using ResultCallback =
         std::function<void(FileHandlingMode mode, bool tagAfterImport, const std::vector<Path>& paths)>;
+    using CancelCallback = std::function<void()>;
 
     ImportOptionsDialog();
     ~ImportOptionsDialog() override = default;
@@ -29,6 +30,7 @@ class ImportOptionsDialog : public Dialog {
 
     // Set callback invoked when user confirms import
     void setOnConfirm(ResultCallback callback);
+    void setOnCancel(CancelCallback callback) { m_onCancel = std::move(callback); }
 
   private:
     std::vector<Path> m_paths;
@@ -37,6 +39,7 @@ class ImportOptionsDialog : public Dialog {
     bool m_queueForTagging = false;
     bool m_pendingOpen = false;
     ResultCallback m_onConfirm;
+    CancelCallback m_onCancel;
 };
 
 } // namespace dw

@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include "../paths/app_paths.h"
+#include "../paths/network_location.h"
 #include "../paths/path_resolver.h"
 #include "../threading/thread_pool.h"
 #include "../utils/file_utils.h"
@@ -13,12 +14,24 @@
 #include "../utils/string_utils.h"
 
 namespace dw {
+namespace {
+
+Path durableRecentGCodeLocation(const Path& path) {
+    if (!network_location::isNetworkLocationCandidate(path))
+        return path;
+    if (auto url = network_location::durableUrl(path))
+        return Path(*url);
+    return {};
+}
+
+} // namespace
 
 Config::Config() : m_parallelismTier(ParallelismTier::Auto) {
     initDefaultBindings();
     m_machineProfiles = gcode::MachineProfile::allBuiltInPresets();
     m_layoutPresets = {
-        LayoutPreset::modelDefault(),
+        LayoutPreset::guidedDefault(),
+        LayoutPreset::advancedDefault(),
         LayoutPreset::cncDefault(),
     };
 }
@@ -49,6 +62,10 @@ bool Config::load() {
         log::error("Config", "Failed to read config file");
         return false;
     }
+
+    // A file without an explicit layout version is a legacy snapshot. The
+    // resolver upgrades it after every preset has been read.
+    m_layoutMigrationVersion = 0;
 
     std::istringstream stream(*content);
     std::string line;
@@ -130,31 +147,6 @@ bool Config::load() {
 // Per-section load helpers
 // ---------------------------------------------------------------------------
 
-void Config::loadUi(const std::string& key, const std::string& value) {
-    if (key == "theme") {
-        str::parseInt(value, m_themeIndex);
-    } else if (key == "scale") {
-        str::parseFloat(value, m_uiScale);
-    } else if (key == "show_grid") {
-        m_showGrid = (value == "true" || value == "1");
-    } else if (key == "show_axis") {
-        m_showAxis = (value == "true" || value == "1");
-    } else if (key == "auto_orient") {
-        m_autoOrient = (value == "true" || value == "1");
-    } else if (key == "invert_orbit_x") {
-        m_invertOrbitX = (value == "true" || value == "1");
-    } else if (key == "invert_orbit_y") {
-        m_invertOrbitY = (value == "true" || value == "1");
-    } else if (key == "nav_style") {
-        int style = 0;
-        str::parseInt(value, style);
-        if (style >= 0 && style <= 2)
-            m_navStyle = static_cast<NavStyle>(style);
-    } else if (key == "floating_windows") {
-        m_enableFloatingWindows = (value == "true" || value == "1");
-    }
-}
-
 void Config::loadRender(const std::string& key, const std::string& value) {
     if (key == "light_dir_x")
         str::parseFloat(value, m_lightDir.x);
@@ -191,78 +183,6 @@ void Config::loadLogging(const std::string& key, const std::string& value) {
         m_logToFile = (value == "true" || value == "1");
     } else if (key == "log_file_path") {
         m_logFilePath = value;
-    }
-}
-
-void Config::loadPaths(const std::string& key, const std::string& value) {
-    if (key == "workspace_root") {
-        m_workspaceRoot = value;
-    } else if (key == "last_import") {
-        m_lastImportDir = value;
-    } else if (key == "last_export") {
-        m_lastExportDir = value;
-    } else if (key == "last_project") {
-        m_lastProjectDir = value;
-    }
-}
-
-void Config::loadWindow(const std::string& key, const std::string& value) {
-    if (key == "width") {
-        str::parseInt(value, m_windowWidth);
-    } else if (key == "height") {
-        str::parseInt(value, m_windowHeight);
-    } else if (key == "maximized") {
-        m_windowMaximized = (value == "true" || value == "1");
-    }
-}
-
-void Config::loadWorkspace(const std::string& key, const std::string& value) {
-    if (key == "show_viewport") {
-        m_wsShowViewport = (value == "true" || value == "1");
-    } else if (key == "show_library") {
-        m_wsShowLibrary = (value == "true" || value == "1");
-    } else if (key == "show_properties") {
-        m_wsShowProperties = (value == "true" || value == "1");
-    } else if (key == "show_project") {
-        m_wsShowProject = (value == "true" || value == "1");
-    } else if (key == "show_materials") {
-        m_wsShowMaterials = (value == "true" || value == "1");
-    } else if (key == "show_gcode") {
-        m_wsShowGCode = (value == "true" || value == "1");
-    } else if (key == "show_cut_optimizer") {
-        m_wsShowCutOptimizer = (value == "true" || value == "1");
-    } else if (key == "show_project_costing" || key == "show_cost_estimator") {
-        m_wsShowProjectCosting = (value == "true" || value == "1");
-    } else if (key == "show_tool_browser") {
-        m_wsShowToolBrowser = (value == "true" || value == "1");
-    } else if (key == "show_cnc_status") {
-        m_wsShowCncStatus = (value == "true" || value == "1");
-    } else if (key == "show_cnc_jog") {
-        m_wsShowCncJog = (value == "true" || value == "1");
-    } else if (key == "show_cnc_console") {
-        m_wsShowCncConsole = (value == "true" || value == "1");
-    } else if (key == "show_cnc_wcs") {
-        m_wsShowCncWcs = (value == "true" || value == "1");
-    } else if (key == "show_cnc_tool") {
-        m_wsShowCncTool = (value == "true" || value == "1");
-    } else if (key == "show_cnc_job") {
-        m_wsShowCncJob = (value == "true" || value == "1");
-    } else if (key == "show_cnc_safety") {
-        m_wsShowCncSafety = (value == "true" || value == "1");
-    } else if (key == "show_cnc_settings") {
-        m_wsShowCncSettings = (value == "true" || value == "1");
-    } else if (key == "show_cnc_macros") {
-        m_wsShowCncMacros = (value == "true" || value == "1");
-    } else if (key == "show_direct_carve") {
-        m_wsShowDirectCarve = (value == "true" || value == "1");
-    } else if (key == "show_start_page") {
-        m_wsShowStartPage = (value == "true" || value == "1");
-    } else if (key == "last_selected_model") {
-        str::parseInt64(value, m_wsLastSelectedModelId);
-    } else if (key == "library_thumb_size") {
-        str::parseFloat(value, m_wsLibraryThumbSize);
-    } else if (key == "materials_thumb_size") {
-        str::parseFloat(value, m_wsMaterialsThumbSize);
     }
 }
 
@@ -325,19 +245,6 @@ void Config::loadApi(const std::string& key, const std::string& value) {
         m_ollamaEndpoint = value;
     } else if (key == "ollama_private_port") {
         str::parseInt(value, m_ollamaPrivatePort);
-    }
-}
-
-void Config::loadRecent(const std::string& key, const std::string& value) {
-    if (str::startsWith(key, "project")) {
-        if (!value.empty() && file::exists(value)) {
-            Path p(value);
-            // Deduplicate — skip if already loaded
-            if (std::find(m_recentProjects.begin(), m_recentProjects.end(), p) ==
-                m_recentProjects.end()) {
-                m_recentProjects.push_back(p);
-            }
-        }
     }
 }
 
@@ -445,7 +352,12 @@ void Config::loadWcsAliases(const std::string& key, const std::string& value) {
 void Config::loadRecentGCode(const std::string& key, const std::string& value) {
     if (str::startsWith(key, "file")) {
         if (!value.empty() && static_cast<int>(m_recentGCodeFiles.size()) < MAX_RECENT_GCODE) {
-            m_recentGCodeFiles.push_back(value);
+            const Path path = durableRecentGCodeLocation(Path(value));
+            if (!path.empty() &&
+                std::find(m_recentGCodeFiles.begin(), m_recentGCodeFiles.end(), path) ==
+                m_recentGCodeFiles.end()) {
+                m_recentGCodeFiles.push_back(path);
+            }
         }
     }
 }
@@ -466,21 +378,6 @@ void Config::loadMachineProfiles(
             if (!loaded)
                 loaded = std::vector<gcode::MachineProfile>{};
             loaded->push_back(std::move(profile));
-        }
-    }
-}
-
-void Config::loadLayoutPresets(
-    const std::string& key, const std::string& value,
-    std::optional<std::vector<LayoutPreset>>& loaded) {
-    if (key == "active_preset") {
-        str::parseInt(value, m_activeLayoutPresetIndex);
-    } else if (str::startsWith(key, "preset")) {
-        auto preset = LayoutPreset::fromJsonString(value);
-        if (!preset.name.empty()) {
-            if (!loaded)
-                loaded = std::vector<LayoutPreset>{};
-            loaded->push_back(std::move(preset));
         }
     }
 }
@@ -519,18 +416,6 @@ void Config::resolveLoadedMachineProfiles(
     if (m_activeMachineProfileIndex < 0 ||
         m_activeMachineProfileIndex >= static_cast<int>(m_machineProfiles.size())) {
         m_activeMachineProfileIndex = 0;
-    }
-}
-
-void Config::resolveLoadedLayoutPresets(
-    std::optional<std::vector<LayoutPreset>>& loaded) {
-    // Replace defaults with loaded layout presets if any were found
-    if (loaded && !loaded->empty()) {
-        m_layoutPresets = std::move(*loaded);
-    }
-    if (m_activeLayoutPresetIndex < 0 ||
-        m_activeLayoutPresetIndex >= static_cast<int>(m_layoutPresets.size())) {
-        m_activeLayoutPresetIndex = 0;
     }
 }
 
@@ -593,20 +478,6 @@ bool Config::save() {
 // Per-section save helpers
 // ---------------------------------------------------------------------------
 
-void Config::saveUi(std::ostringstream& ss) const {
-    ss << "[ui]\n";
-    ss << "theme=" << m_themeIndex << "\n";
-    ss << "scale=" << m_uiScale << "\n";
-    ss << "show_grid=" << (m_showGrid ? "true" : "false") << "\n";
-    ss << "show_axis=" << (m_showAxis ? "true" : "false") << "\n";
-    ss << "auto_orient=" << (m_autoOrient ? "true" : "false") << "\n";
-    ss << "invert_orbit_x=" << (m_invertOrbitX ? "true" : "false") << "\n";
-    ss << "invert_orbit_y=" << (m_invertOrbitY ? "true" : "false") << "\n";
-    ss << "nav_style=" << static_cast<int>(m_navStyle) << "\n";
-    ss << "floating_windows=" << (m_enableFloatingWindows ? "true" : "false") << "\n";
-    ss << "\n";
-}
-
 void Config::saveRender(std::ostringstream& ss) const {
     ss << "[render]\n";
     ss << "light_dir_x=" << m_lightDir.x << "\n";
@@ -632,59 +503,6 @@ void Config::saveLogging(std::ostringstream& ss) const {
     if (!m_logFilePath.empty()) {
         ss << "log_file_path=" << m_logFilePath.string() << "\n";
     }
-    ss << "\n";
-}
-
-void Config::savePaths(std::ostringstream& ss) const {
-    ss << "[paths]\n";
-    if (!m_workspaceRoot.empty()) {
-        ss << "workspace_root=" << m_workspaceRoot.string() << "\n";
-    }
-    if (!m_lastImportDir.empty()) {
-        ss << "last_import=" << m_lastImportDir.string() << "\n";
-    }
-    if (!m_lastExportDir.empty()) {
-        ss << "last_export=" << m_lastExportDir.string() << "\n";
-    }
-    if (!m_lastProjectDir.empty()) {
-        ss << "last_project=" << m_lastProjectDir.string() << "\n";
-    }
-    ss << "\n";
-}
-
-void Config::saveWindow(std::ostringstream& ss) const {
-    ss << "[window]\n";
-    ss << "width=" << m_windowWidth << "\n";
-    ss << "height=" << m_windowHeight << "\n";
-    ss << "maximized=" << (m_windowMaximized ? "true" : "false") << "\n";
-    ss << "\n";
-}
-
-void Config::saveWorkspace(std::ostringstream& ss) const {
-    ss << "[workspace]\n";
-    ss << "show_viewport=" << (m_wsShowViewport ? "true" : "false") << "\n";
-    ss << "show_library=" << (m_wsShowLibrary ? "true" : "false") << "\n";
-    ss << "show_properties=" << (m_wsShowProperties ? "true" : "false") << "\n";
-    ss << "show_project=" << (m_wsShowProject ? "true" : "false") << "\n";
-    ss << "show_materials=" << (m_wsShowMaterials ? "true" : "false") << "\n";
-    ss << "show_gcode=" << (m_wsShowGCode ? "true" : "false") << "\n";
-    ss << "show_cut_optimizer=" << (m_wsShowCutOptimizer ? "true" : "false") << "\n";
-    ss << "show_project_costing=" << (m_wsShowProjectCosting ? "true" : "false") << "\n";
-    ss << "show_tool_browser=" << (m_wsShowToolBrowser ? "true" : "false") << "\n";
-    ss << "show_cnc_status=" << (m_wsShowCncStatus ? "true" : "false") << "\n";
-    ss << "show_cnc_jog=" << (m_wsShowCncJog ? "true" : "false") << "\n";
-    ss << "show_cnc_console=" << (m_wsShowCncConsole ? "true" : "false") << "\n";
-    ss << "show_cnc_wcs=" << (m_wsShowCncWcs ? "true" : "false") << "\n";
-    ss << "show_cnc_tool=" << (m_wsShowCncTool ? "true" : "false") << "\n";
-    ss << "show_cnc_job=" << (m_wsShowCncJob ? "true" : "false") << "\n";
-    ss << "show_cnc_safety=" << (m_wsShowCncSafety ? "true" : "false") << "\n";
-    ss << "show_cnc_settings=" << (m_wsShowCncSettings ? "true" : "false") << "\n";
-    ss << "show_cnc_macros=" << (m_wsShowCncMacros ? "true" : "false") << "\n";
-    ss << "show_direct_carve=" << (m_wsShowDirectCarve ? "true" : "false") << "\n";
-    ss << "show_start_page=" << (m_wsShowStartPage ? "true" : "false") << "\n";
-    ss << "last_selected_model=" << m_wsLastSelectedModelId << "\n";
-    ss << "library_thumb_size=" << m_wsLibraryThumbSize << "\n";
-    ss << "materials_thumb_size=" << m_wsMaterialsThumbSize << "\n";
     ss << "\n";
 }
 
@@ -742,14 +560,6 @@ void Config::saveApi(std::ostringstream& ss) const {
     ss << "ollama_private_port=" << m_ollamaPrivatePort << "\n";
     if (!m_lmStudioEndpoint.empty()) {
         ss << "lmstudio_endpoint=" << m_lmStudioEndpoint << "\n";
-    }
-    ss << "\n";
-}
-
-void Config::saveRecent(std::ostringstream& ss) const {
-    ss << "[recent]\n";
-    for (size_t i = 0; i < m_recentProjects.size(); ++i) {
-        ss << "project" << i << "=" << m_recentProjects[i].string() << "\n";
     }
     ss << "\n";
 }
@@ -829,47 +639,25 @@ void Config::saveMachineProfiles(std::ostringstream& ss) const {
     ss << "\n";
 }
 
-void Config::saveLayoutPresets(std::ostringstream& ss) const {
-    ss << "[layout_presets]\n";
-    ss << "active_preset=" << m_activeLayoutPresetIndex << "\n";
-    for (size_t i = 0; i < m_layoutPresets.size(); ++i) {
-        ss << "preset" << i << "=" << m_layoutPresets[i].toJsonString() << "\n";
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Remaining methods (unchanged)
 // ---------------------------------------------------------------------------
 
-void Config::addRecentProject(const Path& path) {
-    // Remove if already exists
-    removeRecentProject(path);
-
-    // Add to front
-    m_recentProjects.insert(m_recentProjects.begin(), path);
-
-    // Trim to max size
-    if (m_recentProjects.size() > MAX_RECENT_PROJECTS) {
-        m_recentProjects.resize(MAX_RECENT_PROJECTS);
-    }
-}
-
-void Config::removeRecentProject(const Path& path) {
-    auto it = std::remove(m_recentProjects.begin(), m_recentProjects.end(), path);
-    m_recentProjects.erase(it, m_recentProjects.end());
-}
-
-void Config::clearRecentProjects() {
-    m_recentProjects.clear();
-}
-
 void Config::addRecentGCodeFile(const Path& path) {
+    const Path durablePath = durableRecentGCodeLocation(path);
+    if (durablePath.empty())
+        return;
     // Remove if already present
     m_recentGCodeFiles.erase(
-        std::remove(m_recentGCodeFiles.begin(), m_recentGCodeFiles.end(), path),
+        std::remove_if(
+            m_recentGCodeFiles.begin(),
+            m_recentGCodeFiles.end(),
+            [&durablePath](const Path& recent) {
+                return durableRecentGCodeLocation(recent) == durablePath;
+            }),
         m_recentGCodeFiles.end());
     // Insert at front
-    m_recentGCodeFiles.insert(m_recentGCodeFiles.begin(), path);
+    m_recentGCodeFiles.insert(m_recentGCodeFiles.begin(), durablePath);
     // Trim to max
     if (static_cast<int>(m_recentGCodeFiles.size()) > MAX_RECENT_GCODE)
         m_recentGCodeFiles.resize(MAX_RECENT_GCODE);
@@ -926,30 +714,6 @@ void Config::removeMachineProfile(int index) {
 void Config::updateMachineProfile(int index, const gcode::MachineProfile& profile) {
     if (index >= 0 && index < static_cast<int>(m_machineProfiles.size()))
         m_machineProfiles[static_cast<size_t>(index)] = profile;
-}
-
-void Config::setActiveLayoutPresetIndex(int index) {
-    if (index >= 0 && index < static_cast<int>(m_layoutPresets.size()))
-        m_activeLayoutPresetIndex = index;
-}
-
-void Config::addLayoutPreset(const LayoutPreset& preset) {
-    m_layoutPresets.push_back(preset);
-}
-
-void Config::removeLayoutPreset(int index) {
-    if (index < 0 || index >= static_cast<int>(m_layoutPresets.size()))
-        return;
-    if (m_layoutPresets[static_cast<size_t>(index)].builtIn)
-        return;
-    m_layoutPresets.erase(m_layoutPresets.begin() + index);
-    if (m_activeLayoutPresetIndex >= static_cast<int>(m_layoutPresets.size()))
-        m_activeLayoutPresetIndex = static_cast<int>(m_layoutPresets.size()) - 1;
-}
-
-void Config::updateLayoutPreset(int index, const LayoutPreset& preset) {
-    if (index >= 0 && index < static_cast<int>(m_layoutPresets.size()))
-        m_layoutPresets[static_cast<size_t>(index)] = preset;
 }
 
 Path Config::getEffectiveWorkspaceRoot() const {

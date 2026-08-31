@@ -1,14 +1,16 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 APP_NAME="Digital Workshop"
 BIN_NAME="digital_workshop"
 SETTINGS_BIN="dw_settings"
+GRAPHQLITE_LIB="graphqlite.so"
 DESKTOP_ID="digitalworkshop"
 
 # Default to user install, --system for /usr/local
+MODE="${1:-}"
 PREFIX="$HOME/.local"
-if [ "$1" = "--system" ]; then
+if [[ "$MODE" == "--system" ]]; then
     if [ "$(id -u)" -ne 0 ]; then
         echo "System uninstall requires root. Run with: sudo ./uninstall.sh --system"
         exit 1
@@ -17,14 +19,16 @@ if [ "$1" = "--system" ]; then
 fi
 
 BIN_DIR="$PREFIX/bin"
-RESOURCE_DIR="$PREFIX/share/digitalworkshop/resources"
+APP_DIR="$PREFIX/share/digitalworkshop"
+RESOURCE_DIR="$APP_DIR/resources"
+UNINSTALL_PATH="$APP_DIR/uninstall.sh"
 DESKTOP_DIR="$HOME/.local/share/applications"
-if [ "$1" = "--system" ]; then
+if [[ "$MODE" == "--system" ]]; then
     DESKTOP_DIR="/usr/share/applications"
 fi
 
 ICON_DIR="$HOME/.local/share/icons/hicolor"
-if [ "$1" = "--system" ]; then
+if [[ "$MODE" == "--system" ]]; then
     ICON_DIR="/usr/share/icons/hicolor"
 fi
 
@@ -33,6 +37,7 @@ echo "Uninstalling $APP_NAME from $PREFIX..."
 # Remove binaries
 rm -f "$BIN_DIR/$BIN_NAME"
 rm -f "$BIN_DIR/$SETTINGS_BIN"
+rm -f "$BIN_DIR/$GRAPHQLITE_LIB"
 rm -rf "$RESOURCE_DIR"
 
 # Remove desktop entry
@@ -41,6 +46,11 @@ rm -f "$DESKTOP_DIR/$DESKTOP_ID.desktop"
 # Remove icons
 rm -f "$ICON_DIR/512x512/apps/$DESKTOP_ID.png"
 rm -f "$ICON_DIR/1024x1024/apps/$DESKTOP_ID.png"
+
+# Remove the persistent uninstaller last. Linux permits a running script to
+# unlink itself; rmdir only removes the app directory when no user files remain.
+rm -f "$UNINSTALL_PATH"
+rmdir "$APP_DIR" 2>/dev/null || true
 
 # Update desktop database if available
 if command -v update-desktop-database > /dev/null 2>&1; then

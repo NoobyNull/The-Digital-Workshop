@@ -4,6 +4,8 @@
 
 #include "core/cnc/tool_calculator.h"
 
+#include <limits>
+
 using namespace dw;
 
 // ============================================================================
@@ -190,6 +192,41 @@ TEST(ToolCalculator, Calculate_BallScrewHigherFeed) {
     // BallScrew should give 25% higher feed than Belt (1.0 vs 0.8)
     EXPECT_GT(screwResult.feed_rate, beltResult.feed_rate);
     EXPECT_NEAR(screwResult.feed_rate / beltResult.feed_rate, 1.25, 0.01);
+}
+
+TEST(ToolCalculator, Calculate_ExplicitRigidityOverrideScalesFeedAndStepdown) {
+    CalcInput base;
+    base.diameter = 0.25;
+    base.num_flutes = 2;
+    base.janka_hardness = 1290.0;
+    base.max_rpm = 24000;
+    base.drive_type = DriveType::BallScrew;
+
+    const auto fullRigidity = ToolCalculator::calculate(base);
+    base.rigidity_factor_override = 0.73;
+    const auto customRigidity = ToolCalculator::calculate(base);
+
+    EXPECT_DOUBLE_EQ(customRigidity.rigidity_factor, 0.73);
+    EXPECT_NEAR(customRigidity.feed_rate / fullRigidity.feed_rate, 0.73, 1e-9);
+    EXPECT_NEAR(customRigidity.stepdown / fullRigidity.stepdown, 0.73, 1e-9);
+}
+
+TEST(ToolCalculator, Calculate_ExplicitRigidityOverrideIsNormalizedSafely) {
+    CalcInput input;
+    input.diameter = 0.25;
+    input.num_flutes = 2;
+    input.janka_hardness = 1290.0;
+    input.max_rpm = 24000;
+    input.drive_type = DriveType::BallScrew;
+
+    input.rigidity_factor_override = 5.0;
+    EXPECT_DOUBLE_EQ(ToolCalculator::calculate(input).rigidity_factor, 1.0);
+
+    input.rigidity_factor_override = 0.0;
+    EXPECT_DOUBLE_EQ(ToolCalculator::calculate(input).rigidity_factor, 0.10);
+
+    input.rigidity_factor_override = std::numeric_limits<f64>::quiet_NaN();
+    EXPECT_DOUBLE_EQ(ToolCalculator::calculate(input).rigidity_factor, 0.80);
 }
 
 TEST(ToolCalculator, Calculate_MetalLowerPlungeRatio) {

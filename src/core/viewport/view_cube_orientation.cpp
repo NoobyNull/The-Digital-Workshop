@@ -42,4 +42,41 @@ ViewCubeOrientation snapViewCubeOrientation(ViewCubeFace face, f32 currentYawDeg
     return {0.0f, 0.0f};
 }
 
+f32 rotateViewYawByQuarterTurns(f32 currentYawDeg, int quarterTurns) {
+    return normalizeYaw(currentYawDeg + static_cast<f32>(quarterTurns) * 90.0f);
+}
+
+ViewCubeOrientation rotateViewPitchByQuarterTurns(f32 currentYawDeg,
+                                                  f32 currentPitchDeg,
+                                                  int quarterTurns) {
+    f32 yaw = normalizeYaw(currentYawDeg);
+    f32 pitch = currentPitchDeg;
+
+    int steps = std::abs(quarterTurns);
+    int direction = (quarterTurns >= 0) ? 1 : -1;
+    for (int i = 0; i < steps; ++i) {
+        if (direction > 0) {
+            if (pitch > 45.0f) {
+                yaw = normalizeYaw(yaw + 180.0f);
+                pitch = 0.0f;
+            } else if (pitch < -45.0f) {
+                pitch = 0.0f;
+            } else {
+                pitch = 89.0f;
+            }
+        } else {
+            if (pitch < -45.0f) {
+                yaw = normalizeYaw(yaw + 180.0f);
+                pitch = 0.0f;
+            } else if (pitch > 45.0f) {
+                pitch = 0.0f;
+            } else {
+                pitch = -89.0f;
+            }
+        }
+    }
+
+    return {yaw, pitch};
+}
+
 } // namespace dw

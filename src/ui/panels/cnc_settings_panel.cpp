@@ -869,7 +869,7 @@ void CncSettingsPanel::renderSafetyTab() {
         cfg.setDisplayUnitsMetric(false); cfg.save();
     }
     const auto sendUnits = m_cnc ? m_cnc->sendUnits() : cnc::SendUnits::Millimeters;
-    ImGui::TextDisabled("Display-only. Generated carve G-code sends %s (%s).",
+    ImGui::TextDisabled("Display-only. Streamed G-code sends %s (%s).",
                         cnc::unitLabel(sendUnits),
                         cnc::gcodeUnitMode(sendUnits));
 

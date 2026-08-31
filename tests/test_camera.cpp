@@ -140,6 +140,25 @@ TEST(Camera, FitToBounds_CentersOnBounds) {
     EXPECT_NEAR(cam.target().z, 45.0f, EPS);
 }
 
+TEST(Camera, SetTargetToBoundsCenter_UpdatesResetCenterWithoutChangingDistance) {
+    dw::Camera cam;
+    cam.setDistance(42.0f);
+
+    cam.setTargetToBoundsCenter(dw::Vec3(10, 20, 30), dw::Vec3(20, 40, 60));
+
+    EXPECT_NEAR(cam.target().x, 15.0f, EPS);
+    EXPECT_NEAR(cam.target().y, 30.0f, EPS);
+    EXPECT_NEAR(cam.target().z, 45.0f, EPS);
+    EXPECT_NEAR(cam.distance(), 42.0f, EPS);
+
+    cam.pan(100.0f, 100.0f);
+    cam.reset();
+
+    EXPECT_NEAR(cam.target().x, 15.0f, EPS);
+    EXPECT_NEAR(cam.target().y, 30.0f, EPS);
+    EXPECT_NEAR(cam.target().z, 45.0f, EPS);
+}
+
 TEST(Camera, FitToBounds_DistanceProportional) {
     dw::Camera cam;
     cam.fitToBounds(dw::Vec3(0, 0, 0), dw::Vec3(100, 100, 100));

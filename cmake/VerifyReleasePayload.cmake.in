@@ -1,0 +1,44 @@
+# Install/CPack preflight for the app-owned release payload.
+
+set(_dw_graphqlite_available "@DW_GRAPHQLITE_AVAILABLE@")
+set(_dw_graphqlite [==[@DW_GRAPHQLITE_LIB_PATH@]==])
+set(_dw_materials_dir [==[@CMAKE_SOURCE_DIR@/resources/materials]==])
+set(_dw_icons_dir [==[@CMAKE_SOURCE_DIR@/resources/icons]==])
+
+if(NOT _dw_graphqlite_available OR
+   NOT EXISTS "${_dw_graphqlite}" OR
+   IS_DIRECTORY "${_dw_graphqlite}")
+    message(FATAL_ERROR
+        "Release payload requires the cached GraphQLite library; "
+        "configure with DW_ENABLE_GRAPHQLITE=ON while it is available")
+endif()
+file(SIZE "${_dw_graphqlite}" _dw_graphqlite_size)
+if(_dw_graphqlite_size EQUAL 0)
+    message(FATAL_ERROR "Cached GraphQLite library is empty: ${_dw_graphqlite}")
+endif()
+
+file(GLOB _dw_materials LIST_DIRECTORIES FALSE "${_dw_materials_dir}/*.dwmat")
+if(NOT _dw_materials)
+    message(FATAL_ERROR
+        "Release payload requires at least one .dwmat in ${_dw_materials_dir}")
+endif()
+foreach(_dw_material IN LISTS _dw_materials)
+    file(SIZE "${_dw_material}" _dw_material_size)
+    if(_dw_material_size EQUAL 0)
+        message(FATAL_ERROR "Bundled material is empty: ${_dw_material}")
+    endif()
+endforeach()
+
+foreach(_dw_required_icon "statue.png" "Digital Workshop.png")
+    set(_dw_icon "${_dw_icons_dir}/${_dw_required_icon}")
+    if(NOT EXISTS "${_dw_icon}" OR IS_DIRECTORY "${_dw_icon}")
+        message(FATAL_ERROR "Release payload is missing icon: ${_dw_icon}")
+    endif()
+    file(SIZE "${_dw_icon}" _dw_icon_size)
+    if(_dw_icon_size EQUAL 0)
+        message(FATAL_ERROR "Release payload icon is empty: ${_dw_icon}")
+    endif()
+endforeach()
+
+message(STATUS
+    "Release payload preflight passed: GraphQLite, bundled materials, and icons")

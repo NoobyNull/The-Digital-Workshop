@@ -7,6 +7,32 @@
 #include "../utils/log.h"
 
 namespace dw {
+namespace {
+
+std::string immutableSqliteUri(const Path& path) {
+    constexpr char hex[] = "0123456789ABCDEF";
+    const std::string source = path.generic_string();
+    std::string uri = "file:";
+    uri.reserve(source.size() + 32);
+    for (const unsigned char character : source) {
+        const bool unreserved = (character >= 'a' && character <= 'z')
+            || (character >= 'A' && character <= 'Z')
+            || (character >= '0' && character <= '9')
+            || character == '/' || character == ':' || character == '-'
+            || character == '.' || character == '_' || character == '~';
+        if (unreserved) {
+            uri.push_back(static_cast<char>(character));
+        } else {
+            uri.push_back('%');
+            uri.push_back(hex[character >> 4]);
+            uri.push_back(hex[character & 0x0f]);
+        }
+    }
+    uri += "?mode=ro&immutable=1";
+    return uri;
+}
+
+} // namespace
 
 // Statement implementation
 
@@ -118,6 +144,36 @@ Database::~Database() {
 
 bool Database::open(const Path& path) {
     return openWithFlags(path, 0);
+}
+
+bool Database::openReadOnly(const Path& path) {
+    if (m_db) {
+        close();
+    }
+
+    const std::string uri = immutableSqliteUri(path);
+    const int flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_URI;
+    const int result = sqlite3_open_v2(uri.c_str(), &m_db, flags, nullptr);
+    if (result != SQLITE_OK) {
+        const char* error = m_db ? sqlite3_errmsg(m_db) : "unknown SQLite error";
+        log::errorf("Database", "Failed to open read-only: %s", error);
+        if (m_db)
+            sqlite3_close(m_db);
+        m_db = nullptr;
+        return false;
+    }
+
+    sqlite3_busy_timeout(m_db, 5000);
+    if (!execute("PRAGMA query_only = ON")) {
+        close();
+        return false;
+    }
+    if (!execute("PRAGMA foreign_keys = ON")) {
+        log::warning("Database", "Failed to enable foreign keys on read-only connection");
+    }
+
+    log::infof("Database", "Opened read-only: %s", path.string().c_str());
+    return true;
 }
 
 bool Database::openWithFlags(const Path& path, int extraFlags) {
@@ -253,29 +309,34 @@ std::string Database::lastError() const {
 // Transaction implementation
 
 Transaction::Transaction(Database& db) : m_db(db) {
-    if (!m_db.beginTransaction()) {
+    m_started = m_db.beginTransaction();
+    if (!m_started) {
         log::error("Transaction", "Failed to begin transaction");
     }
 }
 
 Transaction::~Transaction() {
-    if (!m_committed) {
+    if (m_started && !m_finished) {
         (void)m_db.rollback();
     }
 }
 
 bool Transaction::commit() {
-    if (!m_committed) {
-        m_committed = m_db.commit();
-    }
+    if (!m_started || m_finished)
+        return m_committed;
+    m_committed = m_db.commit();
+    m_finished = m_committed;
     return m_committed;
 }
 
-void Transaction::rollback() {
-    if (!m_committed) {
-        (void)m_db.rollback();
-        m_committed = true; // Prevent double rollback in destructor
-    }
+bool Transaction::rollback() {
+    if (!m_started)
+        return false;
+    if (m_finished)
+        return !m_committed;
+    const bool rolledBack = m_db.rollback();
+    m_finished = rolledBack;
+    return rolledBack;
 }
 
 } // namespace dw

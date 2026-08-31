@@ -1,23 +1,13 @@
 #include "library_panel.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <cstring>
-#include <filesystem>
-#include <fstream>
 #include <vector>
 
 #include <imgui.h>
 
 #include "../../core/config/config.h"
-#include "../../core/loaders/texture_loader.h"
-#include "../../core/paths/app_paths.h"
-#include "../../core/utils/file_utils.h"
-#include "../../core/utils/log.h"
-#include "../context_menu_manager.h"
 #include "../icons.h"
 #include "../ui_colors.h"
-#include "../widgets/toast.h"
 
 namespace dw {
 
@@ -48,136 +38,15 @@ LibraryPanel::~LibraryPanel() {
     }
 }
 
-GLuint LibraryPanel::getPlaceholderTexture() {
-    if (m_placeholderLoaded) {
-        return m_placeholderTexture;
-    }
-    m_placeholderLoaded = true;
-
-    Path iconPath = paths::getBundledIconsDir() / "statue.png";
-    auto data = TextureLoader::loadPNG(iconPath);
-    if (!data) {
-        log::warning("Library", "Failed to load placeholder icon: statue.png");
-        return 0;
-    }
-
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, data->width, data->height, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, data->pixels.data());
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    m_placeholderTexture = tex;
-    return tex;
-}
-
 void LibraryPanel::setContextMenuManager(ContextMenuManager* mgr) {
     m_contextMenuManager = mgr;
-}
-
-void LibraryPanel::clearTextureCache() {
-    for (auto& [id, tex] : m_textureCache) {
-        if (tex != 0) {
-            glDeleteTextures(1, &tex);
-        }
-    }
-    m_textureCache.clear();
-}
-
-GLuint LibraryPanel::loadTGATexture(const Path& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
-        log::warningf("Library", "Failed to open TGA file: %s", path.string().c_str());
-        return 0;
-    }
-
-    // Read 18-byte TGA header
-    uint8_t header[18];
-    file.read(reinterpret_cast<char*>(header), 18);
-    if (!file) {
-        log::warningf("Library", "Failed to read TGA header: %s", path.string().c_str());
-        return 0;
-    }
-
-    // Validate: uncompressed true-color (type 2), 32bpp
-    if (header[2] != 2 || header[16] != 32) {
-        log::warningf("Library",
-                      "Unsupported TGA format (type=%d, bpp=%d): %s",
-                      header[2],
-                      header[16],
-                      path.string().c_str());
-        return 0;
-    }
-
-    int width = header[12] | (header[13] << 8);
-    int height = header[14] | (header[15] << 8);
-    if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
-        log::warningf(
-            "Library", "Invalid TGA dimensions (%dx%d): %s", width, height, path.string().c_str());
-        return 0;
-    }
-
-    // Read BGRA pixel data
-    size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4u;
-    std::vector<uint8_t> bgra(dataSize);
-    file.read(reinterpret_cast<char*>(bgra.data()), static_cast<std::streamsize>(dataSize));
-    if (!file) {
-        log::warningf("Library", "Failed to read TGA pixel data: %s", path.string().c_str());
-        return 0;
-    }
-
-    // Convert BGRA to RGBA in-place
-    for (size_t i = 0; i < dataSize; i += 4) {
-        std::swap(bgra[i + 0], bgra[i + 2]); // swap B and R
-    }
-
-    // Create OpenGL texture
-    GLuint texture = 0;
-    glGenTextures(1, &texture);
-    if (texture == 0) {
-        log::warning("Library", "Failed to create GL texture for thumbnail");
-        return 0;
-    }
-
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bgra.data());
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    return texture;
-}
-
-GLuint LibraryPanel::getThumbnailTexture(const ModelRecord& model) {
-    // Check cache first
-    auto it = m_textureCache.find(model.id);
-    if (it != m_textureCache.end()) {
-        return it->second;
-    }
-
-    // No thumbnail path yet — don't cache so we re-check after generation
-    if (model.thumbnailPath.empty()) {
-        return 0;
-    }
-
-    // Try to load the TGA file
-    GLuint tex = loadTGATexture(model.thumbnailPath);
-    m_textureCache[model.id] = tex;
-    return tex;
 }
 
 void LibraryPanel::render() {
     if (!m_open) {
         return;
     }
+    const bool wasOpen = m_open;
 
     // Debounce timer for FTS search
     if (m_searchDirty && m_searchDebounceTimer > 0) {
@@ -190,9 +59,17 @@ void LibraryPanel::render() {
 
     applyMinSize(18, 12);
     if (ImGui::Begin(m_title.c_str(), &m_open)) {
+        const bool suppressPickerInput = m_pickerInputSuppressionFrames > 0;
+        if (suppressPickerInput)
+            ImGui::BeginDisabled();
+        renderPickerHeader();
         renderToolbar();
         ImGui::Separator();
-        renderTabs();
+        if (isProjectModelPicker()) {
+            ImGui::TextDisabled("Models");
+        } else {
+            renderTabs();
+        }
         ImGui::Separator();
 
         // Category breadcrumb when filtering
@@ -219,7 +96,7 @@ void LibraryPanel::render() {
         ImGui::SameLine();
 
         ImGui::BeginChild("ContentArea", ImVec2(0, availH), false);
-        switch (m_activeTab) {
+        switch (isProjectModelPicker() ? ViewTab::Models : m_activeTab) {
         case ViewTab::Models:
             renderModelList();
             break;
@@ -235,21 +112,18 @@ void LibraryPanel::render() {
         renderRenameDialog();
         renderDeleteConfirm();
         renderCategoryAssignDialog();
+        if (suppressPickerInput)
+            ImGui::EndDisabled();
     }
     ImGui::End();
-}
+    if (m_pickerInputSuppressionFrames > 0)
+        --m_pickerInputSuppressionFrames;
 
-GLuint LibraryPanel::getThumbnailTextureForModel(int64_t modelId) const {
-    auto it = m_textureCache.find(modelId);
-    return (it != m_textureCache.end()) ? it->second : 0;
-}
-
-void LibraryPanel::invalidateThumbnail(int64_t modelId) {
-    auto it = m_textureCache.find(modelId);
-    if (it != m_textureCache.end()) {
-        if (it->second != 0)
-            glDeleteTextures(1, &it->second);
-        m_textureCache.erase(it);
+    if (wasOpen && !m_open && m_pickerSnapshot.active) {
+        const auto result = emitLibraryIntent(design_library::LibraryCancelRequested{});
+        const auto* action = std::get_if<design_library::LibraryActionResult>(&result);
+        if (!action || action->status == design_library::LibraryActionResultStatus::Rejected)
+            m_open = true;
     }
 }
 
@@ -517,260 +391,7 @@ void LibraryPanel::renderCategoryBreadcrumb() {
     ImGui::Separator();
 }
 
-void LibraryPanel::renderCategoryAssignDialog() {
-    if (m_showCategoryAssignDialog) {
-        ImGui::OpenPopup("Assign Category");
-        m_showCategoryAssignDialog = false;
-
-        // Initialize: load which categories the selected model(s) belong to
-        m_assignedCategoryIds.clear();
-        if (m_library && m_selectedModelIds.size() == 1) {
-            int64_t modelId = *m_selectedModelIds.begin();
-            // Check each category to see if this model is in it
-            for (auto& cat : m_categories) {
-                auto models = m_library->filterByCategory(cat.id);
-                for (auto& m : models) {
-                    if (m.id == modelId) {
-                        m_assignedCategoryIds.insert(cat.id);
-                        break;
-                    }
-                }
-            }
-        }
-        m_newCategoryName[0] = '\0';
-        m_newCategoryParent = -1;
-    }
-
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    const auto* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.25f, vp->WorkSize.y * 0.4f), ImGuiCond_Appearing);
-
-    if (ImGui::BeginPopupModal("Assign Category", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Select categories for model:");
-        ImGui::Separator();
-
-        ImGui::BeginChild("CatList", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.6f), true);
-
-        // Show categories as checkable tree
-        for (auto& cat : m_categories) {
-            if (cat.parentId.has_value())
-                continue; // roots only at top level
-
-            bool checked = m_assignedCategoryIds.count(cat.id) > 0;
-            if (ImGui::Checkbox(cat.name.c_str(), &checked)) {
-                if (checked)
-                    m_assignedCategoryIds.insert(cat.id);
-                else
-                    m_assignedCategoryIds.erase(cat.id);
-            }
-
-            // Show children indented
-            ImGui::Indent(ImGui::GetStyle().IndentSpacing);
-            for (auto& child : m_categories) {
-                if (!child.parentId.has_value() || *child.parentId != cat.id)
-                    continue;
-                bool childChecked = m_assignedCategoryIds.count(child.id) > 0;
-                if (ImGui::Checkbox(child.name.c_str(), &childChecked)) {
-                    if (childChecked)
-                        m_assignedCategoryIds.insert(child.id);
-                    else
-                        m_assignedCategoryIds.erase(child.id);
-                }
-            }
-            ImGui::Unindent(ImGui::GetStyle().IndentSpacing);
-        }
-
-        ImGui::EndChild();
-
-        // Quick add new category
-        ImGui::Separator();
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-        ImGui::InputTextWithHint(
-            "##NewCat", "New category name...", m_newCategoryName, sizeof(m_newCategoryName));
-        ImGui::SameLine();
-        if (ImGui::Button("Add") && m_newCategoryName[0] != '\0') {
-            std::optional<int64_t> parentId;
-            if (m_newCategoryParent > 0)
-                parentId = m_newCategoryParent;
-            auto newId = m_library->createCategory(m_newCategoryName, parentId);
-            if (newId) {
-                m_categories = m_library->getAllCategories();
-                m_assignedCategoryIds.insert(*newId);
-            }
-            m_newCategoryName[0] = '\0';
-        }
-
-        ImGui::Separator();
-        float dlgBtnW = ImGui::CalcTextSize("Cancel").x + ImGui::GetStyle().FramePadding.x * 4;
-        if (ImGui::Button("Apply", ImVec2(dlgBtnW, 0))) {
-            // Apply category assignments for selected model(s)
-            if (m_library) {
-                for (int64_t modelId : m_selectedModelIds) {
-                    // Remove categories no longer checked
-                    for (auto& cat : m_categories) {
-                        bool wasAssigned = false;
-                        auto models = m_library->filterByCategory(cat.id);
-                        for (auto& m : models) {
-                            if (m.id == modelId) {
-                                wasAssigned = true;
-                                break;
-                            }
-                        }
-                        bool isNowAssigned = m_assignedCategoryIds.count(cat.id) > 0;
-
-                        if (wasAssigned && !isNowAssigned) {
-                            m_library->removeModelCategory(modelId, cat.id);
-                        } else if (!wasAssigned && isNowAssigned) {
-                            m_library->assignCategory(modelId, cat.id);
-                        }
-                    }
-                }
-                refresh();
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(dlgBtnW, 0))) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-}
-
-// renderModelList, renderModelItem, renderGCodeList, renderGCodeItem,
-// renderCombinedList, and registerContextMenuEntries are in library_panel_items.cpp
-
-void LibraryPanel::renderDeleteConfirm() {
-    if (m_showDeleteConfirm) {
-        ImGui::OpenPopup("Delete Item?");
-        m_showDeleteConfirm = false;
-    }
-
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    if (ImGui::BeginPopupModal("Delete Item?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        float dlgBtnW = ImGui::CalcTextSize("Cancel").x + ImGui::GetStyle().FramePadding.x * 4;
-        ImGui::Text("Delete \"%s\"?", m_deleteItemName.c_str());
-        ImGui::TextDisabled("This action cannot be undone.");
-        ImGui::Spacing();
-
-        if (ImGui::Button("Delete", ImVec2(dlgBtnW, 0))) {
-            if (m_library) {
-                for (int64_t id : m_deleteItemIds) {
-                    if (m_deleteIsGCode) {
-                        m_library->deleteGCodeFile(id);
-                    } else {
-                        m_library->removeModel(id);
-                    }
-                }
-                size_t count = m_deleteItemIds.size();
-                if (m_deleteIsGCode) {
-                    ToastManager::instance().show(ToastType::Success,
-                                                  "Deleted",
-                                                  count == 1 ? "G-code file deleted successfully"
-                                                             : std::to_string(count) +
-                                                                   " G-code files deleted");
-                } else {
-                    ToastManager::instance().show(ToastType::Success,
-                                                  "Deleted",
-                                                  count == 1
-                                                      ? "Model deleted successfully"
-                                                      : std::to_string(count) + " models deleted");
-                }
-                // Clear selection for deleted items
-                if (m_deleteIsGCode) {
-                    m_selectedGCodeIds.clear();
-                    m_lastClickedGCodeId = -1;
-                } else {
-                    m_selectedModelIds.clear();
-                    m_lastClickedModelId = -1;
-                }
-                refresh();
-            } else {
-                ToastManager::instance().show(ToastType::Error,
-                                              "Delete Failed",
-                                              "Could not delete item");
-            }
-            m_deleteItemIds.clear();
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(dlgBtnW, 0))) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-}
-
-void LibraryPanel::renderRenameDialog() {
-    if (m_showRenameDialog) {
-        ImGui::OpenPopup("Rename Model");
-        m_showRenameDialog = false;
-    }
-
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(ImGui::GetMainViewport()->WorkSize.x * 0.25f, 0), ImGuiCond_Appearing);
-
-    if (ImGui::BeginPopupModal("Rename Model", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        float dlgBtnW = ImGui::CalcTextSize("Cancel").x + ImGui::GetStyle().FramePadding.x * 4;
-        ImGui::Text("Enter new name:");
-        ImGui::SetNextItemWidth(-1);
-
-        bool enterPressed = ImGui::InputText("##RenameInput",
-                                             m_renameBuffer,
-                                             sizeof(m_renameBuffer),
-                                             ImGuiInputTextFlags_EnterReturnsTrue);
-
-        // Auto-focus the input field when popup opens
-        if (ImGui::IsWindowAppearing()) {
-            ImGui::SetKeyboardFocusHere(-1);
-        }
-
-        ImGui::Spacing();
-
-        bool okPressed = ImGui::Button("OK", ImVec2(dlgBtnW, 0));
-        ImGui::SameLine();
-        bool cancelPressed = ImGui::Button("Cancel", ImVec2(dlgBtnW, 0));
-
-        if (okPressed || enterPressed) {
-            std::string newName(m_renameBuffer);
-            // Trim whitespace
-            newName.erase(0, newName.find_first_not_of(" \t\n\r"));
-            newName.erase(newName.find_last_not_of(" \t\n\r") + 1);
-
-            if (newName.empty()) {
-                ToastManager::instance().show(ToastType::Warning,
-                                              "Invalid Name",
-                                              "Name cannot be empty");
-            } else if (m_library) {
-                auto record = m_library->getModel(m_renameModelId);
-                if (record) {
-                    record->name = newName;
-                    if (m_library->updateModel(*record)) {
-                        refresh();
-                        ToastManager::instance().show(ToastType::Success,
-                                                      "Renamed",
-                                                      "Model renamed successfully");
-                    } else {
-                        ToastManager::instance().show(ToastType::Error,
-                                                      "Rename Failed",
-                                                      "Could not rename model");
-                        log::error("Library", "Failed to rename model");
-                    }
-                }
-            }
-            ImGui::CloseCurrentPopup();
-        }
-
-        if (cancelPressed) {
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
-}
+// Item rendering, picker presentation, actions, and dialogs live in focused
+// LibraryPanel translation units.
 
 } // namespace dw

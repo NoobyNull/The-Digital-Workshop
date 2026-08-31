@@ -36,17 +36,21 @@ class ProjectDirectory {
     ProjectDirectory() = default;
 
     // Create a new project directory with initial manifest
-    bool create(const Path& root, const std::string& name,
-                const std::string& description = "");
+    bool create(const Path& root, const std::string& name, const std::string& description = "");
 
     // Open an existing project directory (reads project.json)
     bool open(const Path& root);
+
+    // Read an existing manifest without repairing or otherwise mutating storage.
+    // Use this for preflight checks that must remain write-free.
+    bool inspect(const Path& root);
 
     // Save manifest to project.json
     bool save();
 
     // Metadata and manifest reset
     void setMetadata(const std::string& name, const std::string& description);
+    void setProjectId(i64 projectId) { m_projectId = projectId; }
     void clearModels();
     void clearGCode();
 
@@ -70,15 +74,18 @@ class ProjectDirectory {
 
     const std::string& name() const { return m_name; }
     const std::string& description() const { return m_description; }
+    i64 projectId() const { return m_projectId; }
 
     const std::vector<ProjectModelEntry>& models() const { return m_models; }
     const std::vector<ProjectHeightmapEntry>& heightmaps() const { return m_heightmaps; }
     const std::vector<ProjectGCodeEntry>& gcodeFiles() const { return m_gcodeFiles; }
 
   private:
+    bool load(const Path& root, bool restoreSubdirectories);
     bool createSubdirs();
 
     Path m_root;
+    i64 m_projectId = 0;
     std::string m_name;
     std::string m_description;
 

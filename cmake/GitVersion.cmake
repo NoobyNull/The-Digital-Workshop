@@ -1,5 +1,6 @@
 # Digital Workshop - Git Version
-# Derives semantic version from git tags, plus git hash for identification
+# Derives build metadata from git tags without allowing an older repository tag
+# to roll the source-declared release version backward.
 # Tag format: v0.3.0 → SEMVER "0.3.0", or v0.2.2-14-ge2259ce → "0.2.2+14.e2259ce"
 # Falls back to project(VERSION ...) from CMakeLists.txt when not in a git repo
 
@@ -52,8 +53,14 @@ if(GIT_FOUND)
         set(DW_VERSION_MAJOR ${CMAKE_MATCH_1})
         set(DW_VERSION_MINOR ${CMAKE_MATCH_2})
         set(DW_VERSION_PATCH ${CMAKE_MATCH_3})
+        set(DW_TAG_VERSION
+            "${DW_VERSION_MAJOR}.${DW_VERSION_MINOR}.${DW_VERSION_PATCH}")
 
-        if(CMAKE_MATCH_5)
+        if(DW_TAG_VERSION VERSION_LESS CMAKE_PROJECT_VERSION)
+            # A milestone can be prepared before its tag exists. Keep the
+            # explicit project() version authoritative in that case.
+            set(DW_SEMVER "${CMAKE_PROJECT_VERSION}")
+        elseif(CMAKE_MATCH_5)
             # Not on exact tag: v0.2.2-14-ge2259ce → "0.2.2+14.e2259ce"
             set(DW_SEMVER "${DW_VERSION_MAJOR}.${DW_VERSION_MINOR}.${DW_VERSION_PATCH}+${CMAKE_MATCH_5}.${CMAKE_MATCH_6}")
         else()
@@ -61,15 +68,17 @@ if(GIT_FOUND)
             set(DW_SEMVER "${DW_VERSION_MAJOR}.${DW_VERSION_MINOR}.${DW_VERSION_PATCH}")
         endif()
 
-        # Override CMake project version so CPack picks it up
-        set(CMAKE_PROJECT_VERSION "${DW_VERSION_MAJOR}.${DW_VERSION_MINOR}.${DW_VERSION_PATCH}")
-        set(CMAKE_PROJECT_VERSION_MAJOR "${DW_VERSION_MAJOR}")
-        set(CMAKE_PROJECT_VERSION_MINOR "${DW_VERSION_MINOR}")
-        set(CMAKE_PROJECT_VERSION_PATCH "${DW_VERSION_PATCH}")
-        set(PROJECT_VERSION "${DW_VERSION_MAJOR}.${DW_VERSION_MINOR}.${DW_VERSION_PATCH}")
-        set(PROJECT_VERSION_MAJOR "${DW_VERSION_MAJOR}")
-        set(PROJECT_VERSION_MINOR "${DW_VERSION_MINOR}")
-        set(PROJECT_VERSION_PATCH "${DW_VERSION_PATCH}")
+        if(NOT DW_TAG_VERSION VERSION_LESS CMAKE_PROJECT_VERSION)
+            # A matching or newer release tag remains authoritative.
+            set(CMAKE_PROJECT_VERSION "${DW_TAG_VERSION}")
+            set(CMAKE_PROJECT_VERSION_MAJOR "${DW_VERSION_MAJOR}")
+            set(CMAKE_PROJECT_VERSION_MINOR "${DW_VERSION_MINOR}")
+            set(CMAKE_PROJECT_VERSION_PATCH "${DW_VERSION_PATCH}")
+            set(PROJECT_VERSION "${DW_TAG_VERSION}")
+            set(PROJECT_VERSION_MAJOR "${DW_VERSION_MAJOR}")
+            set(PROJECT_VERSION_MINOR "${DW_VERSION_MINOR}")
+            set(PROJECT_VERSION_PATCH "${DW_VERSION_PATCH}")
+        endif()
     endif()
 else()
     set(DW_GIT_HASH "nogit")

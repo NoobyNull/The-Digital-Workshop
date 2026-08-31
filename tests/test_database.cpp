@@ -235,7 +235,7 @@ TEST(Database, SchemaMigration_v8_to_v9) {
     ASSERT_TRUE(dw::Schema::initialize(db));
 
     // Verify version is now current
-    EXPECT_EQ(dw::Schema::getVersion(db), 17);
+    EXPECT_EQ(dw::Schema::getVersion(db), 18);
 
     // Verify project_gcode table exists
     auto stmt1 = db.prepare(
@@ -252,4 +252,30 @@ TEST(Database, SchemaMigration_v8_to_v9) {
     auto stmt3 = db.prepare("SELECT notes FROM projects WHERE name = 'test'");
     ASSERT_TRUE(stmt3.step());
     EXPECT_EQ(stmt3.getText(0), "some notes");
+}
+
+TEST(Database, SchemaMigration_v17PersistsTemporaryProjectOwnership) {
+    dw::Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    ASSERT_TRUE(db.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)"));
+    ASSERT_TRUE(db.execute("INSERT INTO schema_version (version) VALUES (17)"));
+    ASSERT_TRUE(db.execute(R"(
+        CREATE TABLE projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            file_path TEXT,
+            notes TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            modified_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    )"));
+    ASSERT_TRUE(db.execute("INSERT INTO projects (name) VALUES ('Legacy')"));
+
+    ASSERT_TRUE(dw::Schema::initialize(db));
+    EXPECT_EQ(dw::Schema::getVersion(db), 18);
+
+    auto query = db.prepare("SELECT temporary FROM projects WHERE name = 'Legacy'");
+    ASSERT_TRUE(query.step());
+    EXPECT_EQ(query.getInt(0), 0);
 }

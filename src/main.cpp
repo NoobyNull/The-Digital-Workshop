@@ -4,13 +4,14 @@
 #include "core/utils/log.h"
 
 #include <csignal>
+#include <cstdio>
 #include <cstring>
 
 namespace {
-dw::Application* g_app = nullptr;
+volatile std::sig_atomic_t g_terminationRequested = 0;
 
-void signalHandler(int /*sig*/) {
-    if (g_app) g_app->quit();
+void signalHandler(int signal) {
+    g_terminationRequested = signal;
 }
 } // namespace
 
@@ -31,7 +32,7 @@ int main(int argc, char* argv[]) {
     }
 
     dw::Application app;
-    g_app = &app;
+    app.setTerminationSignalFlag(&g_terminationRequested);
 
     std::signal(SIGTERM, signalHandler);
     std::signal(SIGINT, signalHandler);
@@ -45,6 +46,5 @@ int main(int argc, char* argv[]) {
     }
 
     int result = app.run();
-    g_app = nullptr;
     return result;
 }

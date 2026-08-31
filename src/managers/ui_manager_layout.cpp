@@ -9,21 +9,44 @@
 #include <imgui_internal.h>
 
 #include "core/config/config.h"
+#include "core/config/layout_migration.h"
+#include "modules/workshop/ui/guided_layout_metrics.h"
 #include "ui/tool_library_access.h"
 #include "ui/panels/viewport_panel.h"
 
 namespace dw {
+namespace {
+
+template <typename Predicate>
+int findPresetIndex(const std::vector<LayoutPreset>& presets, Predicate predicate) {
+    for (int index = 0; index < static_cast<int>(presets.size()); ++index) {
+        if (predicate(presets[static_cast<std::size_t>(index)]))
+            return index;
+    }
+    return -1;
+}
+
+} // namespace
 
 void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
+    const auto* viewport = ImGui::GetMainViewport();
+    const auto dockLayout = workshop::ui::chooseGuidedDockLayout(
+        viewport->WorkSize.x, ImGui::GetFontSize());
+
     ImGui::DockBuilderRemoveNode(dockspaceId);
     ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
-    ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->Size);
+    ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->Size);
 
-    // Split: left sidebar (20%) | center+right
+    // Split from physical widths so scaled Guided labels remain readable while
+    // 4K sidebars stay close to their useful content instead of growing to 20%.
     ImGuiID dockLeft = 0;
     ImGuiID dockCenterRight = 0;
     ImGui::DockBuilderSplitNode(
-        dockspaceId, ImGuiDir_Left, 0.20f, &dockLeft, &dockCenterRight);
+        dockspaceId,
+        ImGuiDir_Left,
+        dockLayout.leftSplitRatio,
+        &dockLeft,
+        &dockCenterRight);
 
     // Split left sidebar: library (top 60%) | project (bottom 40%)
     ImGuiID dockLeftTop = 0;
@@ -31,11 +54,15 @@ void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     ImGui::DockBuilderSplitNode(
         dockLeft, ImGuiDir_Down, 0.40f, &dockLeftBottom, &dockLeftTop);
 
-    // Split center+right: center | right sidebar (20%) for properties
+    // Split center+right using the right sidebar's physical target width.
     ImGuiID dockCenter = 0;
     ImGuiID dockRight = 0;
     ImGui::DockBuilderSplitNode(
-        dockCenterRight, ImGuiDir_Right, 0.20f, &dockRight, &dockCenter);
+        dockCenterRight,
+        ImGuiDir_Right,
+        dockLayout.rightSplitRatio,
+        &dockRight,
+        &dockCenter);
 
     // Core visible panels
     ImGui::DockBuilderDockWindow("Library", dockLeftTop);
@@ -44,7 +71,7 @@ void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Properties", dockRight);
 
     // Hidden panels — docked as tabs in existing areas
-    ImGui::DockBuilderDockWindow("Start Page", dockCenter);
+    ImGui::DockBuilderDockWindow("Home###Start Page", dockCenter);
     ImGui::DockBuilderDockWindow("G-code", dockCenter);
     ImGui::DockBuilderDockWindow("Cut Optimizer", dockCenter);
     ImGui::DockBuilderDockWindow("Project Costing", dockLeftBottom);
@@ -61,7 +88,7 @@ void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     ImGui::DockBuilderDockWindow("Machine Settings", dockCenter);
     ImGui::DockBuilderDockWindow("Macros", dockCenter);
     ImGui::DockBuilderDockWindow("Job Progress", dockCenter);
-    ImGui::DockBuilderDockWindow("Direct Carve", dockCenter);
+    ImGui::DockBuilderDockWindow("CAM", dockCenter);
 
     ImGui::DockBuilderFinish(dockspaceId);
 }
@@ -70,7 +97,8 @@ void UIManager::restoreVisibilityFromConfig() {
     auto& cfg = Config::instance();
 
     m_showViewport = cfg.getShowViewport();
-    m_showLibrary = cfg.getShowLibrary();
+    // Design Library visibility belongs to its task flow, never a saved layout.
+    m_showLibrary = false;
     m_showProperties = cfg.getShowProperties();
     m_showProject = cfg.getShowProject();
     m_showMaterials = cfg.getShowMaterials();
@@ -92,6 +120,14 @@ void UIManager::restoreVisibilityFromConfig() {
     m_showDirectCarve = cfg.getShowDirectCarve();
 
     m_activePresetIndex = cfg.getActiveLayoutPresetIndex();
+    if (m_activePresetIndex >= 0 &&
+        m_activePresetIndex < static_cast<int>(cfg.getLayoutPresets().size())) {
+        const auto& active = cfg.getLayoutPresets()[static_cast<std::size_t>(m_activePresetIndex)];
+        if (isGuidedLayout(active) && m_guidedExperienceSetter)
+            m_guidedExperienceSetter(true);
+        else if (isAdvancedLayout(active) && m_guidedExperienceSetter)
+            m_guidedExperienceSetter(false);
+    }
     m_workspaceMode = isBuiltInSenderPreset(m_activePresetIndex)
         ? WorkspaceMode::CNC
         : WorkspaceMode::Model;
@@ -102,7 +138,8 @@ void UIManager::restoreVisibilityFromConfig() {
 void UIManager::saveVisibilityToConfig() {
     auto& cfg = Config::instance();
     cfg.setShowViewport(m_showViewport);
-    cfg.setShowLibrary(m_showLibrary);
+    // Migrate any legacy persisted Library visibility back to the safe default.
+    cfg.setShowLibrary(false);
     cfg.setShowProperties(m_showProperties);
     cfg.setShowProject(m_showProject);
     cfg.setShowMaterials(m_showMaterials);
@@ -146,14 +183,19 @@ void UIManager::applyLayoutPreset(int presetIndex) {
     const auto& presets = cfg.getLayoutPresets();
     if (presetIndex < 0 || presetIndex >= static_cast<int>(presets.size()))
         return;
+    if (m_cncStreaming && presetIndex != m_activePresetIndex)
+        return;
+    if (m_showLibrary && isBuiltInSenderPreset(presetIndex))
+        return;
 
     const auto& preset = presets[static_cast<size_t>(presetIndex)];
     for (const auto& entry : m_panelRegistry) {
-        auto it = preset.visibility.find(entry.key);
-        if (it != preset.visibility.end())
-            *entry.showFlag = it->second;
+        const auto* catalog = findWindowCatalogEntry(entry.key);
+        if (catalog && !catalog->layoutPersistent)
+            continue;
+        if (const auto visible = layoutPresetVisibility(preset, entry.key))
+            *entry.showFlag = *visible;
     }
-
     m_activePresetIndex = presetIndex;
     cfg.setActiveLayoutPresetIndex(presetIndex);
     m_suppressAutoContext = true;
@@ -164,16 +206,69 @@ void UIManager::applyLayoutPreset(int presetIndex) {
     else if (isBuiltInSenderPreset(presetIndex))
         m_workspaceMode = WorkspaceMode::CNC;
 
+    if (isGuidedLayout(preset) && m_guidedExperienceSetter)
+        m_guidedExperienceSetter(true);
+    else if (isAdvancedLayout(preset) && m_guidedExperienceSetter)
+        m_guidedExperienceSetter(false);
+
     syncWorkspaceModeToPanels();
     enforceWorkspaceBoundary();
+}
+
+bool UIManager::isBuiltInWorkshopPreset(int presetIndex) const {
+    const auto& presets = Config::instance().getLayoutPresets();
+    if (presetIndex < 0 || presetIndex >= static_cast<int>(presets.size()))
+        return false;
+    const auto& preset = presets[static_cast<std::size_t>(presetIndex)];
+    return isGuidedLayout(preset) || isAdvancedLayout(preset);
+}
+
+bool UIManager::isBuiltInSenderPreset(int presetIndex) const {
+    const auto& presets = Config::instance().getLayoutPresets();
+    return presetIndex >= 0 && presetIndex < static_cast<int>(presets.size()) &&
+           isCncLayout(presets[static_cast<std::size_t>(presetIndex)]);
+}
+
+bool UIManager::guidedExperienceSelected() const {
+    return m_guidedExperienceGetter && m_guidedExperienceGetter();
+}
+
+int UIManager::workshopPresetIndex() const {
+    const auto& presets = Config::instance().getLayoutPresets();
+    const bool guided = guidedExperienceSelected();
+    const int preferred = findPresetIndex(presets, [guided](const LayoutPreset& preset) {
+        return guided ? isGuidedLayout(preset) : isAdvancedLayout(preset);
+    });
+    if (preferred >= 0)
+        return preferred;
+    return findPresetIndex(presets, [](const LayoutPreset& preset) {
+        return isGuidedLayout(preset) || isAdvancedLayout(preset);
+    });
+}
+
+int UIManager::senderPresetIndex() const {
+    return findPresetIndex(Config::instance().getLayoutPresets(), isCncLayout);
+}
+
+void UIManager::selectGuidedExperience(bool guided) {
+    if (m_cncStreaming)
+        return;
+    if (m_guidedExperienceSetter)
+        m_guidedExperienceSetter(guided);
+    if (m_workspaceMode == WorkspaceMode::Model)
+        applyLayoutPreset(workshopPresetIndex());
 }
 
 LayoutPreset UIManager::captureCurrentLayout(const std::string& name) const {
     LayoutPreset preset;
     preset.name = name;
 
-    for (const auto& entry : m_panelRegistry)
+    for (const auto& entry : m_panelRegistry) {
+        const auto* catalog = findWindowCatalogEntry(entry.key);
+        if (catalog && !catalog->layoutPersistent)
+            continue;
         preset.visibility[entry.key] = *entry.showFlag;
+    }
     return preset;
 }
 
@@ -252,7 +347,8 @@ void UIManager::renderPresetSelector() {
     if (ImGui::BeginCombo("##LayoutPreset", activeLabel, ImGuiComboFlags_NoArrowButton)) {
         for (int i = 0; i < static_cast<int>(presets.size()); ++i) {
             bool selected = (i == m_activePresetIndex);
-            const bool disabled = m_cncStreaming && !isBuiltInSenderPreset(i);
+            const bool disabled = (m_cncStreaming && !selected) ||
+                                  (m_showLibrary && isBuiltInSenderPreset(i));
             if (disabled)
                 ImGui::BeginDisabled();
             if (ImGui::Selectable(presets[static_cast<size_t>(i)].name.c_str(), selected))
@@ -261,7 +357,7 @@ void UIManager::renderPresetSelector() {
                 ImGui::EndDisabled();
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                     ImGui::SetTooltip(
-                        "Finish or stop the active G-code stream before leaving Sender.");
+                        "The active layout stays fixed while a G-code stream is active.");
             }
             if (selected) ImGui::SetItemDefaultFocus();
         }

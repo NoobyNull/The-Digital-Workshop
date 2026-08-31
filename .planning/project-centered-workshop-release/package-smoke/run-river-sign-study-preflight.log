@@ -1,0 +1,83 @@
+[32m[09:32:48.326] [INFO ] [Config] [0mLoaded from /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/config/digitalworkshop/config.ini
+STARTUP: Config Loading took 0.07 ms
+STARTUP: Directory Creation took 0.07 ms
+STARTUP: SDL2 Initialization took 161.63 ms
+[32m[09:32:48.559] [INFO ] [Application] [0mOpenGL 4.6 (Core Profile) Mesa 26.1.4-arch3.1
+STARTUP: OpenGL Window Setup took 71.62 ms
+STARTUP: ImGui Setup and Fonts took 4.66 ms
+[32m[09:32:48.564] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.565] [INFO ] [Schema] [0mDatabase schema initialized successfully
+[32m[09:32:48.566] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.566] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.566] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.566] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.566] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.566] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.567] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.567] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.567] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.567] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.567] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.567] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.568] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.568] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.568] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.568] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.568] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.568] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.569] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.569] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.569] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+[32m[09:32:48.569] [INFO ] [ConnectionPool] [0mCreated pool with 21 connections to /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/library.db
+STARTUP: Threading and Database Setup took 5.10 ms
+[32m[09:32:48.570] [INFO ] [GraphManager] [0mGraphQLite extension loaded successfully
+[32m[09:32:48.570] [INFO ] [GraphManager] [0mGraph schema initialized (implicit)
+STARTUP: GraphManager Extension took 1.10 ms
+[32m[09:32:48.673] [INFO ] [MaterialManager] [0mSeeded 32 materials (30 with textures)
+STARTUP: Managers and Repositories took 102.81 ms
+[32m[09:32:48.682] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/tools.vtdb
+[32m[09:32:48.683] [INFO ] [ToolDatabase] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/tools.vtdb
+STARTUP: Storage and Tool Systems took 9.79 ms
+[32m[09:32:48.683] [INFO ] [Database] [0mOpened: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/data/digitalworkshop/macros.db
+[32m[09:32:48.683] [INFO ] [GamepadInput] [0mOpened controller: se Gamepad
+STARTUP: CNC and Background Systems took 0.29 ms
+[32m[09:32:48.690] [INFO ] [Renderer] [0mInitialized
+[32m[09:32:48.690] [INFO ] [Config] [0mWatching /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/config/digitalworkshop/config.ini (poll 500ms)
+STARTUP: UI and File IO Managers took 6.88 ms
+STARTUP: Wiring and Final Setup took 0.07 ms
+
+=== STARTUP TIMING REPORT ===
+Config Loading: 0.07 ms
+Directory Creation: 0.07 ms
+SDL2 Initialization: 161.63 ms
+OpenGL Window Setup: 71.62 ms
+ImGui Setup and Fonts: 4.66 ms
+Threading and Database Setup: 5.10 ms
+GraphManager Extension: 1.10 ms
+Managers and Repositories: 102.81 ms
+Storage and Tool Systems: 9.79 ms
+CNC and Background Systems: 0.29 ms
+UI and File IO Managers: 6.88 ms
+Wiring and Final Setup: 0.07 ms
+TOTAL: 364.11 ms
+=============================
+
+Digital Workshop 0.7.0 (5347e22-dirty) initialized
+[32m[09:32:48.690] [INFO ] [CNC] [0mSimulator IO thread started
+[32m[09:32:48.690] [INFO ] [CNC] [0mSimulator connected: Grbl 1.1h [Simulator]
+[32m[09:32:48.690] [INFO ] [STL] [0mLoaded binary: 5580 vertices, 1860 triangles
+[32m[09:32:48.692] [INFO ] [Renderer] [0mInitialized
+[32m[09:32:48.729] [INFO ] [Library] [0mGenerated thumbnail: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/cache/digitalworkshop/thumbnails/1.tga
+[32m[09:32:48.730] [INFO ] [Library] [0mImported model: river_sign_primary (ID: 1, 1860 triangles)
+[32m[09:32:48.730] [INFO ] [STL] [0mLoaded binary: 3696 vertices, 1232 triangles
+[32m[09:32:48.731] [INFO ] [Renderer] [0mInitialized
+[32m[09:32:48.733] [INFO ] [Library] [0mGenerated thumbnail: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/cache/digitalworkshop/thumbnails/2.tga
+[32m[09:32:48.733] [INFO ] [Library] [0mImported model: river_sign_alternate (ID: 2, 1232 triangles)
+[32m[09:32:48.733] [INFO ] [STL] [0mLoaded binary: 4788 vertices, 1596 triangles
+[32m[09:32:48.734] [INFO ] [Renderer] [0mInitialized
+[32m[09:32:48.736] [INFO ] [Library] [0mGenerated thumbnail: /tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01/profile/cache/digitalworkshop/thumbnails/3.tga
+[32m[09:32:48.736] [INFO ] [Library] [0mImported model: river_sign_preview_only (ID: 3, 1596 triangles)
+DW_STUDY_READY={"git_hash":"5347e22-dirty","membership_count":0,"model_count":3,"model_names":["Primary","Alternate","Preview Only"],"no_project":true,"picker_purpose":"StartProject","route":"Design Library","selection_count":0,"ui_scale":1.0,"version":"0.7.0","virtual_cnc":true}
+STUDY_ATTEMPT_READY=P02-A01
+STUDY_EVIDENCE_DIR=/tmp/tmp.WuQYTkxyJl/river-sign-study-run/P02/attempt-01
+[32m[09:32:48.770] [INFO ] [CNC] [0mSimulator IO thread stopped

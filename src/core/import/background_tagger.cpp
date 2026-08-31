@@ -220,7 +220,8 @@ bool BackgroundTagger::applyOrientationCorrection(ModelRepository& repo,
     f32 orientYaw = model.orientYaw.value_or(0.0f);
     Mat4 baseMatrix(1.0f);
     if (model.orientMatrix) {
-        baseMatrix = *model.orientMatrix;
+        loadResult.mesh->applyStoredOrient(*model.orientMatrix);
+        baseMatrix = loadResult.mesh->getOrientMatrix();
     } else {
         orientYaw = loadResult.mesh->autoOrient();
         baseMatrix = loadResult.mesh->getOrientMatrix();

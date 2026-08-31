@@ -1,0 +1,17 @@
+Checking production source-size caps
+-- Source-size target warning: src/app/application.cpp has 596 lines (target 500)
+-- Source-size target warning: src/core/config/config.cpp has 718 lines (target 500)
+-- Source-size target warning: src/core/config/config.h has 567 lines (target 500)
+-- Source-size target warning: src/core/database/gcode_repository.cpp has 699 lines (target 500)
+-- Source-size target warning: src/core/export/project_export_manager.cpp has 556 lines (target 500)
+-- Source-size target warning: src/core/mesh/mesh.cpp has 534 lines (target 500)
+-- Source-size target warning: src/managers/ui_manager_menus.cpp has 547 lines (target 500)
+-- Source-size target warning: src/render/renderer.cpp has 570 lines (target 500)
+-- Source-size target warning: src/ui/panels/cnc_status_panel.cpp has 586 lines (target 500)
+-- Source-size target warning: src/ui/panels/direct_carve_panel.cpp has 647 lines (target 500)
+-- Source-size target warning: src/ui/panels/materials_panel.cpp has 691 lines (target 500)
+-- Source-size target warning: src/ui/panels/materials_panel_stock.cpp has 509 lines (target 500)
+-- Source-size target warning: src/ui/panels/viewport_gcode_layer.cpp has 522 lines (target 500)
+-- Source-size target warning: src/ui/panels/viewport_interaction.cpp has 558 lines (target 500)
+-- Source-size policy passed: 524 files checked, 14 target warnings
+Built target check_source_sizes

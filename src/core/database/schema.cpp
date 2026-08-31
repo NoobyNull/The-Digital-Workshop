@@ -1,5 +1,6 @@
 #include "schema.h"
 
+#include "schema_project_migrations.h"
 #include "../paths/app_paths.h"
 #include "../utils/log.h"
 
@@ -101,7 +102,8 @@ bool createProjectsTable(Database& db) {
             file_path TEXT,
             notes TEXT DEFAULT '',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            modified_at TEXT DEFAULT CURRENT_TIMESTAMP
+            modified_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            temporary INTEGER NOT NULL DEFAULT 0
         )
     )");
 }
@@ -801,18 +803,7 @@ bool Schema::migrate(Database& db, int fromVersion) {
         log::info("Schema", "v16: Added rate_categories table");
     }
 
-    if (fromVersion < 17) {
-        if (!createProjectOpenItemsTable(db)) return false;
-        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_project ON "
-                         "project_open_items(project_id)");
-        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_parent ON "
-                         "project_open_items(parent_item_id)");
-        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_source ON "
-                         "project_open_items(project_id, source_table, source_id)");
-        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_source_key ON "
-                         "project_open_items(project_id, source_key)");
-        log::info("Schema", "v17: Added project_open_items table");
-    }
+    if (!migrateProjectSessionSchema(db, fromVersion)) return false;
 
     if (!setVersion(db, CURRENT_VERSION)) {
         txn.rollback();

@@ -9,7 +9,7 @@
 
 namespace dw {
 
-// Decoded pixel data from a PNG image (RGBA, 4 channels)
+// Decoded pixel data from an image (RGBA, 4 channels)
 struct TextureData {
     std::vector<uint8_t> pixels; // Raw RGBA pixels (width * height * 4 bytes)
     int width = 0;
@@ -17,10 +17,14 @@ struct TextureData {
     int channels = 4; // Always 4 (RGBA) — forced on load
 };
 
-// Loads PNG images from disk or memory using stb_image.
+// Loads images from disk or memory using stb_image.
 // Always decodes to RGBA (4 channels) for consistent GPU upload.
 class TextureLoader {
   public:
+    // Load a supported image from file path
+    // Returns nullopt on failure (logs stbi_failure_reason)
+    static std::optional<TextureData> loadImage(const Path& path);
+
     // Load PNG from file path
     // Returns nullopt on failure (logs stbi_failure_reason)
     static std::optional<TextureData> loadPNG(const Path& path);

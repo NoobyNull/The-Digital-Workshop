@@ -17,7 +17,19 @@ size_t writeCallback(char* ptr, size_t size, size_t nmemb, void* userdata) {
 
 } // namespace detail
 
-std::string curlPost(const std::string& url, const std::string& body) {
+namespace {
+
+// Shared hardening for every local-service transfer: no SIGALRM-based DNS
+// timeouts in a multithreaded process, and never route loopback through a
+// user's http_proxy environment.
+void setCommonOpts(CURL* curl) {
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_NOPROXY, "127.0.0.1,localhost");
+}
+
+} // namespace
+
+std::string curlPost(const std::string& url, const std::string& body, long timeoutSeconds) {
     CURL* curl = curl_easy_init();
     if (curl == nullptr) {
         return {};
@@ -33,7 +45,8 @@ std::string curlPost(const std::string& url, const std::string& body) {
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, detail::writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeoutSeconds);
+    setCommonOpts(curl);
 
     CURLcode res = curl_easy_perform(curl);
 
@@ -48,6 +61,38 @@ std::string curlPost(const std::string& url, const std::string& body) {
         return {};
     }
     if (httpCode != 200) {
+        log::errorf("LMStudioHTTP", "HTTP %ld: %.500s", httpCode, response.c_str());
+    }
+    return response;
+}
+
+std::string curlGet(const std::string& url, long timeoutSeconds, bool quiet) {
+    CURL* curl = curl_easy_init();
+    if (curl == nullptr) {
+        return {};
+    }
+
+    std::string response;
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, detail::writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeoutSeconds);
+    setCommonOpts(curl);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    long httpCode = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        if (!quiet)
+            log::errorf("LMStudioHTTP", "curl error: %s", curl_easy_strerror(res));
+        return {};
+    }
+    if (httpCode != 200 && !quiet) {
         log::errorf("LMStudioHTTP", "HTTP %ld: %.500s", httpCode, response.c_str());
     }
     return response;

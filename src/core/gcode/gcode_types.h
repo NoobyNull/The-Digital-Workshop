@@ -101,6 +101,8 @@ struct PathSegment {
 // Parsed G-code program
 struct Program {
     std::vector<Command> commands;
+    // Canonical machine-space geometry in millimeters, regardless of whether
+    // the exact source commands use G20 or G21.
     std::vector<PathSegment> path;
 
     Units units = Units::Millimeters;

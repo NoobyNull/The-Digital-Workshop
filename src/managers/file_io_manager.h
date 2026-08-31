@@ -6,9 +6,12 @@
 // recent project opening. Extracted from Application (god class
 // decomposition Wave 2).
 
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../core/types.h"
@@ -18,6 +21,8 @@ namespace dw {
 // Forward declarations
 class Database;
 class LibraryManager;
+class Project;
+class ProjectDirectory;
 class ProjectManager;
 class ImportQueue;
 struct ImportTask;
@@ -32,6 +37,18 @@ class ImportOptionsDialog;
 class ProjectExportManager;
 class ProgressDialog;
 class MainThreadQueue;
+
+enum class ImportedLibraryItemKind {
+    Model,
+    GCode,
+};
+
+struct ImportedLibraryItem {
+    ImportedLibraryItemKind kind = ImportedLibraryItemKind::Model;
+    int64_t id = 0;
+
+    [[nodiscard]] bool valid() const noexcept { return id > 0; }
+};
 
 class FileIOManager {
   public:
@@ -58,25 +75,52 @@ class FileIOManager {
     using GCodeCallback = std::function<void(const std::string& path)>;
     void setGCodeCallback(GCodeCallback cb) { m_gcodeCallback = std::move(cb); }
 
+    // Project identity is committed by the application-owned ProjectSession
+    // gateway. The completion runs after the transition is finally applied or
+    // rejected, including any asynchronous save/discard prompt.
+    using ProjectActivationCompletion = std::function<void(bool activated)>;
+    using ProjectActivationCallback = std::function<void(std::shared_ptr<Project>,
+                                                         std::optional<uint64_t> expectedGeneration,
+                                                         ProjectActivationCompletion)>;
+    using ProjectGenerationCallback = std::function<uint64_t()>;
+    void setProjectActivationCallback(ProjectActivationCallback callback) {
+        m_projectActivationCallback = std::move(callback);
+    }
+    void setProjectGenerationCallback(ProjectGenerationCallback callback) {
+        m_projectGenerationCallback = std::move(callback);
+    }
+    using ProjectSavedCallback = std::function<void()>;
+    void setProjectSavedCallback(ProjectSavedCallback callback) {
+        m_projectSavedCallback = std::move(callback);
+    }
+
     // Import/Export
     void importModel();
     void importFolder();
     void exportModel();
     void onFilesDropped(const std::vector<std::string>& paths);
+
+    // Fired when an import flow ends with nothing enqueued (picker cancelled,
+    // empty selection, scan cancelled) so callers can drop pending intent.
+    void setOnImportSelectionAbandoned(std::function<void()> callback) {
+        m_onImportSelectionAbandoned = std::move(callback);
+    }
+    using ImportsReadyCallback =
+        std::function<void(const std::vector<ImportedLibraryItem>& items)>;
     void processCompletedImports(ViewportPanel* viewport,
                                  PropertiesPanel* properties,
                                  LibraryPanel* library,
-                                 std::function<void(bool)> setShowStartPage);
+                                 ImportsReadyCallback onImportsReady);
 
     // Project operations
-    void newProject(std::function<void(bool)> setShowStartPage);
-    void openProject(std::function<void(bool)> setShowStartPage);
-    void saveProject();
-    void openRecentProject(const Path& path, std::function<void(bool)> setShowStartPage);
+    void newProject(std::string name, ProjectActivationCompletion completion = {});
+    void openProject(ProjectActivationCompletion completion = {});
+    [[nodiscard]] bool saveProject();
+    void openRecentProject(const Path& path, ProjectActivationCompletion completion = {});
 
     // Project archive export/import (.dwproj)
     void exportProjectArchive();
-    void importProjectArchive(std::function<void(bool)> setShowStartPage);
+    void importProjectArchive(ProjectActivationCompletion completion = {});
 
     // Dependency injection
     void setProgressDialog(ProgressDialog* dialog) { m_progressDialog = dialog; }
@@ -85,6 +129,15 @@ class FileIOManager {
   private:
     // Recursive directory scanning helper
     void collectSupportedFiles(const Path& directory, std::vector<Path>& outPaths);
+    void activateProject(std::shared_ptr<Project> project,
+                         std::optional<uint64_t> expectedGeneration,
+                         ProjectActivationCompletion completion = {});
+    void openProjectDirectory(const Path& path,
+                              std::optional<uint64_t> expectedGeneration,
+                              ProjectActivationCompletion completion,
+                              bool recentEntry);
+    [[nodiscard]] std::optional<uint64_t> captureProjectGeneration() const;
+    void startBackgroundTask(std::function<void()> task);
 
     Database* m_database;
     LibraryManager* m_libraryManager;
@@ -92,10 +145,12 @@ class FileIOManager {
     ImportQueue* m_importQueue;
     Workspace* m_workspace;
     FileDialog* m_fileDialog;
+    std::function<void()> m_onImportSelectionAbandoned;
     ThumbnailGenerator* m_thumbnailGenerator;
 
     // Pending completions queue for throttled processing (one per frame)
     std::vector<ImportTask> m_pendingCompletions;
+    std::vector<std::thread> m_backgroundThreads;
 
     // Optional material-aware thumbnail callback
     ThumbnailCallback m_thumbnailCallback;
@@ -103,6 +158,9 @@ class FileIOManager {
 
     // G-code file callback (routes to G-code panel)
     GCodeCallback m_gcodeCallback;
+    ProjectActivationCallback m_projectActivationCallback;
+    ProjectGenerationCallback m_projectGenerationCallback;
+    ProjectSavedCallback m_projectSavedCallback;
 
     // Import options dialog (owned by UIManager, nullable)
     ImportOptionsDialog* m_importOptionsDialog = nullptr;

@@ -10,6 +10,7 @@
 #include "../gcode/machine_profile.h"
 #include "../types.h"
 #include "input_binding.h"
+#include "layout_migration.h"
 #include "layout_preset.h"
 
 namespace dw {
@@ -23,6 +24,11 @@ enum class NavStyle : int {
     CAD = 1,     // Middle=Orbit, Shift+Middle=Pan, Right=Pan, Scroll=Zoom
     Maya = 2,    // Alt+Left=Orbit, Alt+Middle=Pan, Alt+Right=Zoom
 };
+
+NavStyle nextNavStyle(NavStyle style);
+const char* navStyleLetter(NavStyle style);
+const char* navStyleName(NavStyle style);
+const char* navStyleControlHint(NavStyle style);
 
 // File handling mode for imported models
 enum class FileHandlingMode : int {
@@ -83,9 +89,6 @@ class Config {
 
     const Path& getLastExportDir() const { return m_lastExportDir; }
     void setLastExportDir(const Path& path) { m_lastExportDir = path; }
-
-    const Path& getLastProjectDir() const { return m_lastProjectDir; }
-    void setLastProjectDir(const Path& path) { m_lastProjectDir = path; }
 
     // Window state
     int getWindowWidth() const { return m_windowWidth; }
@@ -353,6 +356,7 @@ class Config {
     const std::vector<LayoutPreset>& getLayoutPresets() const { return m_layoutPresets; }
     void setLayoutPresets(const std::vector<LayoutPreset>& presets) { m_layoutPresets = presets; }
     int getActiveLayoutPresetIndex() const { return m_activeLayoutPresetIndex; }
+    int getLayoutMigrationVersion() const { return m_layoutMigrationVersion; }
     void setActiveLayoutPresetIndex(int index);
     void addLayoutPreset(const LayoutPreset& preset);
     void removeLayoutPreset(int index);
@@ -444,7 +448,6 @@ class Config {
     // Default paths
     Path m_lastImportDir;
     Path m_lastExportDir;
-    Path m_lastProjectDir;
 
     // Window state
     int m_windowWidth = 1600;
@@ -557,7 +560,8 @@ class Config {
 
     // Layout presets
     std::vector<LayoutPreset> m_layoutPresets;
-    int m_activeLayoutPresetIndex = 0;
+    int m_activeLayoutPresetIndex = 1;
+    int m_layoutMigrationVersion = CURRENT_LAYOUT_MIGRATION_VERSION;
 };
 
 } // namespace dw

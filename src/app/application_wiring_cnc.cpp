@@ -1,23 +1,32 @@
-// Application wiring — CNC, GCode, DirectCarve, and tool panels.
+// Application wiring — CNC, GCode, and tool panels.
 
 #include "app/application.h"
+#include "app/direct_carve_run_effect_adapter.h"
 
+#include <filesystem>
 #include <string>
+#include <system_error>
+#include <utility>
 
+#include "core/cam/cam_engine_runtime.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/cnc/macro_manager.h"
 #include "core/cnc/machine_units.h"
 #include "core/cnc/unified_settings.h"
 #include "core/config/config.h"
-#include "core/gcode/gcode_analyzer.h"
+#include "core/gcode/gcode_document.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/job_repository.h"
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
 #include "core/materials/material_manager.h"
+#include "core/paths/app_paths.h"
 #include "core/paths/path_resolver.h"
 #include "core/threading/main_thread_queue.h"
 #include "managers/ui_manager.h"
+#include "modules/project_session/project_session.h"
+#include "ui/dialogs/supplier_tool_import_dialog.h"
+#include "ui/panels/cam_placeholder_panel.h"
 #include "ui/panels/cnc_console_panel.h"
 #include "ui/panels/cnc_jog_panel.h"
 #include "ui/panels/cnc_job_panel.h"
@@ -28,7 +37,6 @@
 #include "ui/panels/cnc_tool_panel.h"
 #include "ui/panels/cnc_wcs_panel.h"
 #include "ui/panels/cut_optimizer_panel.h"
-#include "ui/panels/direct_carve_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/tool_browser_panel.h"
 #include "ui/panels/viewport_panel.h"
@@ -89,13 +97,11 @@ void Application::wireCncPanels() {
         });
 
         // Forward program load/clear to viewport for toolpath rendering + simulation
-        gcp->setOnProgramLoaded([this](const gcode::Program& prog) {
+        gcp->setOnProgramLoaded([this](const gcode::Program& prog,
+                                      const gcode::Statistics& stats) {
             if (auto* vp = m_uiManager->viewportPanel()) {
-                vp->setGCodeProgram(prog);
-                // Compute segment times for viewport simulation
-                gcode::Analyzer analyzer;
-                analyzer.setMachineProfile(Config::instance().getActiveMachineProfile());
-                auto stats = analyzer.analyze(prog);
+                vp->setGCodeProgram(
+                    prog, ViewportGCodeSource::FileBackedProgram);
                 vp->setGCodeStatistics(stats);
             }
         });
@@ -114,53 +120,14 @@ void Application::wireCncPanels() {
         auto* safetyp = m_uiManager->cncSafetyPanel();
         auto* settsp = m_uiManager->cncSettingsPanel();
         auto* macrop = m_uiManager->cncMacroPanel();
-        auto* dcarvep = m_uiManager->directCarvePanel();
         auto* vpp = m_uiManager->viewportPanel();
 
-        // Wire Direct Carve panel dependencies
-        if (dcarvep) {
-            dcarvep->setCncController(m_cncController.get());
-            dcarvep->setToolDatabase(m_toolDatabase.get());
-            dcarvep->setToolboxRepository(m_toolboxRepo.get());
-            dcarvep->setMaterialManager(m_materialManager.get());
-            dcarvep->setCarveJob(m_carveJob.get());
-            dcarvep->setFileDialog(m_uiManager->fileDialog());
-            dcarvep->setGCodeRepository(m_gcodeRepo.get());
-            dcarvep->setGCodePanel(gcp);
-            dcarvep->setLibraryManager(m_libraryManager.get());
-            dcarvep->setProjectManager(m_projectManager.get());
-            dcarvep->setOpenToolBrowserCallback([this]() {
-                m_uiManager->openWindow("tool_library");
-            });
-            dcarvep->setOpenMachineProfilesCallback([this]() {
-                m_uiManager->openMachineProfiles();
-            });
-            dcarvep->setCutOptimizerPanel(m_uiManager->cutOptimizerPanel());
-            dcarvep->setOnMaterialPartSync([this](const DirectCarvePanel::MaterialPartSync& data) {
-                auto* costPanel = m_uiManager->costPanel();
-                if (!costPanel || !m_projectManager || !m_projectManager->currentDirectory())
-                    return;
-
-                costPanel->setCostingDir(m_projectManager->currentDirectory()->costingDir());
-                auto entry = CostingEngine::createMaterialEntry(
-                    data.materialName.empty() ? data.name : data.materialName,
-                    data.stockSizeDbId,
-                    data.dimensions,
-                    data.unitRate,
-                    data.quantity,
-                    data.unit);
-                entry.name = data.name;
-                costPanel->upsertAutoEntry(entry, data.key);
-                costPanel->save();
-            });
-            if (vpp) {
-                dcarvep->setOnFitParamsChanged(
-                    [vpp](const carve::FitParams& params,
-                          const Vec3& boundsMin, const Vec3& boundsMax,
-                          const carve::StockDimensions& stock) {
-                        vpp->setFitParams(params, boundsMin, boundsMax, stock);
-                    });
-            }
+        // No production dispatcher calls execute() until the CAM rebuild
+        // restores a protected-run initiator; only snapshot() is read today.
+        if (m_projectSession && m_projectManager && m_jobRepo && m_cncController) {
+            m_directCarveRunEffectAdapter =
+                std::make_unique<DirectCarveRunEffectAdapter>(
+                    *m_projectSession, *m_projectManager, *m_jobRepo, *m_cncController);
         }
 
         // Set CncController on CNC panels
@@ -183,7 +150,7 @@ void Application::wireCncPanels() {
 
         CncCallbacks cncCb;
         cncCb.onConnectionChanged =
-            [this, gcp, csp, jogp, conp, wcsp, jobp, safetyp, settsp, macrop, dcarvep, vpp](
+            [this, gcp, csp, jogp, conp, wcsp, jobp, safetyp, settsp, macrop, vpp](
                 bool connected, const std::string& version) {
             gcp->onGrblConnected(connected, version);
             if (csp) csp->onConnectionChanged(connected, version);
@@ -198,7 +165,6 @@ void Application::wireCncPanels() {
             }
             if (settsp) settsp->onConnectionChanged(connected, version);
             if (macrop) macrop->onConnectionChanged(connected, version);
-            if (dcarvep) dcarvep->onConnectionChanged(connected);
             if (vpp) vpp->setCncConnected(connected);
             m_uiManager->setCncConnected(connected);
             m_uiManager->setCncSimulating(m_cncController->isSimulating());
@@ -209,7 +175,7 @@ void Application::wireCncPanels() {
             }
         };
         cncCb.onStatusUpdate =
-            [gcp, csp, jogp, wcsp, jobp, ctp, safetyp, settsp, macrop, dcarvep, vpp](
+            [gcp, csp, jogp, wcsp, jobp, ctp, safetyp, settsp, macrop, vpp](
                 const MachineStatus& status) {
             gcp->onGrblStatus(status);
             if (csp) csp->onStatusUpdate(status);
@@ -223,7 +189,6 @@ void Application::wireCncPanels() {
             if (safetyp) safetyp->onStatusUpdate(status);
             if (settsp) settsp->onStatusUpdate(status);
             if (macrop) macrop->onStatusUpdate(status);
-            if (dcarvep) dcarvep->onStatusUpdate(status);
             if (vpp) vpp->onCncStatusUpdate(status);
         };
         cncCb.onLineAcked = [gcp](const LineAck& ack) {
@@ -232,8 +197,9 @@ void Application::wireCncPanels() {
         cncCb.onProgressUpdate =
             [this, gcp, jobp, safetyp](const StreamProgress& progress) {
             gcp->onGrblProgress(progress);
-            bool streaming = progress.streaming;
-            m_uiManager->setCncStreaming(streaming);
+            const bool streaming = progress.streaming;
+            // DirectCarve-origin streams return with the CAM rebuild.
+            m_uiManager->setCncStreaming(streaming, CncStreamOrigin::ExternalGCode);
             if (jobp) {
                 jobp->onProgressUpdate(progress);
                 jobp->setStreaming(streaming);
@@ -255,12 +221,19 @@ void Application::wireCncPanels() {
             gcp->onGrblError(message);
             if (conp) conp->onError(message);
         };
-        cncCb.onRawLine = [this, gcp, conp, wcsp, settsp, dcarvep](
+        cncCb.onStreamingError =
+            [gcp, conp](const StreamingError& error) {
+                const std::string message =
+                    "Streaming stopped at line " + std::to_string(error.lineIndex + 1) +
+                    ": " + error.errorMessage;
+                gcp->onGrblError(message);
+                if (conp) conp->onError(message);
+            };
+        cncCb.onRawLine = [this, gcp, conp, wcsp, settsp](
             const std::string& line, bool isSent) {
             gcp->onGrblRawLine(line, isSent);
             if (conp) conp->onRawLine(line, isSent);
             if (wcsp) wcsp->onRawLine(line, isSent);
-            if (dcarvep) dcarvep->onRawLine(line, isSent);
             if (settsp) {
                 settsp->onRawLine(line, isSent);
                 if (!isSent && line == "ok" && settsp->hasSettings()) {
@@ -320,7 +293,7 @@ void Application::wireCncPanels() {
 
         m_uiManager->setOnPanicStop([this]() {
             m_cncController->feedHold();
-            m_cncController->stopStream();
+            if (m_cncController->isStreaming()) m_cncController->stopStream();
             ToastManager::instance().show(
                 ToastType::Warning, "PANIC STOP", "Feed hold sent — job aborted", 5.0f);
         });
@@ -332,6 +305,14 @@ void Application::wireCncPanels() {
         tbp->setToolboxRepository(m_toolboxRepo.get());
         tbp->setMaterialManager(m_materialManager.get());
         tbp->setFileDialog(m_uiManager->fileDialog());
+        if (auto* importDialog = m_uiManager->supplierToolImportDialog()) {
+            importDialog->setToolDatabase(m_toolDatabase.get());
+            importDialog->setToolboxRepository(m_toolboxRepo.get());
+            importDialog->setOnImported([tbp](const SelectiveToolImportResult&) {
+                tbp->refresh();
+            });
+            tbp->setSupplierToolImportDialog(importDialog);
+        }
         tbp->setOpenMachineProfilesCallback([this]() {
             m_uiManager->openMachineProfiles();
         });
@@ -342,6 +323,35 @@ void Application::wireCncPanels() {
     if (auto* ctp = m_uiManager->cncToolPanel()) {
         ctp->setToolDatabase(m_toolDatabase.get());
         ctp->setMaterialManager(m_materialManager.get());
+    }
+
+    // Wire CAM placeholder panel's engine status surface (v0.8.0 rebuild).
+    if (auto* camp = m_uiManager->camPlaceholderPanel()) {
+        camp->setEngineStatusProvider([this]() -> std::string {
+            if (!m_camEngineStatus)
+                return "Engine not started";
+            // Don't keep reporting "ready" after the owned child dies.
+            if (m_camEngineStatus->ready && m_camEngineRuntime &&
+                m_camEngineRuntime->ownedChildExited()) {
+                m_camEngineStatus->ready = false;
+                m_camEngineStatus->reason = "CAM engine stopped (process exited)";
+            }
+            return m_camEngineStatus->ready
+                       ? "Engine ready at " + m_camEngineStatus->endpoint
+                       : m_camEngineStatus->reason;
+        });
+        camp->setOnStartEngine([this]() {
+            if (!m_camEngineRuntime) {
+                cam::CamEngineConfig cfg;
+                cfg.port = cam::bridgePortFromEnv(cfg.port);
+                cfg.payloadDir = cam::locatePayloadDir(paths::getExeDir());
+                m_camEngineRuntime = std::make_unique<cam::CamEngineRuntime>(cfg);
+            }
+            // Synchronous on the UI thread: the accepted Phase 2 manual
+            // verification path (bounded by the runtime's ~10s reachability
+            // wait). Phase 3 replaces this with an async/managed start.
+            m_camEngineStatus = m_camEngineRuntime->ensureReady();
+        });
     }
 }
 

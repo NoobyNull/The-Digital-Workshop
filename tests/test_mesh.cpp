@@ -40,6 +40,12 @@ dw::Mesh makeCube() {
     return dw::Mesh(std::move(verts), std::move(idx));
 }
 
+float upper3x3Determinant(const dw::Mat4& matrix) {
+    return matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[2][1] * matrix[1][2]) -
+           matrix[1][0] * (matrix[0][1] * matrix[2][2] - matrix[2][1] * matrix[0][2]) +
+           matrix[2][0] * (matrix[0][1] * matrix[1][2] - matrix[1][1] * matrix[0][2]);
+}
+
 } // namespace
 
 // --- Construction ---
@@ -249,6 +255,54 @@ TEST(Mesh, GeometryHashChangesWhenTexCoordsChange) {
     mesh.generatePlanarUVs();
 
     EXPECT_NE(hashBefore, mesh.geometryHash());
+}
+
+TEST(Mesh, AutoOrientUsesRotationNotReflection) {
+    std::vector<dw::Vertex> verts = {
+        dw::Vertex({0.0f, 0.0f, 0.0f}),
+        dw::Vertex({2.0f, 0.0f, 0.0f}),
+        dw::Vertex({0.0f, 0.0f, 3.0f}),
+        dw::Vertex({0.0f, 0.1f, 0.0f}),
+    };
+    std::vector<dw::u32> indices = {0, 1, 2, 0, 3, 1};
+    dw::Mesh mesh(std::move(verts), std::move(indices));
+
+    mesh.autoOrient();
+
+    EXPECT_GT(upper3x3Determinant(mesh.getOrientMatrix()), 0.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[1].position.x, 2.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[1].position.y, 0.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[2].position.x, 0.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[2].position.y, 3.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[3].position.z, -0.1f);
+}
+
+TEST(Mesh, ApplyStoredOrientRepairsLegacyReflections) {
+    std::vector<dw::Vertex> verts = {
+        dw::Vertex({0.0f, 0.0f, 0.0f}),
+        dw::Vertex({2.0f, 0.0f, 0.0f}),
+        dw::Vertex({0.0f, 0.0f, 3.0f}),
+        dw::Vertex({0.0f, 0.1f, 0.0f}),
+    };
+    std::vector<dw::u32> indices = {0, 1, 2, 0, 3, 1};
+    dw::Mesh mesh(std::move(verts), std::move(indices));
+
+    dw::Mat4 legacySwapYZ(1.0f);
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            legacySwapYZ[c][r] = 0.0f;
+    legacySwapYZ[0][0] = 1.0f;
+    legacySwapYZ[2][1] = 1.0f;
+    legacySwapYZ[1][2] = 1.0f;
+
+    mesh.applyStoredOrient(legacySwapYZ);
+
+    EXPECT_GT(upper3x3Determinant(mesh.getOrientMatrix()), 0.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[1].position.x, 2.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[1].position.y, 0.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[2].position.x, 0.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[2].position.y, 3.0f);
+    EXPECT_FLOAT_EQ(mesh.vertices()[3].position.z, -0.1f);
 }
 
 // --- AABB tests (header-only) ---

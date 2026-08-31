@@ -10,7 +10,10 @@
 #include "core/database/model_repository.h"
 #include "core/database/project_repository.h"
 #include "core/database/schema.h"
+#include "core/config/config.h"
 #include "core/export/project_export_manager.h"
+#include "core/library/library_manager.h"
+#include "core/loaders/gcode_loader.h"
 #include "core/paths/app_paths.h"
 #include "core/paths/path_resolver.h"
 #include "core/project/project.h"
@@ -26,10 +29,18 @@ class ProjectExportTest : public ::testing::Test {
   protected:
     void SetUp() override {
         m_baseDir = std::filesystem::temp_directory_path() / "dw_test_export";
+        std::filesystem::remove_all(m_baseDir);
         std::filesystem::create_directories(m_baseDir);
 
         m_modelsDir = m_baseDir / "models";
         std::filesystem::create_directories(m_modelsDir);
+
+        m_previousModelsDir = dw::Config::instance().getModelsDir();
+        m_previousGCodeDir = dw::Config::instance().getGCodeDir();
+        m_previousProjectsDir = dw::Config::instance().getProjectsDir();
+        dw::Config::instance().setModelsDir(m_modelsDir);
+        dw::Config::instance().setGCodeDir(m_baseDir / "gcode");
+        dw::Config::instance().setProjectsDir(m_baseDir / "projects");
 
         m_archivePath = (m_baseDir / "test.dwproj").string();
 
@@ -38,7 +49,12 @@ class ProjectExportTest : public ::testing::Test {
         ASSERT_TRUE(dw::Schema::initialize(m_db));
     }
 
-    void TearDown() override { std::filesystem::remove_all(m_baseDir); }
+    void TearDown() override {
+        dw::Config::instance().setModelsDir(m_previousModelsDir);
+        dw::Config::instance().setGCodeDir(m_previousGCodeDir);
+        dw::Config::instance().setProjectsDir(m_previousProjectsDir);
+        std::filesystem::remove_all(m_baseDir);
+    }
 
     // Create a dummy model file and insert a ModelRecord
     dw::i64 insertModelWithFile(const std::string& hash,
@@ -120,6 +136,9 @@ class ProjectExportTest : public ::testing::Test {
 
     std::filesystem::path m_baseDir;
     dw::Path m_modelsDir;
+    dw::Path m_previousModelsDir;
+    dw::Path m_previousGCodeDir;
+    dw::Path m_previousProjectsDir;
     std::string m_archivePath;
     dw::Database m_db;
 };
@@ -263,6 +282,89 @@ TEST_F(ProjectExportTest, ImportIgnoresUnknownManifestFields) {
     auto projects = projRepo.findAll();
     ASSERT_EQ(projects.size(), 1u);
     EXPECT_EQ(projects[0].name, "Future Project");
+}
+
+TEST_F(ProjectExportTest, LegacyProjectLibraryImportedGCodeAndExternalNcRemainUsable) {
+    const std::string importedGCode =
+        "G21\nG90\nT3 M6\nG0 X0 Y0 Z5\nG1 X10 Y0 Z0 F300\nG1 X10 Y10 Z0\nM30\n";
+
+    nlohmann::json manifest;
+    manifest["format_version"] = 1;
+    manifest["app_version"] = "1.1.0";
+    manifest["created_at"] = "2025-01-15T10:30:00Z";
+    manifest["project_id"] = 27;
+    manifest["project_name"] = "Legacy River Sign";
+    manifest["models"] = nlohmann::json::array(
+        {{{"name", "River Sign"},
+          {"hash", "legacy-river-sign-model"},
+          {"original_filename", "river-sign.stl"},
+          {"file_in_archive", "models/legacy-river-sign.stl"},
+          {"file_format", "stl"},
+          {"tags", nlohmann::json::array({"sign", "legacy"})},
+          {"vertex_count", 12},
+          {"triangle_count", 4},
+          {"bounds_min", {0.0, 0.0, 0.0}},
+          {"bounds_max", {120.0, 60.0, 6.0}}}});
+    manifest["gcode"] = nlohmann::json::array(
+        {{{"id", 31},
+          {"name", "Legacy Finish Pass"},
+          {"hash", "legacy-river-sign-finish"},
+          {"file_in_archive", "gcode/legacy-finish.nc"},
+          {"estimated_time", 42.0},
+          {"tool_numbers", nlohmann::json::array({3})}}});
+
+    createArchiveWithManifest(
+        m_archivePath,
+        manifest,
+        {{"models/legacy-river-sign.stl", "solid river_sign\nendsolid river_sign\n"},
+         {"gcode/legacy-finish.nc", importedGCode}});
+
+    dw::ProjectExportManager importer(m_db);
+    const auto imported = importer.importProject(m_archivePath);
+    ASSERT_TRUE(imported.success) << imported.error;
+    ASSERT_TRUE(imported.importedProjectId.has_value());
+
+    dw::ProjectManager projects(m_db);
+    auto legacyProject = projects.open(*imported.importedProjectId);
+    ASSERT_NE(legacyProject, nullptr);
+    EXPECT_EQ(legacyProject->name(), "Legacy River Sign");
+    ASSERT_EQ(legacyProject->modelCount(), 1);
+    projects.synchronizeActiveProject(legacyProject);
+    ASSERT_TRUE(projects.save(*legacyProject));
+    EXPECT_EQ(projects.validateProjectStorage(legacyProject->id()),
+              dw::ProjectStorageValidationStatus::Ready);
+
+    dw::LibraryManager library(m_db);
+    const auto libraryModel = library.getModelByHash("legacy-river-sign-model");
+    ASSERT_TRUE(libraryModel.has_value());
+    EXPECT_EQ(libraryModel->name, "River Sign");
+    EXPECT_EQ(library.modelCount(), 1);
+
+    dw::GCodeRepository gcodes(m_db);
+    const auto projectGCode = gcodes.findByProject(legacyProject->id());
+    ASSERT_EQ(projectGCode.size(), 1u);
+    EXPECT_EQ(projectGCode.front().name, "Legacy Finish Pass");
+    const auto importedGCodePath =
+        dw::PathResolver::resolve(projectGCode.front().filePath, dw::PathCategory::GCode);
+    ASSERT_TRUE(dw::file::isFile(importedGCodePath));
+
+    dw::GCodeLoader loader;
+    const auto importedLoad = loader.load(importedGCodePath);
+    ASSERT_TRUE(importedLoad.success()) << importedLoad.error;
+    EXPECT_GT(importedLoad.mesh->vertexCount(), 0u);
+    ASSERT_EQ(loader.lastMetadata().toolNumbers.size(), 1u);
+    EXPECT_EQ(loader.lastMetadata().toolNumbers.front(), 3);
+
+    const dw::Path externalPath = m_baseDir / "external-one-off.nc";
+    ASSERT_TRUE(dw::file::writeText(
+        externalPath, "G21\nG90\nG0 X0 Y0 Z2\nG1 X5 Y5 Z0 F150\nM30\n"));
+    const auto repositoryCountBefore = gcodes.count();
+    EXPECT_FALSE(gcodes.findByPath(externalPath).has_value());
+    const auto externalLoad = loader.load(externalPath);
+    ASSERT_TRUE(externalLoad.success()) << externalLoad.error;
+    EXPECT_GT(externalLoad.mesh->vertexCount(), 0u);
+    EXPECT_EQ(gcodes.count(), repositoryCountBefore);
+    EXPECT_FALSE(gcodes.findByPath(externalPath).has_value());
 }
 
 // --- Test 4: Import deduplicates existing models ---

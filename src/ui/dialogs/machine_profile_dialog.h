@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <string>
 
 #include "../../core/gcode/machine_profile.h"
 
@@ -24,6 +25,7 @@ class MachineProfileDialog {
     bool m_open = false;
     gcode::MachineProfile m_editProfile;
     int m_editProfileIndex = 0;
+    std::string m_saveFeedback;
     std::function<void()> m_onChanged;
 };
 

@@ -80,19 +80,25 @@ void UIManager::renderToolbar() {
         ImGui::EndDisabled();
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
         ImGui::SetTooltip(m_cncStreaming
-            ? "Finish or stop the active G-code stream before leaving Sender."
+            ? "The workspace stays fixed while a G-code stream is active."
             : "Workshop / Projects (Ctrl+1)");
     }
 
     ImGui::SameLine(0, 0);
-    if (senderActive)
+    const bool lockSender = senderActive || m_showLibrary || m_cncStreaming;
+    if (lockSender)
         ImGui::BeginDisabled();
     if (ImGui::SmallButton("Sender"))
         setWorkspaceMode(WorkspaceMode::CNC);
-    if (senderActive)
+    if (lockSender)
         ImGui::EndDisabled();
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("CNC Sender (Ctrl+2)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip(m_cncStreaming
+                              ? "The workspace stays fixed while a G-code stream is active."
+                              : (m_showLibrary
+                                     ? "Return from the Design Library before opening CNC Sender."
+                                     : "CNC Sender (Ctrl+2)"));
+    }
 }
 
 void UIManager::renderCncMenuBarStatus() {
@@ -182,6 +188,20 @@ void UIManager::renderViewMenu() {
     if (!ImGui::BeginMenu("View"))
         return;
 
+    if (ImGui::BeginMenu("Experience")) {
+        const bool guided = guidedExperienceSelected();
+        if (m_cncStreaming)
+            ImGui::BeginDisabled();
+        if (ImGui::MenuItem("Guided Workshop", nullptr, guided))
+            selectGuidedExperience(true);
+        if (ImGui::MenuItem("Advanced Workbench", nullptr, !guided))
+            selectGuidedExperience(false);
+        if (m_cncStreaming)
+            ImGui::EndDisabled();
+        ImGui::EndMenu();
+    }
+    ImGui::Separator();
+
     bool isModel = (m_workspaceMode == WorkspaceMode::Model);
     bool isCnc = (m_workspaceMode == WorkspaceMode::CNC);
     if (m_cncStreaming)
@@ -191,10 +211,21 @@ void UIManager::renderViewMenu() {
     if (m_cncStreaming) {
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("Finish or stop the active G-code stream before leaving Sender.");
+            ImGui::SetTooltip("The workspace stays fixed while a G-code stream is active.");
     }
+    const bool lockSenderWorkspace = m_showLibrary || m_cncStreaming;
+    if (lockSenderWorkspace)
+        ImGui::BeginDisabled();
     if (ImGui::MenuItem("CNC Sender", "Ctrl+2", isCnc))
         setWorkspaceMode(WorkspaceMode::CNC);
+    if (lockSenderWorkspace) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip(m_cncStreaming
+                                  ? "The workspace stays fixed while a G-code stream is active."
+                                  : "Return from the Design Library before opening CNC Sender.");
+        }
+    }
     ImGui::Separator();
 
     if (ImGui::MenuItem("Viewport", nullptr, isWindowVisible("viewport")))
@@ -206,10 +237,9 @@ void UIManager::renderViewMenu() {
     ImGui::Separator();
 
     if (m_workspaceMode == WorkspaceMode::Model) {
-        if (ImGui::MenuItem("Start Page", nullptr, isWindowVisible("start_page")))
+        if (ImGui::MenuItem("Home", nullptr, isWindowVisible("start_page")))
             toggleWindow("start_page");
-        if (ImGui::MenuItem("Library", nullptr, isWindowVisible("library")))
-            toggleWindow("library");
+        renderDesignLibraryMenuItem();
         if (ImGui::MenuItem("Properties", nullptr, isWindowVisible("properties")))
             toggleWindow("properties");
         ImGui::Separator();
@@ -259,7 +289,7 @@ void UIManager::renderSenderSubmenu() {
     if (ImGui::MenuItem("Macros", nullptr, isWindowVisible("cnc_macros")))
         toggleWindow("cnc_macros");
     ImGui::Separator();
-    if (ImGui::MenuItem("Direct Carve", nullptr, isWindowVisible("direct_carve")))
+    if (ImGui::MenuItem("CAM", nullptr, isWindowVisible("direct_carve")))
         toggleWindow("direct_carve");
     ImGui::Separator();
     if (ImGui::BeginMenu("Live Overlay")) {
@@ -392,6 +422,7 @@ void UIManager::renderAboutDialog() {
             "About Digital Workshop", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Digital Workshop");
         ImGui::Text("Version %s", VERSION);
+        ImGui::TextDisabled("Build %s", GIT_HASH);
         ImGui::Separator();
         ImGui::TextWrapped("A 3D model management application for CNC and 3D printing workflows.");
         ImGui::Spacing();
@@ -509,7 +540,7 @@ void UIManager::handleKeyboardShortcuts() {
 
     if (ImGui::IsKeyPressed(ImGuiKey_1) && !m_cncStreaming)
         setWorkspaceMode(WorkspaceMode::Model);
-    if (ImGui::IsKeyPressed(ImGuiKey_2))
+    if (ImGui::IsKeyPressed(ImGuiKey_2) && !m_cncStreaming)
         setWorkspaceMode(WorkspaceMode::CNC);
 }
 

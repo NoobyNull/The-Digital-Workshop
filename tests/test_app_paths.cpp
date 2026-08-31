@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include "test_env_util.h"
+
 #include "core/paths/app_paths.h"
 
 #include <cstring>
@@ -18,14 +20,14 @@ class ScopedEnvVar {
         if (existing != nullptr) {
             m_oldValue = existing;
         }
-        setenv(name, value.c_str(), 1);
+        dw::test::setEnv(name, value.c_str());
     }
 
     ~ScopedEnvVar() {
         if (!m_oldValue) {
-            unsetenv(m_name.c_str());
+            dw::test::unsetEnv(m_name.c_str());
         } else {
-            setenv(m_name.c_str(), m_oldValue->c_str(), 1);
+            dw::test::setEnv(m_name.c_str(), m_oldValue->c_str());
         }
     }
 

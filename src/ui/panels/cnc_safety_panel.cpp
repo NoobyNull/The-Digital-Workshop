@@ -587,7 +587,7 @@ void CncSafetyPanel::renderResumeDialog() {
         }
 
         if (m_cnc)
-            m_cnc->startStream(combined);
+            (void)m_cnc->startStream(combined);
 
         ImGui::CloseCurrentPopup();
     }

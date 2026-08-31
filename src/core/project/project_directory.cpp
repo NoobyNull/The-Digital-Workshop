@@ -20,7 +20,8 @@ static constexpr int kManifestVersion = 1;
 std::string ProjectDirectory::sanitizeName(const std::string& raw) {
     // Strip extension
     std::string stem = file::getStem(raw);
-    if (stem.empty()) stem = raw;
+    if (stem.empty())
+        stem = raw;
 
     std::string out;
     out.reserve(stem.size());
@@ -32,8 +33,10 @@ std::string ProjectDirectory::sanitizeName(const std::string& raw) {
         }
     }
     // Trim trailing dash
-    while (!out.empty() && out.back() == '-') out.pop_back();
-    if (out.empty()) out = "project";
+    while (!out.empty() && out.back() == '-')
+        out.pop_back();
+    if (out.empty())
+        out = "project";
     return out;
 }
 
@@ -51,9 +54,11 @@ bool ProjectDirectory::createSubdirs() {
 
 // --- create ---
 
-bool ProjectDirectory::create(const Path& root, const std::string& name,
-                               const std::string& description) {
+bool ProjectDirectory::create(const Path& root,
+                              const std::string& name,
+                              const std::string& description) {
     m_root = root;
+    m_projectId = 0;
     m_name = name;
     m_description = description;
     m_models.clear();
@@ -79,6 +84,14 @@ bool ProjectDirectory::create(const Path& root, const std::string& name,
 // --- open ---
 
 bool ProjectDirectory::open(const Path& root) {
+    return load(root, true);
+}
+
+bool ProjectDirectory::inspect(const Path& root) {
+    return load(root, false);
+}
+
+bool ProjectDirectory::load(const Path& root, bool restoreSubdirectories) {
     m_root = root;
     Path manifestPath = m_root / kManifestFile;
 
@@ -91,6 +104,7 @@ bool ProjectDirectory::open(const Path& root) {
     try {
         auto j = nlohmann::json::parse(*text);
 
+        m_projectId = j.value("projectId", 0LL);
         m_name = j.value("name", "");
         m_description = j.value("description", "");
 
@@ -128,8 +142,12 @@ bool ProjectDirectory::open(const Path& root) {
         return false;
     }
 
-    // Ensure subdirectories exist (may have been deleted or never created)
-    createSubdirs();
+    // Opening is the legacy repair-capable path. Inspection deliberately stops
+    // after parsing so callers can guarantee a non-mutating preflight.
+    if (restoreSubdirectories && !createSubdirs()) {
+        log::errorf(kLogModule, "Failed to restore project subdirectories: %s", m_root.c_str());
+        return false;
+    }
 
     log::infof(kLogModule, "Opened project: %s at %s", m_name.c_str(), m_root.c_str());
     return true;
@@ -140,6 +158,7 @@ bool ProjectDirectory::open(const Path& root) {
 bool ProjectDirectory::save() {
     nlohmann::json j;
     j["version"] = kManifestVersion;
+    j["projectId"] = m_projectId;
     j["name"] = m_name;
     j["description"] = m_description;
 
@@ -150,22 +169,17 @@ bool ProjectDirectory::save() {
 
     j["heightmaps"] = nlohmann::json::array();
     for (const auto& h : m_heightmaps) {
-        j["heightmaps"].push_back({
-            {"filename", h.filename},
-            {"resolutionMmPerPx", h.resolutionMmPerPx}
-        });
+        j["heightmaps"].push_back(
+            {{"filename", h.filename}, {"resolutionMmPerPx", h.resolutionMmPerPx}});
     }
 
     j["gcode"] = nlohmann::json::array();
     for (const auto& g : m_gcodeFiles) {
-        j["gcode"].push_back({
-            {"filename", g.filename},
-            {"toolDescription", g.toolDescription}
-        });
+        j["gcode"].push_back({{"filename", g.filename}, {"toolDescription", g.toolDescription}});
     }
 
     Path manifestPath = m_root / kManifestFile;
-    if (!file::writeText(manifestPath, j.dump(2))) {
+    if (!file::writeTextAtomic(manifestPath, j.dump(2))) {
         log::errorf(kLogModule, "Failed to write manifest: %s", manifestPath.c_str());
         return false;
     }
@@ -204,7 +218,8 @@ bool ProjectDirectory::addModelFile(const Path& sourcePath, const std::string& f
 
     // Skip if already registered with same hash
     for (const auto& m : m_models) {
-        if (m.hash == fileHash) return true;
+        if (m.hash == fileHash)
+            return true;
     }
 
     if (!file::exists(destPath)) {
@@ -239,7 +254,8 @@ bool ProjectDirectory::addGCodeFile(const Path& sourcePath, const std::string& t
     Path destPath = gcodeDir() / destName;
 
     for (const auto& g : m_gcodeFiles) {
-        if (g.filename == destName) return true;
+        if (g.filename == destName)
+            return true;
     }
 
     if (!file::exists(destPath)) {
@@ -268,8 +284,7 @@ void ProjectDirectory::addHeightmap(const std::string& filename, f32 resolutionM
 
 // --- addGCode ---
 
-void ProjectDirectory::addGCode(const std::string& filename,
-                                 const std::string& toolDescription) {
+void ProjectDirectory::addGCode(const std::string& filename, const std::string& toolDescription) {
     for (auto& g : m_gcodeFiles) {
         if (g.filename == filename) {
             g.toolDescription = toolDescription;

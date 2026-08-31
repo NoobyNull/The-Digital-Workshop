@@ -1,70 +1,65 @@
 #include "start_page.h"
 
-#include <cstring>
-#include <filesystem>
 #include <fstream>
 
 #include <imgui.h>
-#include <nfd.h>
 #include <nlohmann/json.hpp>
 
 #include "../../core/config/config.h"
-#include "../../core/paths/app_paths.h"
 #include "../../core/utils/file_utils.h"
+#include "../../modules/workshop/ui/guided_layout_metrics.h"
 #include "version.h"
 
 namespace dw {
 
-StartPage::StartPage() : Panel("Start Page") {}
+StartPage::StartPage() : Panel("Home###Start Page") {}
+
+void StartPage::beginNamedProject() {
+    const auto result = m_homeFlow.dispatch(workshop::BeginNamedProject{});
+    if (result.snapshot.namingProject) {
+        if (result.status == workshop::HomeTransitionStatus::Applied)
+            m_projectName[0] = '\0';
+        m_openProjectNamePopup = true;
+        m_focusProjectName = true;
+        m_open = true;
+    }
+}
 
 void StartPage::render() {
     if (!m_open)
         return;
 
-    // Load workspace root from config on first render
-    if (!m_workspaceRootLoaded) {
-        auto root = Config::instance().getWorkspaceRoot();
-        std::strncpy(m_workspaceRoot, root.string().c_str(), sizeof(m_workspaceRoot) - 1);
-        m_workspaceRoot[sizeof(m_workspaceRoot) - 1] = '\0';
-        m_startMode = Config::instance().getActiveLayoutPresetIndex();
-        m_workspaceRootLoaded = true;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
+    if (m_focusHome) {
+        ImGui::SetNextWindowFocus();
+        m_focusHome = false;
     }
-
-    // Non-dockable floating window
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking;
-
-    const auto* viewport = ImGui::GetMainViewport();
-    ImVec2 startSize(viewport->WorkSize.x * 0.55f, viewport->WorkSize.y * 0.55f);
-    ImGui::SetNextWindowSize(startSize, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(
-        ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
-               viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
-        ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
 
     applyMinSize(30, 16);
     if (ImGui::Begin(m_title.c_str(), &m_open, flags)) {
+        const auto homeLayout = workshop::ui::chooseGuidedHomeLayout(
+            ImGui::GetContentRegionAvail().x, ImGui::GetStyle().ItemSpacing.x);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + homeLayout.horizontalOffset);
+        ImGui::BeginChild(
+            "##GuidedHomeContent", ImVec2(homeLayout.contentWidth, 0.0F), false);
+
         // Header
-        ImGui::Text("Digital Workshop");
+        ImGui::Text("Home");
         ImGui::SameLine();
         ImGui::TextDisabled("v%s", VERSION);
-        ImGui::TextDisabled("3D Model Management for CNC and 3D Printing");
+        ImGui::TextDisabled("Start a project or continue one you already know.");
+        ImGui::TextWrapped(
+            "Projects keep the design, preparation, and machine work for one job together.");
 
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
-        // Reserve space for bottom checkbox
-        float checkboxHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
-        float contentHeight = ImGui::GetContentRegionAvail().y - checkboxHeight;
-        float availWidth = ImGui::GetContentRegionAvail().x;
-        float leftWidth = availWidth * 0.55f;
+        const float contentHeight = ImGui::GetContentRegionAvail().y;
 
-        // Left column: setup + recent projects
-        ImGui::BeginChild("##StartLeft", ImVec2(leftWidth, contentHeight), false);
-        renderSetup();
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
+        // Left column: recent projects
+        ImGui::BeginChild(
+            "##StartLeft", ImVec2(homeLayout.leftColumnWidth, contentHeight), false);
         renderRecentProjects();
         ImGui::EndChild();
 
@@ -75,100 +70,10 @@ void StartPage::render() {
         renderQuickActions();
         ImGui::EndChild();
 
-        // Show at launch checkbox
-        ImGui::Spacing();
-        bool showAtLaunch = Config::instance().getShowStartPage();
-        if (ImGui::Checkbox("Show at launch", &showAtLaunch)) {
-            Config::instance().setShowStartPage(showAtLaunch);
-            Config::instance().save();
-        }
+        ImGui::EndChild();
+        renderNamedProjectDialog();
     }
     ImGui::End();
-}
-
-void StartPage::setWorkspaceRoot(const Path& path) {
-    const std::string value = path.string();
-    std::strncpy(m_workspaceRoot, value.c_str(), sizeof(m_workspaceRoot) - 1);
-    m_workspaceRoot[sizeof(m_workspaceRoot) - 1] = '\0';
-
-    Config::instance().setWorkspaceRoot(path);
-    Config::instance().save();
-}
-
-void StartPage::browseWorkspaceRoot() {
-    Path startPath(m_workspaceRoot);
-    if (startPath.empty() || !std::filesystem::is_directory(startPath)) {
-        startPath = paths::getUserRoot().parent_path();
-    }
-    if (startPath.empty() || !std::filesystem::is_directory(startPath)) {
-        startPath = std::filesystem::current_path();
-    }
-
-    NFD_Init();
-    nfdchar_t* outPath = nullptr;
-    nfdresult_t result = NFD_PickFolder(&outPath, startPath.string().c_str());
-    if (result == NFD_OKAY && outPath) {
-        setWorkspaceRoot(Path(outPath));
-        NFD_FreePath(outPath);
-    } else if (result == NFD_ERROR) {
-        std::fprintf(stderr, "Native folder dialog error: %s\n", NFD_GetError());
-    }
-    NFD_Quit();
-}
-
-void StartPage::renderSetup() {
-    ImGui::Text("Setup");
-    ImGui::Spacing();
-
-    // Workspace root
-    ImGui::TextDisabled("Workspace Root");
-    const float browseWidth =
-        ImGui::CalcTextSize("Browse...").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth -
-                            ImGui::GetStyle().ItemSpacing.x);
-    if (ImGui::InputText("##WorkspaceRoot", m_workspaceRoot, sizeof(m_workspaceRoot))) {
-        Config::instance().setWorkspaceRoot(Path(m_workspaceRoot));
-        Config::instance().save();
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Base directory for all project files.\nLeave empty for default: %s",
-                          paths::getUserRoot().string().c_str());
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Browse...")) {
-        browseWorkspaceRoot();
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Choose the workspace root with the system folder picker.");
-    }
-
-    // Show validation
-    Path wsPath(m_workspaceRoot);
-    if (!wsPath.empty()) {
-        if (std::filesystem::exists(wsPath) && std::filesystem::is_directory(wsPath)) {
-            ImGui::SameLine();
-        } else {
-            ImGui::TextDisabled("Directory will be created when needed.");
-        }
-    } else {
-        ImGui::TextDisabled("Using default: %s", paths::getUserRoot().string().c_str());
-    }
-
-    ImGui::Spacing();
-
-    // Start mode selection
-    ImGui::TextDisabled("Start In");
-    if (ImGui::RadioButton("Workshop / Projects", m_startMode == 0)) {
-        m_startMode = 0;
-        if (m_onWorkspaceModeChanged)
-            m_onWorkspaceModeChanged(0);
-    }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("CNC Sender", m_startMode == 1)) {
-        m_startMode = 1;
-        if (m_onWorkspaceModeChanged)
-            m_onWorkspaceModeChanged(1);
-    }
 }
 
 void StartPage::refreshRecentNames() {
@@ -191,7 +96,7 @@ void StartPage::refreshRecentNames() {
             name = projectPath.filename().string();
         m_recentNames.push_back(std::move(name));
     }
-    m_recentNamesCount = recentProjects.size();
+    m_recentPaths = recentProjects;
 }
 
 void StartPage::renderRecentProjects() {
@@ -201,7 +106,7 @@ void StartPage::renderRecentProjects() {
     const auto& recentProjects = Config::instance().getRecentProjects();
 
     // Refresh cached names when list changes
-    if (recentProjects.size() != m_recentNamesCount)
+    if (recentProjects != m_recentPaths)
         refreshRecentNames();
 
     if (recentProjects.empty()) {
@@ -228,24 +133,20 @@ void StartPage::renderRecentProjects() {
                 ImGui::SetTooltip("%s", projectPath.string().c_str());
             }
 
-            ImGui::SameLine();
-            ImGui::TextDisabled("%s", projectPath.parent_path().string().c_str());
-
             ImGui::PopID();
         }
     }
 }
 
 void StartPage::renderQuickActions() {
-    ImGui::Text("Quick Actions");
+    ImGui::Text("Start Here");
     ImGui::Spacing();
 
     float buttonWidth = ImGui::GetContentRegionAvail().x - ImGui::GetStyle().WindowPadding.x * 2;
     float buttonHeight = ImGui::GetFrameHeight() * 1.4f;
 
     if (ImGui::Button("New Project", ImVec2(buttonWidth, buttonHeight))) {
-        if (m_onNewProject)
-            m_onNewProject();
+        beginNamedProject();
     }
 
     ImGui::Spacing();
@@ -256,20 +157,109 @@ void StartPage::renderQuickActions() {
     }
 
     ImGui::Spacing();
+
+    if (ImGui::Button("Browse Design Library", ImVec2(buttonWidth, buttonHeight))) {
+        if (m_onBrowseLibrary)
+            m_onBrowseLibrary();
+    }
+
+    ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (ImGui::Button("Import Models", ImVec2(buttonWidth, buttonHeight))) {
+    ImGui::TextDisabled("Import designs");
+
+    const float importButtonWidth =
+        (buttonWidth - ImGui::GetStyle().ItemSpacing.x) * 0.5F;
+    if (ImGui::Button("Import Models", ImVec2(importButtonWidth, buttonHeight))) {
         if (m_onImportModel)
             m_onImportModel();
     }
 
-    ImGui::Spacing();
-
-    if (ImGui::Button("Import Folder", ImVec2(buttonWidth, buttonHeight))) {
+    ImGui::SameLine();
+    if (ImGui::Button("Import Folder", ImVec2(importButtonWidth, buttonHeight))) {
         if (m_onImportFolder)
             m_onImportFolder();
     }
+}
+
+void StartPage::renderNamedProjectDialog() {
+    if (m_openProjectNamePopup) {
+        ImGui::OpenPopup("Name Your Project");
+        m_openProjectNamePopup = false;
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(ImGui::GetFontSize() * 30.0f, 0.0f),
+                             ImGuiCond_Appearing);
+    if (!ImGui::BeginPopupModal("Name Your Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    const auto& before = m_homeFlow.snapshot();
+    if (!before.namingProject) {
+        ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+        return;
+    }
+
+    ImGui::TextWrapped("Give this project a name you will recognize later.");
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Project name");
+    ImGui::SetNextItemWidth(-1.0f);
+    if (m_focusProjectName) {
+        ImGui::SetKeyboardFocusHere();
+        m_focusProjectName = false;
+    }
+    if (before.submittingProject)
+        ImGui::BeginDisabled();
+    const bool pressedEnter = ImGui::InputText("##ProjectName",
+                                                m_projectName,
+                                                sizeof(m_projectName),
+                                                ImGuiInputTextFlags_EnterReturnsTrue);
+    if (before.submittingProject)
+        ImGui::EndDisabled();
+    if (ImGui::IsItemEdited())
+        (void)m_homeFlow.dispatch(workshop::EditProjectName{m_projectName});
+
+    const auto& snapshot = m_homeFlow.snapshot();
+    if (!snapshot.validationMessage.empty()) {
+        ImGui::TextWrapped("%s", snapshot.validationMessage.c_str());
+    } else {
+        ImGui::TextDisabled("A project folder will be prepared after you continue.");
+    }
+
+    ImGui::Spacing();
+    const bool canSubmit = snapshot.canSubmitProject();
+    if (!canSubmit)
+        ImGui::BeginDisabled();
+    const bool createClicked =
+        ImGui::Button(snapshot.submittingProject ? "Creating..." : "Create Project");
+    if (!canSubmit)
+        ImGui::EndDisabled();
+
+    if ((createClicked || (pressedEnter && canSubmit)) && m_onNewProject) {
+        const auto result = m_homeFlow.dispatch(workshop::SubmitNamedProject{});
+        if (result.createRequest) {
+            m_onNewProject(result.createRequest->name,
+                           [this](bool created, std::string failureMessage) {
+                               (void)m_homeFlow.dispatch(workshop::CompleteNamedProject{
+                                   created, std::move(failureMessage)});
+                           });
+            if (!m_homeFlow.snapshot().namingProject)
+                ImGui::CloseCurrentPopup();
+        }
+    }
+
+    ImGui::SameLine();
+    if (snapshot.submittingProject)
+        ImGui::BeginDisabled();
+    if (ImGui::Button("Cancel")) {
+        (void)m_homeFlow.dispatch(workshop::CancelNamedProject{});
+        ImGui::CloseCurrentPopup();
+    }
+    if (snapshot.submittingProject)
+        ImGui::EndDisabled();
+
+    ImGui::EndPopup();
 }
 
 } // namespace dw

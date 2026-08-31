@@ -16,6 +16,9 @@ Result<ByteBuffer> readBinary(const Path& path);
 
 // Write string to file
 [[nodiscard]] bool writeText(const Path& path, std::string_view content);
+// Replace a text file through a same-directory temporary file so a failed or
+// interrupted write cannot truncate the previous contents.
+[[nodiscard]] bool writeTextAtomic(const Path& path, std::string_view content);
 
 // Write bytes to file
 [[nodiscard]] bool writeBinary(const Path& path, const ByteBuffer& data);

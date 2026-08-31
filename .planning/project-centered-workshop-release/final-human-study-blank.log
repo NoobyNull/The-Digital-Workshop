@@ -1,0 +1,949 @@
+River Sign novice-study score: .planning/project-centered-workshop-release/river_sign_study_results.blank.json
+INPUT: INVALID / NOT EVALUABLE
+  ERROR: human_study_status: expected COMPLETE; NOT_RUN is not scoreable
+  ERROR: P01.run_status: expected COMPLETE
+  ERROR: P01.eligible: expected true
+  ERROR: P01.consent: expected true
+  ERROR: P01.first_exposure_to_build: expected true
+  ERROR: P01.not_routine_professional_cad_cam: expected true
+  ERROR: P01.mouse_keyboard_unassisted: expected true
+  ERROR: P01.did_not_observe_prior_session: expected true
+  ERROR: P01.fresh_test_profile: expected true
+  ERROR: P01.fixture_only_library: expected true
+  ERROR: P01.guided_workshop: expected true
+  ERROR: P01.virtual_cnc_only: expected true
+  ERROR: P01.session_datetime: required non-empty string
+  ERROR: P01.build_id: required non-empty string
+  ERROR: P01.os_display: required non-empty string
+  ERROR: P01.prior_cad_cam: required non-empty string
+  ERROR: P01.prior_hobby_cnc: required non-empty string
+  ERROR: P01.moderator: required non-empty string
+  ERROR: P01.ui_scale: required positive finite number
+  ERROR: P01.manual_ball_nose_diameter_mm: expected 3.175
+  ERROR: P01.back_to_project_visibly_labeled: required boolean
+  ERROR: P01.preview_only_became_member: required boolean
+  ERROR: P01.wrong_project_asset_or_output: required boolean
+  ERROR: P01.layout_preset_opened: required boolean
+  ERROR: P01.unrelated_panel_tab_opened: required boolean
+  ERROR: P01.back_to_project_activations: required non-negative integer
+  ERROR: P01.continue_activations: required non-negative integer
+  ERROR: P01.reopened_project: required non-empty string
+  ERROR: P01.reopened_selected_design: required non-empty string
+  ERROR: P01.T1.start_timestamp: required non-empty string
+  ERROR: P01.T1.end_timestamp: required non-empty string
+  ERROR: P01.T1.project_answer: required non-empty string
+  ERROR: P01.T1.design_answer: required non-empty string
+  ERROR: P01.T1.membership_answer: required non-empty string
+  ERROR: P01.T1.next_action_answer: required non-empty string
+  ERROR: P01.T1.observation_timecode: required non-empty string
+  ERROR: P01.T1.success: required boolean
+  ERROR: P01.T1.accidental_mutation: required boolean
+  ERROR: P01.T1.project_correct: required boolean
+  ERROR: P01.T1.design_correct: required boolean
+  ERROR: P01.T1.membership_correct: required boolean
+  ERROR: P01.T1.state_probe_pass: required boolean
+  ERROR: P01.T1.actions: required non-negative integer
+  ERROR: P01.T1.backtracks: required non-negative integer
+  ERROR: P01.T1.workspace_tab_hunts: required non-negative integer
+  ERROR: P01.T1.elapsed_seconds: required non-negative finite number
+  ERROR: P01.T1.project_response_seconds: required non-negative finite number
+  ERROR: P01.T1.design_response_seconds: required non-negative finite number
+  ERROR: P01.T1.membership_response_seconds: required non-negative finite number
+  ERROR: P01.T1.seq: required integer from 1 through 7
+  ERROR: P01.T1.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P01.T1.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P01.T2.start_timestamp: required non-empty string
+  ERROR: P01.T2.end_timestamp: required non-empty string
+  ERROR: P01.T2.project_answer: required non-empty string
+  ERROR: P01.T2.design_answer: required non-empty string
+  ERROR: P01.T2.membership_answer: required non-empty string
+  ERROR: P01.T2.next_action_answer: required non-empty string
+  ERROR: P01.T2.observation_timecode: required non-empty string
+  ERROR: P01.T2.success: required boolean
+  ERROR: P01.T2.accidental_mutation: required boolean
+  ERROR: P01.T2.project_correct: required boolean
+  ERROR: P01.T2.design_correct: required boolean
+  ERROR: P01.T2.membership_correct: required boolean
+  ERROR: P01.T2.state_probe_pass: required boolean
+  ERROR: P01.T2.actions: required non-negative integer
+  ERROR: P01.T2.backtracks: required non-negative integer
+  ERROR: P01.T2.workspace_tab_hunts: required non-negative integer
+  ERROR: P01.T2.elapsed_seconds: required non-negative finite number
+  ERROR: P01.T2.project_response_seconds: required non-negative finite number
+  ERROR: P01.T2.design_response_seconds: required non-negative finite number
+  ERROR: P01.T2.membership_response_seconds: required non-negative finite number
+  ERROR: P01.T2.seq: required integer from 1 through 7
+  ERROR: P01.T2.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P01.T2.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P01.T3.start_timestamp: required non-empty string
+  ERROR: P01.T3.end_timestamp: required non-empty string
+  ERROR: P01.T3.project_answer: required non-empty string
+  ERROR: P01.T3.design_answer: required non-empty string
+  ERROR: P01.T3.membership_answer: required non-empty string
+  ERROR: P01.T3.next_action_answer: required non-empty string
+  ERROR: P01.T3.observation_timecode: required non-empty string
+  ERROR: P01.T3.success: required boolean
+  ERROR: P01.T3.accidental_mutation: required boolean
+  ERROR: P01.T3.project_correct: required boolean
+  ERROR: P01.T3.design_correct: required boolean
+  ERROR: P01.T3.membership_correct: required boolean
+  ERROR: P01.T3.state_probe_pass: required boolean
+  ERROR: P01.T3.actions: required non-negative integer
+  ERROR: P01.T3.backtracks: required non-negative integer
+  ERROR: P01.T3.workspace_tab_hunts: required non-negative integer
+  ERROR: P01.T3.elapsed_seconds: required non-negative finite number
+  ERROR: P01.T3.project_response_seconds: required non-negative finite number
+  ERROR: P01.T3.design_response_seconds: required non-negative finite number
+  ERROR: P01.T3.membership_response_seconds: required non-negative finite number
+  ERROR: P01.T3.seq: required integer from 1 through 7
+  ERROR: P01.T3.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P01.T3.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P01.T4.start_timestamp: required non-empty string
+  ERROR: P01.T4.end_timestamp: required non-empty string
+  ERROR: P01.T4.project_answer: required non-empty string
+  ERROR: P01.T4.design_answer: required non-empty string
+  ERROR: P01.T4.membership_answer: required non-empty string
+  ERROR: P01.T4.next_action_answer: required non-empty string
+  ERROR: P01.T4.observation_timecode: required non-empty string
+  ERROR: P01.T4.success: required boolean
+  ERROR: P01.T4.accidental_mutation: required boolean
+  ERROR: P01.T4.project_correct: required boolean
+  ERROR: P01.T4.design_correct: required boolean
+  ERROR: P01.T4.membership_correct: required boolean
+  ERROR: P01.T4.state_probe_pass: required boolean
+  ERROR: P01.T4.actions: required non-negative integer
+  ERROR: P01.T4.backtracks: required non-negative integer
+  ERROR: P01.T4.workspace_tab_hunts: required non-negative integer
+  ERROR: P01.T4.elapsed_seconds: required non-negative finite number
+  ERROR: P01.T4.project_response_seconds: required non-negative finite number
+  ERROR: P01.T4.design_response_seconds: required non-negative finite number
+  ERROR: P01.T4.membership_response_seconds: required non-negative finite number
+  ERROR: P01.T4.seq: required integer from 1 through 7
+  ERROR: P01.T4.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P01.T4.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P01.T5.start_timestamp: required non-empty string
+  ERROR: P01.T5.end_timestamp: required non-empty string
+  ERROR: P01.T5.project_answer: required non-empty string
+  ERROR: P01.T5.design_answer: required non-empty string
+  ERROR: P01.T5.membership_answer: required non-empty string
+  ERROR: P01.T5.next_action_answer: required non-empty string
+  ERROR: P01.T5.observation_timecode: required non-empty string
+  ERROR: P01.T5.success: required boolean
+  ERROR: P01.T5.accidental_mutation: required boolean
+  ERROR: P01.T5.project_correct: required boolean
+  ERROR: P01.T5.design_correct: required boolean
+  ERROR: P01.T5.membership_correct: required boolean
+  ERROR: P01.T5.state_probe_pass: required boolean
+  ERROR: P01.T5.actions: required non-negative integer
+  ERROR: P01.T5.backtracks: required non-negative integer
+  ERROR: P01.T5.workspace_tab_hunts: required non-negative integer
+  ERROR: P01.T5.elapsed_seconds: required non-negative finite number
+  ERROR: P01.T5.project_response_seconds: required non-negative finite number
+  ERROR: P01.T5.design_response_seconds: required non-negative finite number
+  ERROR: P01.T5.membership_response_seconds: required non-negative finite number
+  ERROR: P01.T5.seq: required integer from 1 through 7
+  ERROR: P01.T5.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P01.T5.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P01.T6.start_timestamp: required non-empty string
+  ERROR: P01.T6.end_timestamp: required non-empty string
+  ERROR: P01.T6.project_answer: required non-empty string
+  ERROR: P01.T6.design_answer: required non-empty string
+  ERROR: P01.T6.membership_answer: required non-empty string
+  ERROR: P01.T6.next_action_answer: required non-empty string
+  ERROR: P01.T6.observation_timecode: required non-empty string
+  ERROR: P01.T6.success: required boolean
+  ERROR: P01.T6.accidental_mutation: required boolean
+  ERROR: P01.T6.project_correct: required boolean
+  ERROR: P01.T6.design_correct: required boolean
+  ERROR: P01.T6.membership_correct: required boolean
+  ERROR: P01.T6.state_probe_pass: required boolean
+  ERROR: P01.T6.actions: required non-negative integer
+  ERROR: P01.T6.backtracks: required non-negative integer
+  ERROR: P01.T6.workspace_tab_hunts: required non-negative integer
+  ERROR: P01.T6.elapsed_seconds: required non-negative finite number
+  ERROR: P01.T6.project_response_seconds: required non-negative finite number
+  ERROR: P01.T6.design_response_seconds: required non-negative finite number
+  ERROR: P01.T6.membership_response_seconds: required non-negative finite number
+  ERROR: P01.T6.seq: required integer from 1 through 7
+  ERROR: P01.T6.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P01.T6.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P01.T7.start_timestamp: required non-empty string
+  ERROR: P01.T7.end_timestamp: required non-empty string
+  ERROR: P01.T7.project_answer: required non-empty string
+  ERROR: P01.T7.design_answer: required non-empty string
+  ERROR: P01.T7.membership_answer: required non-empty string
+  ERROR: P01.T7.next_action_answer: required non-empty string
+  ERROR: P01.T7.observation_timecode: required non-empty string
+  ERROR: P01.T7.success: required boolean
+  ERROR: P01.T7.accidental_mutation: required boolean
+  ERROR: P01.T7.project_correct: required boolean
+  ERROR: P01.T7.design_correct: required boolean
+  ERROR: P01.T7.membership_correct: required boolean
+  ERROR: P01.T7.state_probe_pass: required boolean
+  ERROR: P01.T7.actions: required non-negative integer
+  ERROR: P01.T7.backtracks: required non-negative integer
+  ERROR: P01.T7.workspace_tab_hunts: required non-negative integer
+  ERROR: P01.T7.elapsed_seconds: required non-negative finite number
+  ERROR: P01.T7.project_response_seconds: required non-negative finite number
+  ERROR: P01.T7.design_response_seconds: required non-negative finite number
+  ERROR: P01.T7.membership_response_seconds: required non-negative finite number
+  ERROR: P01.T7.seq: required integer from 1 through 7
+  ERROR: P01.T7.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P01.T7.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P02.run_status: expected COMPLETE
+  ERROR: P02.eligible: expected true
+  ERROR: P02.consent: expected true
+  ERROR: P02.first_exposure_to_build: expected true
+  ERROR: P02.not_routine_professional_cad_cam: expected true
+  ERROR: P02.mouse_keyboard_unassisted: expected true
+  ERROR: P02.did_not_observe_prior_session: expected true
+  ERROR: P02.fresh_test_profile: expected true
+  ERROR: P02.fixture_only_library: expected true
+  ERROR: P02.guided_workshop: expected true
+  ERROR: P02.virtual_cnc_only: expected true
+  ERROR: P02.session_datetime: required non-empty string
+  ERROR: P02.build_id: required non-empty string
+  ERROR: P02.os_display: required non-empty string
+  ERROR: P02.prior_cad_cam: required non-empty string
+  ERROR: P02.prior_hobby_cnc: required non-empty string
+  ERROR: P02.moderator: required non-empty string
+  ERROR: P02.ui_scale: required positive finite number
+  ERROR: P02.manual_ball_nose_diameter_mm: expected 3.175
+  ERROR: P02.back_to_project_visibly_labeled: required boolean
+  ERROR: P02.preview_only_became_member: required boolean
+  ERROR: P02.wrong_project_asset_or_output: required boolean
+  ERROR: P02.layout_preset_opened: required boolean
+  ERROR: P02.unrelated_panel_tab_opened: required boolean
+  ERROR: P02.back_to_project_activations: required non-negative integer
+  ERROR: P02.continue_activations: required non-negative integer
+  ERROR: P02.reopened_project: required non-empty string
+  ERROR: P02.reopened_selected_design: required non-empty string
+  ERROR: P02.T1.start_timestamp: required non-empty string
+  ERROR: P02.T1.end_timestamp: required non-empty string
+  ERROR: P02.T1.project_answer: required non-empty string
+  ERROR: P02.T1.design_answer: required non-empty string
+  ERROR: P02.T1.membership_answer: required non-empty string
+  ERROR: P02.T1.next_action_answer: required non-empty string
+  ERROR: P02.T1.observation_timecode: required non-empty string
+  ERROR: P02.T1.success: required boolean
+  ERROR: P02.T1.accidental_mutation: required boolean
+  ERROR: P02.T1.project_correct: required boolean
+  ERROR: P02.T1.design_correct: required boolean
+  ERROR: P02.T1.membership_correct: required boolean
+  ERROR: P02.T1.state_probe_pass: required boolean
+  ERROR: P02.T1.actions: required non-negative integer
+  ERROR: P02.T1.backtracks: required non-negative integer
+  ERROR: P02.T1.workspace_tab_hunts: required non-negative integer
+  ERROR: P02.T1.elapsed_seconds: required non-negative finite number
+  ERROR: P02.T1.project_response_seconds: required non-negative finite number
+  ERROR: P02.T1.design_response_seconds: required non-negative finite number
+  ERROR: P02.T1.membership_response_seconds: required non-negative finite number
+  ERROR: P02.T1.seq: required integer from 1 through 7
+  ERROR: P02.T1.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P02.T1.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P02.T2.start_timestamp: required non-empty string
+  ERROR: P02.T2.end_timestamp: required non-empty string
+  ERROR: P02.T2.project_answer: required non-empty string
+  ERROR: P02.T2.design_answer: required non-empty string
+  ERROR: P02.T2.membership_answer: required non-empty string
+  ERROR: P02.T2.next_action_answer: required non-empty string
+  ERROR: P02.T2.observation_timecode: required non-empty string
+  ERROR: P02.T2.success: required boolean
+  ERROR: P02.T2.accidental_mutation: required boolean
+  ERROR: P02.T2.project_correct: required boolean
+  ERROR: P02.T2.design_correct: required boolean
+  ERROR: P02.T2.membership_correct: required boolean
+  ERROR: P02.T2.state_probe_pass: required boolean
+  ERROR: P02.T2.actions: required non-negative integer
+  ERROR: P02.T2.backtracks: required non-negative integer
+  ERROR: P02.T2.workspace_tab_hunts: required non-negative integer
+  ERROR: P02.T2.elapsed_seconds: required non-negative finite number
+  ERROR: P02.T2.project_response_seconds: required non-negative finite number
+  ERROR: P02.T2.design_response_seconds: required non-negative finite number
+  ERROR: P02.T2.membership_response_seconds: required non-negative finite number
+  ERROR: P02.T2.seq: required integer from 1 through 7
+  ERROR: P02.T2.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P02.T2.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P02.T3.start_timestamp: required non-empty string
+  ERROR: P02.T3.end_timestamp: required non-empty string
+  ERROR: P02.T3.project_answer: required non-empty string
+  ERROR: P02.T3.design_answer: required non-empty string
+  ERROR: P02.T3.membership_answer: required non-empty string
+  ERROR: P02.T3.next_action_answer: required non-empty string
+  ERROR: P02.T3.observation_timecode: required non-empty string
+  ERROR: P02.T3.success: required boolean
+  ERROR: P02.T3.accidental_mutation: required boolean
+  ERROR: P02.T3.project_correct: required boolean
+  ERROR: P02.T3.design_correct: required boolean
+  ERROR: P02.T3.membership_correct: required boolean
+  ERROR: P02.T3.state_probe_pass: required boolean
+  ERROR: P02.T3.actions: required non-negative integer
+  ERROR: P02.T3.backtracks: required non-negative integer
+  ERROR: P02.T3.workspace_tab_hunts: required non-negative integer
+  ERROR: P02.T3.elapsed_seconds: required non-negative finite number
+  ERROR: P02.T3.project_response_seconds: required non-negative finite number
+  ERROR: P02.T3.design_response_seconds: required non-negative finite number
+  ERROR: P02.T3.membership_response_seconds: required non-negative finite number
+  ERROR: P02.T3.seq: required integer from 1 through 7
+  ERROR: P02.T3.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P02.T3.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P02.T4.start_timestamp: required non-empty string
+  ERROR: P02.T4.end_timestamp: required non-empty string
+  ERROR: P02.T4.project_answer: required non-empty string
+  ERROR: P02.T4.design_answer: required non-empty string
+  ERROR: P02.T4.membership_answer: required non-empty string
+  ERROR: P02.T4.next_action_answer: required non-empty string
+  ERROR: P02.T4.observation_timecode: required non-empty string
+  ERROR: P02.T4.success: required boolean
+  ERROR: P02.T4.accidental_mutation: required boolean
+  ERROR: P02.T4.project_correct: required boolean
+  ERROR: P02.T4.design_correct: required boolean
+  ERROR: P02.T4.membership_correct: required boolean
+  ERROR: P02.T4.state_probe_pass: required boolean
+  ERROR: P02.T4.actions: required non-negative integer
+  ERROR: P02.T4.backtracks: required non-negative integer
+  ERROR: P02.T4.workspace_tab_hunts: required non-negative integer
+  ERROR: P02.T4.elapsed_seconds: required non-negative finite number
+  ERROR: P02.T4.project_response_seconds: required non-negative finite number
+  ERROR: P02.T4.design_response_seconds: required non-negative finite number
+  ERROR: P02.T4.membership_response_seconds: required non-negative finite number
+  ERROR: P02.T4.seq: required integer from 1 through 7
+  ERROR: P02.T4.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P02.T4.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P02.T5.start_timestamp: required non-empty string
+  ERROR: P02.T5.end_timestamp: required non-empty string
+  ERROR: P02.T5.project_answer: required non-empty string
+  ERROR: P02.T5.design_answer: required non-empty string
+  ERROR: P02.T5.membership_answer: required non-empty string
+  ERROR: P02.T5.next_action_answer: required non-empty string
+  ERROR: P02.T5.observation_timecode: required non-empty string
+  ERROR: P02.T5.success: required boolean
+  ERROR: P02.T5.accidental_mutation: required boolean
+  ERROR: P02.T5.project_correct: required boolean
+  ERROR: P02.T5.design_correct: required boolean
+  ERROR: P02.T5.membership_correct: required boolean
+  ERROR: P02.T5.state_probe_pass: required boolean
+  ERROR: P02.T5.actions: required non-negative integer
+  ERROR: P02.T5.backtracks: required non-negative integer
+  ERROR: P02.T5.workspace_tab_hunts: required non-negative integer
+  ERROR: P02.T5.elapsed_seconds: required non-negative finite number
+  ERROR: P02.T5.project_response_seconds: required non-negative finite number
+  ERROR: P02.T5.design_response_seconds: required non-negative finite number
+  ERROR: P02.T5.membership_response_seconds: required non-negative finite number
+  ERROR: P02.T5.seq: required integer from 1 through 7
+  ERROR: P02.T5.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P02.T5.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P02.T6.start_timestamp: required non-empty string
+  ERROR: P02.T6.end_timestamp: required non-empty string
+  ERROR: P02.T6.project_answer: required non-empty string
+  ERROR: P02.T6.design_answer: required non-empty string
+  ERROR: P02.T6.membership_answer: required non-empty string
+  ERROR: P02.T6.next_action_answer: required non-empty string
+  ERROR: P02.T6.observation_timecode: required non-empty string
+  ERROR: P02.T6.success: required boolean
+  ERROR: P02.T6.accidental_mutation: required boolean
+  ERROR: P02.T6.project_correct: required boolean
+  ERROR: P02.T6.design_correct: required boolean
+  ERROR: P02.T6.membership_correct: required boolean
+  ERROR: P02.T6.state_probe_pass: required boolean
+  ERROR: P02.T6.actions: required non-negative integer
+  ERROR: P02.T6.backtracks: required non-negative integer
+  ERROR: P02.T6.workspace_tab_hunts: required non-negative integer
+  ERROR: P02.T6.elapsed_seconds: required non-negative finite number
+  ERROR: P02.T6.project_response_seconds: required non-negative finite number
+  ERROR: P02.T6.design_response_seconds: required non-negative finite number
+  ERROR: P02.T6.membership_response_seconds: required non-negative finite number
+  ERROR: P02.T6.seq: required integer from 1 through 7
+  ERROR: P02.T6.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P02.T6.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P02.T7.start_timestamp: required non-empty string
+  ERROR: P02.T7.end_timestamp: required non-empty string
+  ERROR: P02.T7.project_answer: required non-empty string
+  ERROR: P02.T7.design_answer: required non-empty string
+  ERROR: P02.T7.membership_answer: required non-empty string
+  ERROR: P02.T7.next_action_answer: required non-empty string
+  ERROR: P02.T7.observation_timecode: required non-empty string
+  ERROR: P02.T7.success: required boolean
+  ERROR: P02.T7.accidental_mutation: required boolean
+  ERROR: P02.T7.project_correct: required boolean
+  ERROR: P02.T7.design_correct: required boolean
+  ERROR: P02.T7.membership_correct: required boolean
+  ERROR: P02.T7.state_probe_pass: required boolean
+  ERROR: P02.T7.actions: required non-negative integer
+  ERROR: P02.T7.backtracks: required non-negative integer
+  ERROR: P02.T7.workspace_tab_hunts: required non-negative integer
+  ERROR: P02.T7.elapsed_seconds: required non-negative finite number
+  ERROR: P02.T7.project_response_seconds: required non-negative finite number
+  ERROR: P02.T7.design_response_seconds: required non-negative finite number
+  ERROR: P02.T7.membership_response_seconds: required non-negative finite number
+  ERROR: P02.T7.seq: required integer from 1 through 7
+  ERROR: P02.T7.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P02.T7.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P03.run_status: expected COMPLETE
+  ERROR: P03.eligible: expected true
+  ERROR: P03.consent: expected true
+  ERROR: P03.first_exposure_to_build: expected true
+  ERROR: P03.not_routine_professional_cad_cam: expected true
+  ERROR: P03.mouse_keyboard_unassisted: expected true
+  ERROR: P03.did_not_observe_prior_session: expected true
+  ERROR: P03.fresh_test_profile: expected true
+  ERROR: P03.fixture_only_library: expected true
+  ERROR: P03.guided_workshop: expected true
+  ERROR: P03.virtual_cnc_only: expected true
+  ERROR: P03.session_datetime: required non-empty string
+  ERROR: P03.build_id: required non-empty string
+  ERROR: P03.os_display: required non-empty string
+  ERROR: P03.prior_cad_cam: required non-empty string
+  ERROR: P03.prior_hobby_cnc: required non-empty string
+  ERROR: P03.moderator: required non-empty string
+  ERROR: P03.ui_scale: required positive finite number
+  ERROR: P03.manual_ball_nose_diameter_mm: expected 3.175
+  ERROR: P03.back_to_project_visibly_labeled: required boolean
+  ERROR: P03.preview_only_became_member: required boolean
+  ERROR: P03.wrong_project_asset_or_output: required boolean
+  ERROR: P03.layout_preset_opened: required boolean
+  ERROR: P03.unrelated_panel_tab_opened: required boolean
+  ERROR: P03.back_to_project_activations: required non-negative integer
+  ERROR: P03.continue_activations: required non-negative integer
+  ERROR: P03.reopened_project: required non-empty string
+  ERROR: P03.reopened_selected_design: required non-empty string
+  ERROR: P03.T1.start_timestamp: required non-empty string
+  ERROR: P03.T1.end_timestamp: required non-empty string
+  ERROR: P03.T1.project_answer: required non-empty string
+  ERROR: P03.T1.design_answer: required non-empty string
+  ERROR: P03.T1.membership_answer: required non-empty string
+  ERROR: P03.T1.next_action_answer: required non-empty string
+  ERROR: P03.T1.observation_timecode: required non-empty string
+  ERROR: P03.T1.success: required boolean
+  ERROR: P03.T1.accidental_mutation: required boolean
+  ERROR: P03.T1.project_correct: required boolean
+  ERROR: P03.T1.design_correct: required boolean
+  ERROR: P03.T1.membership_correct: required boolean
+  ERROR: P03.T1.state_probe_pass: required boolean
+  ERROR: P03.T1.actions: required non-negative integer
+  ERROR: P03.T1.backtracks: required non-negative integer
+  ERROR: P03.T1.workspace_tab_hunts: required non-negative integer
+  ERROR: P03.T1.elapsed_seconds: required non-negative finite number
+  ERROR: P03.T1.project_response_seconds: required non-negative finite number
+  ERROR: P03.T1.design_response_seconds: required non-negative finite number
+  ERROR: P03.T1.membership_response_seconds: required non-negative finite number
+  ERROR: P03.T1.seq: required integer from 1 through 7
+  ERROR: P03.T1.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P03.T1.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P03.T2.start_timestamp: required non-empty string
+  ERROR: P03.T2.end_timestamp: required non-empty string
+  ERROR: P03.T2.project_answer: required non-empty string
+  ERROR: P03.T2.design_answer: required non-empty string
+  ERROR: P03.T2.membership_answer: required non-empty string
+  ERROR: P03.T2.next_action_answer: required non-empty string
+  ERROR: P03.T2.observation_timecode: required non-empty string
+  ERROR: P03.T2.success: required boolean
+  ERROR: P03.T2.accidental_mutation: required boolean
+  ERROR: P03.T2.project_correct: required boolean
+  ERROR: P03.T2.design_correct: required boolean
+  ERROR: P03.T2.membership_correct: required boolean
+  ERROR: P03.T2.state_probe_pass: required boolean
+  ERROR: P03.T2.actions: required non-negative integer
+  ERROR: P03.T2.backtracks: required non-negative integer
+  ERROR: P03.T2.workspace_tab_hunts: required non-negative integer
+  ERROR: P03.T2.elapsed_seconds: required non-negative finite number
+  ERROR: P03.T2.project_response_seconds: required non-negative finite number
+  ERROR: P03.T2.design_response_seconds: required non-negative finite number
+  ERROR: P03.T2.membership_response_seconds: required non-negative finite number
+  ERROR: P03.T2.seq: required integer from 1 through 7
+  ERROR: P03.T2.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P03.T2.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P03.T3.start_timestamp: required non-empty string
+  ERROR: P03.T3.end_timestamp: required non-empty string
+  ERROR: P03.T3.project_answer: required non-empty string
+  ERROR: P03.T3.design_answer: required non-empty string
+  ERROR: P03.T3.membership_answer: required non-empty string
+  ERROR: P03.T3.next_action_answer: required non-empty string
+  ERROR: P03.T3.observation_timecode: required non-empty string
+  ERROR: P03.T3.success: required boolean
+  ERROR: P03.T3.accidental_mutation: required boolean
+  ERROR: P03.T3.project_correct: required boolean
+  ERROR: P03.T3.design_correct: required boolean
+  ERROR: P03.T3.membership_correct: required boolean
+  ERROR: P03.T3.state_probe_pass: required boolean
+  ERROR: P03.T3.actions: required non-negative integer
+  ERROR: P03.T3.backtracks: required non-negative integer
+  ERROR: P03.T3.workspace_tab_hunts: required non-negative integer
+  ERROR: P03.T3.elapsed_seconds: required non-negative finite number
+  ERROR: P03.T3.project_response_seconds: required non-negative finite number
+  ERROR: P03.T3.design_response_seconds: required non-negative finite number
+  ERROR: P03.T3.membership_response_seconds: required non-negative finite number
+  ERROR: P03.T3.seq: required integer from 1 through 7
+  ERROR: P03.T3.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P03.T3.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P03.T4.start_timestamp: required non-empty string
+  ERROR: P03.T4.end_timestamp: required non-empty string
+  ERROR: P03.T4.project_answer: required non-empty string
+  ERROR: P03.T4.design_answer: required non-empty string
+  ERROR: P03.T4.membership_answer: required non-empty string
+  ERROR: P03.T4.next_action_answer: required non-empty string
+  ERROR: P03.T4.observation_timecode: required non-empty string
+  ERROR: P03.T4.success: required boolean
+  ERROR: P03.T4.accidental_mutation: required boolean
+  ERROR: P03.T4.project_correct: required boolean
+  ERROR: P03.T4.design_correct: required boolean
+  ERROR: P03.T4.membership_correct: required boolean
+  ERROR: P03.T4.state_probe_pass: required boolean
+  ERROR: P03.T4.actions: required non-negative integer
+  ERROR: P03.T4.backtracks: required non-negative integer
+  ERROR: P03.T4.workspace_tab_hunts: required non-negative integer
+  ERROR: P03.T4.elapsed_seconds: required non-negative finite number
+  ERROR: P03.T4.project_response_seconds: required non-negative finite number
+  ERROR: P03.T4.design_response_seconds: required non-negative finite number
+  ERROR: P03.T4.membership_response_seconds: required non-negative finite number
+  ERROR: P03.T4.seq: required integer from 1 through 7
+  ERROR: P03.T4.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P03.T4.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P03.T5.start_timestamp: required non-empty string
+  ERROR: P03.T5.end_timestamp: required non-empty string
+  ERROR: P03.T5.project_answer: required non-empty string
+  ERROR: P03.T5.design_answer: required non-empty string
+  ERROR: P03.T5.membership_answer: required non-empty string
+  ERROR: P03.T5.next_action_answer: required non-empty string
+  ERROR: P03.T5.observation_timecode: required non-empty string
+  ERROR: P03.T5.success: required boolean
+  ERROR: P03.T5.accidental_mutation: required boolean
+  ERROR: P03.T5.project_correct: required boolean
+  ERROR: P03.T5.design_correct: required boolean
+  ERROR: P03.T5.membership_correct: required boolean
+  ERROR: P03.T5.state_probe_pass: required boolean
+  ERROR: P03.T5.actions: required non-negative integer
+  ERROR: P03.T5.backtracks: required non-negative integer
+  ERROR: P03.T5.workspace_tab_hunts: required non-negative integer
+  ERROR: P03.T5.elapsed_seconds: required non-negative finite number
+  ERROR: P03.T5.project_response_seconds: required non-negative finite number
+  ERROR: P03.T5.design_response_seconds: required non-negative finite number
+  ERROR: P03.T5.membership_response_seconds: required non-negative finite number
+  ERROR: P03.T5.seq: required integer from 1 through 7
+  ERROR: P03.T5.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P03.T5.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P03.T6.start_timestamp: required non-empty string
+  ERROR: P03.T6.end_timestamp: required non-empty string
+  ERROR: P03.T6.project_answer: required non-empty string
+  ERROR: P03.T6.design_answer: required non-empty string
+  ERROR: P03.T6.membership_answer: required non-empty string
+  ERROR: P03.T6.next_action_answer: required non-empty string
+  ERROR: P03.T6.observation_timecode: required non-empty string
+  ERROR: P03.T6.success: required boolean
+  ERROR: P03.T6.accidental_mutation: required boolean
+  ERROR: P03.T6.project_correct: required boolean
+  ERROR: P03.T6.design_correct: required boolean
+  ERROR: P03.T6.membership_correct: required boolean
+  ERROR: P03.T6.state_probe_pass: required boolean
+  ERROR: P03.T6.actions: required non-negative integer
+  ERROR: P03.T6.backtracks: required non-negative integer
+  ERROR: P03.T6.workspace_tab_hunts: required non-negative integer
+  ERROR: P03.T6.elapsed_seconds: required non-negative finite number
+  ERROR: P03.T6.project_response_seconds: required non-negative finite number
+  ERROR: P03.T6.design_response_seconds: required non-negative finite number
+  ERROR: P03.T6.membership_response_seconds: required non-negative finite number
+  ERROR: P03.T6.seq: required integer from 1 through 7
+  ERROR: P03.T6.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P03.T6.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P03.T7.start_timestamp: required non-empty string
+  ERROR: P03.T7.end_timestamp: required non-empty string
+  ERROR: P03.T7.project_answer: required non-empty string
+  ERROR: P03.T7.design_answer: required non-empty string
+  ERROR: P03.T7.membership_answer: required non-empty string
+  ERROR: P03.T7.next_action_answer: required non-empty string
+  ERROR: P03.T7.observation_timecode: required non-empty string
+  ERROR: P03.T7.success: required boolean
+  ERROR: P03.T7.accidental_mutation: required boolean
+  ERROR: P03.T7.project_correct: required boolean
+  ERROR: P03.T7.design_correct: required boolean
+  ERROR: P03.T7.membership_correct: required boolean
+  ERROR: P03.T7.state_probe_pass: required boolean
+  ERROR: P03.T7.actions: required non-negative integer
+  ERROR: P03.T7.backtracks: required non-negative integer
+  ERROR: P03.T7.workspace_tab_hunts: required non-negative integer
+  ERROR: P03.T7.elapsed_seconds: required non-negative finite number
+  ERROR: P03.T7.project_response_seconds: required non-negative finite number
+  ERROR: P03.T7.design_response_seconds: required non-negative finite number
+  ERROR: P03.T7.membership_response_seconds: required non-negative finite number
+  ERROR: P03.T7.seq: required integer from 1 through 7
+  ERROR: P03.T7.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P03.T7.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P04.run_status: expected COMPLETE
+  ERROR: P04.eligible: expected true
+  ERROR: P04.consent: expected true
+  ERROR: P04.first_exposure_to_build: expected true
+  ERROR: P04.not_routine_professional_cad_cam: expected true
+  ERROR: P04.mouse_keyboard_unassisted: expected true
+  ERROR: P04.did_not_observe_prior_session: expected true
+  ERROR: P04.fresh_test_profile: expected true
+  ERROR: P04.fixture_only_library: expected true
+  ERROR: P04.guided_workshop: expected true
+  ERROR: P04.virtual_cnc_only: expected true
+  ERROR: P04.session_datetime: required non-empty string
+  ERROR: P04.build_id: required non-empty string
+  ERROR: P04.os_display: required non-empty string
+  ERROR: P04.prior_cad_cam: required non-empty string
+  ERROR: P04.prior_hobby_cnc: required non-empty string
+  ERROR: P04.moderator: required non-empty string
+  ERROR: P04.ui_scale: required positive finite number
+  ERROR: P04.manual_ball_nose_diameter_mm: expected 3.175
+  ERROR: P04.back_to_project_visibly_labeled: required boolean
+  ERROR: P04.preview_only_became_member: required boolean
+  ERROR: P04.wrong_project_asset_or_output: required boolean
+  ERROR: P04.layout_preset_opened: required boolean
+  ERROR: P04.unrelated_panel_tab_opened: required boolean
+  ERROR: P04.back_to_project_activations: required non-negative integer
+  ERROR: P04.continue_activations: required non-negative integer
+  ERROR: P04.reopened_project: required non-empty string
+  ERROR: P04.reopened_selected_design: required non-empty string
+  ERROR: P04.T1.start_timestamp: required non-empty string
+  ERROR: P04.T1.end_timestamp: required non-empty string
+  ERROR: P04.T1.project_answer: required non-empty string
+  ERROR: P04.T1.design_answer: required non-empty string
+  ERROR: P04.T1.membership_answer: required non-empty string
+  ERROR: P04.T1.next_action_answer: required non-empty string
+  ERROR: P04.T1.observation_timecode: required non-empty string
+  ERROR: P04.T1.success: required boolean
+  ERROR: P04.T1.accidental_mutation: required boolean
+  ERROR: P04.T1.project_correct: required boolean
+  ERROR: P04.T1.design_correct: required boolean
+  ERROR: P04.T1.membership_correct: required boolean
+  ERROR: P04.T1.state_probe_pass: required boolean
+  ERROR: P04.T1.actions: required non-negative integer
+  ERROR: P04.T1.backtracks: required non-negative integer
+  ERROR: P04.T1.workspace_tab_hunts: required non-negative integer
+  ERROR: P04.T1.elapsed_seconds: required non-negative finite number
+  ERROR: P04.T1.project_response_seconds: required non-negative finite number
+  ERROR: P04.T1.design_response_seconds: required non-negative finite number
+  ERROR: P04.T1.membership_response_seconds: required non-negative finite number
+  ERROR: P04.T1.seq: required integer from 1 through 7
+  ERROR: P04.T1.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P04.T1.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P04.T2.start_timestamp: required non-empty string
+  ERROR: P04.T2.end_timestamp: required non-empty string
+  ERROR: P04.T2.project_answer: required non-empty string
+  ERROR: P04.T2.design_answer: required non-empty string
+  ERROR: P04.T2.membership_answer: required non-empty string
+  ERROR: P04.T2.next_action_answer: required non-empty string
+  ERROR: P04.T2.observation_timecode: required non-empty string
+  ERROR: P04.T2.success: required boolean
+  ERROR: P04.T2.accidental_mutation: required boolean
+  ERROR: P04.T2.project_correct: required boolean
+  ERROR: P04.T2.design_correct: required boolean
+  ERROR: P04.T2.membership_correct: required boolean
+  ERROR: P04.T2.state_probe_pass: required boolean
+  ERROR: P04.T2.actions: required non-negative integer
+  ERROR: P04.T2.backtracks: required non-negative integer
+  ERROR: P04.T2.workspace_tab_hunts: required non-negative integer
+  ERROR: P04.T2.elapsed_seconds: required non-negative finite number
+  ERROR: P04.T2.project_response_seconds: required non-negative finite number
+  ERROR: P04.T2.design_response_seconds: required non-negative finite number
+  ERROR: P04.T2.membership_response_seconds: required non-negative finite number
+  ERROR: P04.T2.seq: required integer from 1 through 7
+  ERROR: P04.T2.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P04.T2.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P04.T3.start_timestamp: required non-empty string
+  ERROR: P04.T3.end_timestamp: required non-empty string
+  ERROR: P04.T3.project_answer: required non-empty string
+  ERROR: P04.T3.design_answer: required non-empty string
+  ERROR: P04.T3.membership_answer: required non-empty string
+  ERROR: P04.T3.next_action_answer: required non-empty string
+  ERROR: P04.T3.observation_timecode: required non-empty string
+  ERROR: P04.T3.success: required boolean
+  ERROR: P04.T3.accidental_mutation: required boolean
+  ERROR: P04.T3.project_correct: required boolean
+  ERROR: P04.T3.design_correct: required boolean
+  ERROR: P04.T3.membership_correct: required boolean
+  ERROR: P04.T3.state_probe_pass: required boolean
+  ERROR: P04.T3.actions: required non-negative integer
+  ERROR: P04.T3.backtracks: required non-negative integer
+  ERROR: P04.T3.workspace_tab_hunts: required non-negative integer
+  ERROR: P04.T3.elapsed_seconds: required non-negative finite number
+  ERROR: P04.T3.project_response_seconds: required non-negative finite number
+  ERROR: P04.T3.design_response_seconds: required non-negative finite number
+  ERROR: P04.T3.membership_response_seconds: required non-negative finite number
+  ERROR: P04.T3.seq: required integer from 1 through 7
+  ERROR: P04.T3.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P04.T3.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P04.T4.start_timestamp: required non-empty string
+  ERROR: P04.T4.end_timestamp: required non-empty string
+  ERROR: P04.T4.project_answer: required non-empty string
+  ERROR: P04.T4.design_answer: required non-empty string
+  ERROR: P04.T4.membership_answer: required non-empty string
+  ERROR: P04.T4.next_action_answer: required non-empty string
+  ERROR: P04.T4.observation_timecode: required non-empty string
+  ERROR: P04.T4.success: required boolean
+  ERROR: P04.T4.accidental_mutation: required boolean
+  ERROR: P04.T4.project_correct: required boolean
+  ERROR: P04.T4.design_correct: required boolean
+  ERROR: P04.T4.membership_correct: required boolean
+  ERROR: P04.T4.state_probe_pass: required boolean
+  ERROR: P04.T4.actions: required non-negative integer
+  ERROR: P04.T4.backtracks: required non-negative integer
+  ERROR: P04.T4.workspace_tab_hunts: required non-negative integer
+  ERROR: P04.T4.elapsed_seconds: required non-negative finite number
+  ERROR: P04.T4.project_response_seconds: required non-negative finite number
+  ERROR: P04.T4.design_response_seconds: required non-negative finite number
+  ERROR: P04.T4.membership_response_seconds: required non-negative finite number
+  ERROR: P04.T4.seq: required integer from 1 through 7
+  ERROR: P04.T4.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P04.T4.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P04.T5.start_timestamp: required non-empty string
+  ERROR: P04.T5.end_timestamp: required non-empty string
+  ERROR: P04.T5.project_answer: required non-empty string
+  ERROR: P04.T5.design_answer: required non-empty string
+  ERROR: P04.T5.membership_answer: required non-empty string
+  ERROR: P04.T5.next_action_answer: required non-empty string
+  ERROR: P04.T5.observation_timecode: required non-empty string
+  ERROR: P04.T5.success: required boolean
+  ERROR: P04.T5.accidental_mutation: required boolean
+  ERROR: P04.T5.project_correct: required boolean
+  ERROR: P04.T5.design_correct: required boolean
+  ERROR: P04.T5.membership_correct: required boolean
+  ERROR: P04.T5.state_probe_pass: required boolean
+  ERROR: P04.T5.actions: required non-negative integer
+  ERROR: P04.T5.backtracks: required non-negative integer
+  ERROR: P04.T5.workspace_tab_hunts: required non-negative integer
+  ERROR: P04.T5.elapsed_seconds: required non-negative finite number
+  ERROR: P04.T5.project_response_seconds: required non-negative finite number
+  ERROR: P04.T5.design_response_seconds: required non-negative finite number
+  ERROR: P04.T5.membership_response_seconds: required non-negative finite number
+  ERROR: P04.T5.seq: required integer from 1 through 7
+  ERROR: P04.T5.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P04.T5.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P04.T6.start_timestamp: required non-empty string
+  ERROR: P04.T6.end_timestamp: required non-empty string
+  ERROR: P04.T6.project_answer: required non-empty string
+  ERROR: P04.T6.design_answer: required non-empty string
+  ERROR: P04.T6.membership_answer: required non-empty string
+  ERROR: P04.T6.next_action_answer: required non-empty string
+  ERROR: P04.T6.observation_timecode: required non-empty string
+  ERROR: P04.T6.success: required boolean
+  ERROR: P04.T6.accidental_mutation: required boolean
+  ERROR: P04.T6.project_correct: required boolean
+  ERROR: P04.T6.design_correct: required boolean
+  ERROR: P04.T6.membership_correct: required boolean
+  ERROR: P04.T6.state_probe_pass: required boolean
+  ERROR: P04.T6.actions: required non-negative integer
+  ERROR: P04.T6.backtracks: required non-negative integer
+  ERROR: P04.T6.workspace_tab_hunts: required non-negative integer
+  ERROR: P04.T6.elapsed_seconds: required non-negative finite number
+  ERROR: P04.T6.project_response_seconds: required non-negative finite number
+  ERROR: P04.T6.design_response_seconds: required non-negative finite number
+  ERROR: P04.T6.membership_response_seconds: required non-negative finite number
+  ERROR: P04.T6.seq: required integer from 1 through 7
+  ERROR: P04.T6.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P04.T6.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P04.T7.start_timestamp: required non-empty string
+  ERROR: P04.T7.end_timestamp: required non-empty string
+  ERROR: P04.T7.project_answer: required non-empty string
+  ERROR: P04.T7.design_answer: required non-empty string
+  ERROR: P04.T7.membership_answer: required non-empty string
+  ERROR: P04.T7.next_action_answer: required non-empty string
+  ERROR: P04.T7.observation_timecode: required non-empty string
+  ERROR: P04.T7.success: required boolean
+  ERROR: P04.T7.accidental_mutation: required boolean
+  ERROR: P04.T7.project_correct: required boolean
+  ERROR: P04.T7.design_correct: required boolean
+  ERROR: P04.T7.membership_correct: required boolean
+  ERROR: P04.T7.state_probe_pass: required boolean
+  ERROR: P04.T7.actions: required non-negative integer
+  ERROR: P04.T7.backtracks: required non-negative integer
+  ERROR: P04.T7.workspace_tab_hunts: required non-negative integer
+  ERROR: P04.T7.elapsed_seconds: required non-negative finite number
+  ERROR: P04.T7.project_response_seconds: required non-negative finite number
+  ERROR: P04.T7.design_response_seconds: required non-negative finite number
+  ERROR: P04.T7.membership_response_seconds: required non-negative finite number
+  ERROR: P04.T7.seq: required integer from 1 through 7
+  ERROR: P04.T7.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P04.T7.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P05.run_status: expected COMPLETE
+  ERROR: P05.eligible: expected true
+  ERROR: P05.consent: expected true
+  ERROR: P05.first_exposure_to_build: expected true
+  ERROR: P05.not_routine_professional_cad_cam: expected true
+  ERROR: P05.mouse_keyboard_unassisted: expected true
+  ERROR: P05.did_not_observe_prior_session: expected true
+  ERROR: P05.fresh_test_profile: expected true
+  ERROR: P05.fixture_only_library: expected true
+  ERROR: P05.guided_workshop: expected true
+  ERROR: P05.virtual_cnc_only: expected true
+  ERROR: P05.session_datetime: required non-empty string
+  ERROR: P05.build_id: required non-empty string
+  ERROR: P05.os_display: required non-empty string
+  ERROR: P05.prior_cad_cam: required non-empty string
+  ERROR: P05.prior_hobby_cnc: required non-empty string
+  ERROR: P05.moderator: required non-empty string
+  ERROR: P05.ui_scale: required positive finite number
+  ERROR: P05.manual_ball_nose_diameter_mm: expected 3.175
+  ERROR: P05.back_to_project_visibly_labeled: required boolean
+  ERROR: P05.preview_only_became_member: required boolean
+  ERROR: P05.wrong_project_asset_or_output: required boolean
+  ERROR: P05.layout_preset_opened: required boolean
+  ERROR: P05.unrelated_panel_tab_opened: required boolean
+  ERROR: P05.back_to_project_activations: required non-negative integer
+  ERROR: P05.continue_activations: required non-negative integer
+  ERROR: P05.reopened_project: required non-empty string
+  ERROR: P05.reopened_selected_design: required non-empty string
+  ERROR: P05.T1.start_timestamp: required non-empty string
+  ERROR: P05.T1.end_timestamp: required non-empty string
+  ERROR: P05.T1.project_answer: required non-empty string
+  ERROR: P05.T1.design_answer: required non-empty string
+  ERROR: P05.T1.membership_answer: required non-empty string
+  ERROR: P05.T1.next_action_answer: required non-empty string
+  ERROR: P05.T1.observation_timecode: required non-empty string
+  ERROR: P05.T1.success: required boolean
+  ERROR: P05.T1.accidental_mutation: required boolean
+  ERROR: P05.T1.project_correct: required boolean
+  ERROR: P05.T1.design_correct: required boolean
+  ERROR: P05.T1.membership_correct: required boolean
+  ERROR: P05.T1.state_probe_pass: required boolean
+  ERROR: P05.T1.actions: required non-negative integer
+  ERROR: P05.T1.backtracks: required non-negative integer
+  ERROR: P05.T1.workspace_tab_hunts: required non-negative integer
+  ERROR: P05.T1.elapsed_seconds: required non-negative finite number
+  ERROR: P05.T1.project_response_seconds: required non-negative finite number
+  ERROR: P05.T1.design_response_seconds: required non-negative finite number
+  ERROR: P05.T1.membership_response_seconds: required non-negative finite number
+  ERROR: P05.T1.seq: required integer from 1 through 7
+  ERROR: P05.T1.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P05.T1.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P05.T2.start_timestamp: required non-empty string
+  ERROR: P05.T2.end_timestamp: required non-empty string
+  ERROR: P05.T2.project_answer: required non-empty string
+  ERROR: P05.T2.design_answer: required non-empty string
+  ERROR: P05.T2.membership_answer: required non-empty string
+  ERROR: P05.T2.next_action_answer: required non-empty string
+  ERROR: P05.T2.observation_timecode: required non-empty string
+  ERROR: P05.T2.success: required boolean
+  ERROR: P05.T2.accidental_mutation: required boolean
+  ERROR: P05.T2.project_correct: required boolean
+  ERROR: P05.T2.design_correct: required boolean
+  ERROR: P05.T2.membership_correct: required boolean
+  ERROR: P05.T2.state_probe_pass: required boolean
+  ERROR: P05.T2.actions: required non-negative integer
+  ERROR: P05.T2.backtracks: required non-negative integer
+  ERROR: P05.T2.workspace_tab_hunts: required non-negative integer
+  ERROR: P05.T2.elapsed_seconds: required non-negative finite number
+  ERROR: P05.T2.project_response_seconds: required non-negative finite number
+  ERROR: P05.T2.design_response_seconds: required non-negative finite number
+  ERROR: P05.T2.membership_response_seconds: required non-negative finite number
+  ERROR: P05.T2.seq: required integer from 1 through 7
+  ERROR: P05.T2.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P05.T2.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P05.T3.start_timestamp: required non-empty string
+  ERROR: P05.T3.end_timestamp: required non-empty string
+  ERROR: P05.T3.project_answer: required non-empty string
+  ERROR: P05.T3.design_answer: required non-empty string
+  ERROR: P05.T3.membership_answer: required non-empty string
+  ERROR: P05.T3.next_action_answer: required non-empty string
+  ERROR: P05.T3.observation_timecode: required non-empty string
+  ERROR: P05.T3.success: required boolean
+  ERROR: P05.T3.accidental_mutation: required boolean
+  ERROR: P05.T3.project_correct: required boolean
+  ERROR: P05.T3.design_correct: required boolean
+  ERROR: P05.T3.membership_correct: required boolean
+  ERROR: P05.T3.state_probe_pass: required boolean
+  ERROR: P05.T3.actions: required non-negative integer
+  ERROR: P05.T3.backtracks: required non-negative integer
+  ERROR: P05.T3.workspace_tab_hunts: required non-negative integer
+  ERROR: P05.T3.elapsed_seconds: required non-negative finite number
+  ERROR: P05.T3.project_response_seconds: required non-negative finite number
+  ERROR: P05.T3.design_response_seconds: required non-negative finite number
+  ERROR: P05.T3.membership_response_seconds: required non-negative finite number
+  ERROR: P05.T3.seq: required integer from 1 through 7
+  ERROR: P05.T3.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P05.T3.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P05.T4.start_timestamp: required non-empty string
+  ERROR: P05.T4.end_timestamp: required non-empty string
+  ERROR: P05.T4.project_answer: required non-empty string
+  ERROR: P05.T4.design_answer: required non-empty string
+  ERROR: P05.T4.membership_answer: required non-empty string
+  ERROR: P05.T4.next_action_answer: required non-empty string
+  ERROR: P05.T4.observation_timecode: required non-empty string
+  ERROR: P05.T4.success: required boolean
+  ERROR: P05.T4.accidental_mutation: required boolean
+  ERROR: P05.T4.project_correct: required boolean
+  ERROR: P05.T4.design_correct: required boolean
+  ERROR: P05.T4.membership_correct: required boolean
+  ERROR: P05.T4.state_probe_pass: required boolean
+  ERROR: P05.T4.actions: required non-negative integer
+  ERROR: P05.T4.backtracks: required non-negative integer
+  ERROR: P05.T4.workspace_tab_hunts: required non-negative integer
+  ERROR: P05.T4.elapsed_seconds: required non-negative finite number
+  ERROR: P05.T4.project_response_seconds: required non-negative finite number
+  ERROR: P05.T4.design_response_seconds: required non-negative finite number
+  ERROR: P05.T4.membership_response_seconds: required non-negative finite number
+  ERROR: P05.T4.seq: required integer from 1 through 7
+  ERROR: P05.T4.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P05.T4.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P05.T5.start_timestamp: required non-empty string
+  ERROR: P05.T5.end_timestamp: required non-empty string
+  ERROR: P05.T5.project_answer: required non-empty string
+  ERROR: P05.T5.design_answer: required non-empty string
+  ERROR: P05.T5.membership_answer: required non-empty string
+  ERROR: P05.T5.next_action_answer: required non-empty string
+  ERROR: P05.T5.observation_timecode: required non-empty string
+  ERROR: P05.T5.success: required boolean
+  ERROR: P05.T5.accidental_mutation: required boolean
+  ERROR: P05.T5.project_correct: required boolean
+  ERROR: P05.T5.design_correct: required boolean
+  ERROR: P05.T5.membership_correct: required boolean
+  ERROR: P05.T5.state_probe_pass: required boolean
+  ERROR: P05.T5.actions: required non-negative integer
+  ERROR: P05.T5.backtracks: required non-negative integer
+  ERROR: P05.T5.workspace_tab_hunts: required non-negative integer
+  ERROR: P05.T5.elapsed_seconds: required non-negative finite number
+  ERROR: P05.T5.project_response_seconds: required non-negative finite number
+  ERROR: P05.T5.design_response_seconds: required non-negative finite number
+  ERROR: P05.T5.membership_response_seconds: required non-negative finite number
+  ERROR: P05.T5.seq: required integer from 1 through 7
+  ERROR: P05.T5.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P05.T5.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P05.T6.start_timestamp: required non-empty string
+  ERROR: P05.T6.end_timestamp: required non-empty string
+  ERROR: P05.T6.project_answer: required non-empty string
+  ERROR: P05.T6.design_answer: required non-empty string
+  ERROR: P05.T6.membership_answer: required non-empty string
+  ERROR: P05.T6.next_action_answer: required non-empty string
+  ERROR: P05.T6.observation_timecode: required non-empty string
+  ERROR: P05.T6.success: required boolean
+  ERROR: P05.T6.accidental_mutation: required boolean
+  ERROR: P05.T6.project_correct: required boolean
+  ERROR: P05.T6.design_correct: required boolean
+  ERROR: P05.T6.membership_correct: required boolean
+  ERROR: P05.T6.state_probe_pass: required boolean
+  ERROR: P05.T6.actions: required non-negative integer
+  ERROR: P05.T6.backtracks: required non-negative integer
+  ERROR: P05.T6.workspace_tab_hunts: required non-negative integer
+  ERROR: P05.T6.elapsed_seconds: required non-negative finite number
+  ERROR: P05.T6.project_response_seconds: required non-negative finite number
+  ERROR: P05.T6.design_response_seconds: required non-negative finite number
+  ERROR: P05.T6.membership_response_seconds: required non-negative finite number
+  ERROR: P05.T6.seq: required integer from 1 through 7
+  ERROR: P05.T6.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P05.T6.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+  ERROR: P05.T7.start_timestamp: required non-empty string
+  ERROR: P05.T7.end_timestamp: required non-empty string
+  ERROR: P05.T7.project_answer: required non-empty string
+  ERROR: P05.T7.design_answer: required non-empty string
+  ERROR: P05.T7.membership_answer: required non-empty string
+  ERROR: P05.T7.next_action_answer: required non-empty string
+  ERROR: P05.T7.observation_timecode: required non-empty string
+  ERROR: P05.T7.success: required boolean
+  ERROR: P05.T7.accidental_mutation: required boolean
+  ERROR: P05.T7.project_correct: required boolean
+  ERROR: P05.T7.design_correct: required boolean
+  ERROR: P05.T7.membership_correct: required boolean
+  ERROR: P05.T7.state_probe_pass: required boolean
+  ERROR: P05.T7.actions: required non-negative integer
+  ERROR: P05.T7.backtracks: required non-negative integer
+  ERROR: P05.T7.workspace_tab_hunts: required non-negative integer
+  ERROR: P05.T7.elapsed_seconds: required non-negative finite number
+  ERROR: P05.T7.project_response_seconds: required non-negative finite number
+  ERROR: P05.T7.design_response_seconds: required non-negative finite number
+  ERROR: P05.T7.membership_response_seconds: required non-negative finite number
+  ERROR: P05.T7.seq: required integer from 1 through 7
+  ERROR: P05.T7.assistance: expected NONE, REPEAT, or RESCUE
+  ERROR: P05.T7.membership_answer_code: expected MEMBER, NOT_MEMBER, or UNRECOGNIZED
+OVERALL: NOT PASSING (exit 2)

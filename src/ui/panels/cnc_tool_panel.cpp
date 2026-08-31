@@ -6,6 +6,7 @@
 #include <imgui.h>
 
 #include "core/cnc/tool_calculator.h"
+#include "core/cnc/machine_profile_calculator_adapter.h"
 #include "core/config/config.h"
 #include "core/database/tool_database.h"
 #include "core/gcode/machine_profile.h"
@@ -314,13 +315,7 @@ void CncToolPanel::recalculate() {
     // Fall back to active Config machine profile
     if (!foundMachine) {
         const auto& mp = Config::instance().getActiveMachineProfile();
-        input.spindle_power_watts = static_cast<f64>(mp.spindlePower);
-        input.max_rpm = static_cast<int>(mp.spindleMaxRPM);
-        switch (mp.driveSystem) {
-        case gcode::DriveSystem::Belt:      input.drive_type = DriveType::Belt; break;
-        case gcode::DriveSystem::BallScrew: input.drive_type = DriveType::BallScrew; break;
-        default:                            input.drive_type = DriveType::LeadScrew; break;
-        }
+        applyMachineProfileToCalcInput(mp, input);
     }
 
     m_calcResult = ToolCalculator::calculate(input);

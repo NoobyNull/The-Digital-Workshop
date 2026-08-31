@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "../types.h"
 #include "cnc_tool.h"
 
@@ -32,6 +34,7 @@ struct CalcInput {
     f64 spindle_power_watts = 0.0;
     int max_rpm = 24000;
     DriveType drive_type = DriveType::Belt;
+    std::optional<f64> rigidity_factor_override;
 };
 
 // Output: recommended cutting parameters

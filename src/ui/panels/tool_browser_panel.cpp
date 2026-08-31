@@ -8,14 +8,17 @@
 #include <imgui.h>
 
 #include "core/config/config.h"
+#include "core/cnc/machine_profile_calculator_adapter.h"
 #include "core/cnc/tool_profile.h"
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
 #include "core/utils/uuid.h"
 #include "core/gcode/machine_profile.h"
+#include "core/gcode/machine_rigidity.h"
 #include "core/materials/material_manager.h"
 #include "core/utils/log.h"
 #include "ui/dialogs/file_dialog.h"
+#include "ui/dialogs/supplier_tool_import_dialog.h"
 #include "ui/icons.h"
 #include "ui/tool_library_access.h"
 #include "ui/ui_colors.h"
@@ -191,20 +194,13 @@ void ToolBrowserPanel::renderToolbar() {
         deleteSelected();
     }
     ImGui::SameLine();
-    if (iconBtn(Icons::Import, "Import .vtdb")) {
-        if (m_fileDialog) {
+    if (iconBtn(Icons::Import, "Import Tools...")) {
+        if (m_fileDialog && m_supplierToolImportDialog) {
             std::vector<FileFilter> filters = {{".vtdb Tool Database", "*.vtdb"}};
-            m_fileDialog->showOpen(
-                "Import Tool Database", filters, [this](const std::string& path) {
-                    if (!path.empty() && m_toolDatabase) {
-                        int count = m_toolDatabase->importFromVtdb(Path(path));
-                        if (count >= 0) {
-                            log::infof("ToolBrowser", "Imported %d tools from %s", count, path.c_str());
-                        } else {
-                            log::errorf("ToolBrowser", "Failed to import from %s", path.c_str());
-                        }
-                        refresh();
-                    }
+            m_fileDialog->showNativeOpen(
+                "Choose Supplier Tool Database", filters, [this](const std::string& path) {
+                    if (!path.empty() && m_supplierToolImportDialog)
+                        m_supplierToolImportDialog->openSource(Path(path));
                 });
         }
     }
@@ -1008,26 +1004,6 @@ void ToolBrowserPanel::selectTool(const std::string& geometryId) {
     }
 }
 
-static const char* driveTypeName(DriveType dt) {
-    switch (dt) {
-    case DriveType::Belt: return "Belt";
-    case DriveType::LeadScrew: return "Lead Screw";
-    case DriveType::BallScrew: return "Ball Screw";
-    case DriveType::RackPinion: return "Rack & Pinion";
-    }
-    return "Unknown";
-}
-
-static DriveType driveTypeFromProfile(const gcode::MachineProfile& profile) {
-    switch (profile.driveSystem) {
-    case gcode::DriveSystem::Belt: return DriveType::Belt;
-    case gcode::DriveSystem::BallScrew: return DriveType::BallScrew;
-    case gcode::DriveSystem::Acme:
-    case gcode::DriveSystem::LeadScrew: return DriveType::LeadScrew;
-    }
-    return DriveType::LeadScrew;
-}
-
 static const char* hardnessBandName(HardnessBand band) {
     switch (band) {
     case HardnessBand::Soft: return "Soft Wood";
@@ -1070,10 +1046,11 @@ void ToolBrowserPanel::renderCalculator() {
     ImGui::Text("Machine: %s", toolBrowserMachineProfileLabel(profile).c_str());
     if (machineConfigured) {
         ImGui::SameLine();
-        ImGui::TextDisabled("(%s, %.0f RPM, %.0fW)",
-                            driveTypeName(driveTypeFromProfile(profile)),
+        ImGui::TextDisabled("(%s, %.0f RPM, %.0fW, %.0f%% rigidity)",
+                            gcode::driveSystemDisplayName(profile.driveSystem),
                             static_cast<double>(profile.spindleMaxRPM),
-                            static_cast<double>(profile.spindlePower));
+                            static_cast<double>(profile.spindlePower),
+                            gcode::effectiveRigidityFactor(profile) * 100.0);
     } else {
         ImGui::TextColored(colors::kOrange, "Configure an active machine profile before calculating.");
     }
@@ -1166,11 +1143,11 @@ void ToolBrowserPanel::renderMachineEditor() {
     if (configured) {
         ImGui::Text("Active Profile: %s", profile.name.c_str());
         ImGui::TextDisabled("%s, %.0f RPM, %.0fW",
-                            driveTypeName(driveTypeFromProfile(profile)),
+                            gcode::driveSystemDisplayName(profile.driveSystem),
                             static_cast<double>(profile.spindleMaxRPM),
                             static_cast<double>(profile.spindlePower));
         ImGui::TextDisabled("Rigidity: %.0f%%",
-                            ToolCalculator::rigidityFactor(driveTypeFromProfile(profile)) * 100.0);
+                            gcode::effectiveRigidityFactor(profile) * 100.0);
     } else {
         ImGui::TextColored(colors::kOrange, "Machine not configured");
         ImGui::TextDisabled("Set an active machine profile with travel, RPM, power, and drive system.");
@@ -1198,9 +1175,7 @@ void ToolBrowserPanel::runCalculation() {
     input.units = m_editGeometry.units;
     input.janka_hardness = m_calcJanka;
     input.material_name = m_calcMaterialName;
-    input.spindle_power_watts = static_cast<f64>(profile.spindlePower);
-    input.max_rpm = static_cast<int>(profile.spindleMaxRPM);
-    input.drive_type = driveTypeFromProfile(profile);
+    applyMachineProfileToCalcInput(profile, input);
 
     m_calcResult = ToolCalculator::calculate(input);
     m_hasCalcResult = true;
