@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Season Countdown</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8C%97%3C/text%3E%3C/svg%3E">
+<meta name="description" content="A live countdown to the exact moment of the next equinox or solstice, with a calendar feed that keeps itself up to date.">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --text: #1d1d1b;
+    --muted: #6b6a66;
+    --line: #e4e1d9;
+    --accent: #3f7d4e;
+    --accent-soft: #e3efe5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121311;
+      --surface: #1c1d1b;
+      --text: #efeee9;
+      --muted: #a09f99;
+      --line: #2e2f2c;
+      --accent-soft: #23302a;
+      color-scheme: dark;
+    }
+  }
+  /* Accent follows the season that is about to begin. */
+  body[data-season="spring"] { --accent: #3f7d4e; }
+  body[data-season="summer"] { --accent: #b7791f; }
+  body[data-season="autumn"] { --accent: #b4532a; }
+  body[data-season="winter"] { --accent: #3867a8; }
+  @media (prefers-color-scheme: dark) {
+    body[data-season="spring"] { --accent: #6fbf83; }
+    body[data-season="summer"] { --accent: #e8b04a; }
+    body[data-season="autumn"] { --accent: #e07a4f; }
+    body[data-season="winter"] { --accent: #7aa7e8; }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 56px; }
+
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .eyebrow { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+
+  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
+  .toggle button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px;
+    padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .toggle button[aria-pressed="true"] { color: #121311; } }
+
+  h1 { font-size: clamp(30px, 7vw, 44px); line-height: 1.1; margin: 28px 0 6px; letter-spacing: -.02em; }
+  h1 .season { color: var(--accent); }
+  .when { color: var(--muted); margin: 0 0 28px; }
+
+  .clock { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .unit {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 4px 12px; text-align: center;
+  }
+  .unit b { display: block; font-size: clamp(28px, 9vw, 52px); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1; }
+  .unit span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+  .progress { margin: 22px 0 8px; }
+  .bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
+  .progress p { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+  .just { background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; margin: 0 0 20px; font-size: 14px; }
+  .just[hidden] { display: none; }
+
+  section { margin-top: 40px; }
+  h2 { font-size: 18px; margin: 0 0 12px; }
+
+  ol.upcoming { list-style: none; padding: 0; margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+  ol.upcoming li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  ol.upcoming li:first-child { border-top: 0; }
+  ol.upcoming .name { font-weight: 600; }
+  ol.upcoming .name small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+  ol.upcoming time { text-align: right; font-variant-numeric: tabular-nums; font-size: 14px; }
+  ol.upcoming time small { display: block; color: var(--muted); font-size: 13px; }
+
+  .subscribe { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px; }
+  .subscribe p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    padding: 9px 14px; border-radius: 10px; font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #121311; } }
+  .url { display: flex; gap: 8px; margin-top: 14px; }
+  .url input {
+    flex: 1; min-width: 0; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  }
+
+  footer { margin-top: 40px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body data-season="winter">
+<main>
+  <div class="top">
+    <p class="eyebrow">Season countdown</p>
+    <div class="toggle" role="group" aria-label="Hemisphere">
+      <button type="button" data-hemi="north" aria-pressed="true">Northern</button>
+      <button type="button" data-hemi="south" aria-pressed="false">Southern</button>
+    </div>
+  </div>
+
+  <h1><span class="season" id="season">Winter</span> begins in</h1>
+  <p class="when" id="when">&nbsp;</p>
+
+  <p class="just" id="just" hidden></p>
+
+  <div class="clock" aria-live="off">
+    <div class="unit"><b id="d">–</b><span>days</span></div>
+    <div class="unit"><b id="h">–</b><span>hours</span></div>
+    <div class="unit"><b id="m">–</b><span>min</span></div>
+    <div class="unit"><b id="s">–</b><span>sec</span></div>
+  </div>
+
+  <div class="progress">
+    <div class="bar"><i id="bar"></i></div>
+    <p><span id="now-season">&nbsp;</span><span id="pct"></span></p>
+  </div>
+
+  <section>
+    <h2>Coming up</h2>
+    <ol class="upcoming" id="upcoming"></ol>
+  </section>
+
+  <section>
+    <h2>Add to your calendar</h2>
+    <div class="subscribe">
+      <p>Subscribe once and every equinox and solstice through 2050 appears at its exact moment, in your own time zone, named for the <strong id="feed-hemi">Northern</strong> Hemisphere’s seasons. Subscribing (rather than importing) lets your calendar pick up any corrections automatically.</p>
+      <div class="buttons">
+        <a class="btn primary" id="sub-apple" href="#">Apple / Outlook desktop</a>
+        <a class="btn" id="sub-google" href="#" target="_blank" rel="noopener">Google Calendar</a>
+        <a class="btn" id="sub-outlook" href="#" target="_blank" rel="noopener">Outlook.com</a>
+      </div>
+      <div class="url">
+        <input id="feed-url" readonly aria-label="Calendar feed URL">
+        <button class="btn" type="button" id="copy">Copy</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Moments are astronomical (the Sun crossing the equator or reaching its furthest point north or south), computed with Meeus’ algorithm and accurate to within about a minute. Meteorological seasons instead start on the 1st of March, June, September and December.
+  </footer>
+</main>
+
+<script src="seasons.js"></script>
+<script>
+(function () {
+  'use strict';
+  var FEEDS = { north: 'seasons-north.txt', south: 'seasons-south.txt' };
+  var SOUTHERN_ZONES = /^(Australia|Antarctica)\/|^Pacific\/(Auckland|Chatham|Fiji|Tongatapu|Apia|Noumea|Efate|Port_Moresby)|^America\/(Argentina|Sao_Paulo|Santiago|Montevideo|Asuncion|La_Paz|Lima|Punta_Arenas|Bahia|Recife|Maceio|Fortaleza|Belem|Cuiaba|Campo_Grande|Porto_Velho|Rio_Branco|Manaus|Araguaina)|^Africa\/(Johannesburg|Maputo|Harare|Lusaka|Windhoek|Gaborone|Maseru|Mbabane|Luanda|Lubumbashi|Blantyre|Dar_es_Salaam)|^Indian\/(Mauritius|Reunion|Antananarivo|Mayotte|Comoro)|^Atlantic\/(Stanley|St_Helena)/;
+
+  function store(key, value) {
+    try {
+      if (value === undefined) return localStorage.getItem(key);
+      localStorage.setItem(key, value);
+    } catch (e) { /* storage unavailable: settings just won't persist */ }
+    return null;
+  }
+
+  function guessHemisphere() {
+    try {
+      var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      return SOUTHERN_ZONES.test(tz) ? 'south' : 'north';
+    } catch (e) { return 'north'; }
+  }
+
+  var hemi = store('hemi') || guessHemisphere();
+
+  var $ = function (id) { return document.getElementById(id); };
+  var cap = function (s) { return s[0].toUpperCase() + s.slice(1); };
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+
+  var fmtFull = new Intl.DateTimeFormat(undefined, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+  });
+  var fmtDate = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  var fmtTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+
+  var state = null;       // Seasons.around() result for the current target
+  var lastUpcomingKey = '';
+
+  function refresh(now) {
+    state = Seasons.around(now);
+    var next = state.next, prev = state.previous;
+    document.body.dataset.season = next[hemi];
+    $('season').textContent = cap(next[hemi]);
+    $('when').textContent = next.name + ' · ' + fmtFull.format(next.date);
+    $('now-season').textContent = cap(prev[hemi]) + ' so far';
+
+    // Celebrate for a day after a season change.
+    var since = now - prev.date;
+    var just = $('just');
+    if (since < 86400000) {
+      var hrs = Math.floor(since / 3600000);
+      just.textContent = cap(prev[hemi]) + ' began ' +
+        (hrs < 1 ? 'less than an hour' : hrs + (hrs === 1 ? ' hour' : ' hours')) +
+        ' ago, at ' + fmtTime.format(prev.date) + '.';
+      just.hidden = false;
+    } else {
+      just.hidden = true;
+    }
+
+    var key = hemi + next.key + next.year;
+    if (key !== lastUpcomingKey) {
+      lastUpcomingKey = key;
+      var ol = $('upcoming');
+      ol.textContent = '';
+      state.upcoming.slice(0, 6).forEach(function (e) {
+        var li = document.createElement('li');
+        li.innerHTML = '<span class="name"></span><time></time>';
+        var name = li.firstChild, t = li.lastChild;
+        name.textContent = cap(e[hemi]);
+        var small = document.createElement('small');
+        small.textContent = e.name;
+        name.appendChild(small);
+        t.dateTime = e.date.toISOString();
+        t.textContent = fmtDate.format(e.date);
+        var tt = document.createElement('small');
+        tt.textContent = fmtTime.format(e.date);
+        t.appendChild(tt);
+        ol.appendChild(li);
+      });
+    }
+  }
+
+  function tick() {
+    var now = new Date();
+    if (!state || now >= state.next.date || now - state.previous.date < 86400000) refresh(now);
+    var ms = Math.max(0, state.next.date - now);
+    var sec = Math.floor(ms / 1000);
+    $('d').textContent = Math.floor(sec / 86400);
+    $('h').textContent = pad(Math.floor(sec / 3600) % 24);
+    $('m').textContent = pad(Math.floor(sec / 60) % 60);
+    $('s').textContent = pad(sec % 60);
+    var span = state.next.date - state.previous.date;
+    var pct = Math.min(100, (now - state.previous.date) / span * 100);
+    $('bar').style.width = pct.toFixed(3) + '%';
+    $('pct').textContent = pct.toFixed(1) + '%';
+  }
+
+  function feedUrls() {
+    var https = new URL(FEEDS[hemi], location.href).href;
+    var webcal = https.replace(/^https?:/, 'webcal:');
+    var name = hemi === 'south' ? 'Seasons (Southern Hemisphere)' : 'Seasons (Northern Hemisphere)';
+    $('feed-hemi').textContent = hemi === 'south' ? 'Southern' : 'Northern';
+    $('feed-url').value = https;
+    $('sub-apple').href = webcal;
+    $('sub-google').href = 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal);
+    $('sub-outlook').href = 'https://outlook.live.com/calendar/0/addfromweb?url=' +
+      encodeURIComponent(https) + '&name=' + encodeURIComponent(name);
+  }
+
+  function setHemi(h) {
+    hemi = h;
+    store('hemi', h);
+    document.querySelectorAll('.toggle button').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.hemi === h));
+    });
+    feedUrls();
+    state = null;
+    tick();
+  }
+
+  document.querySelectorAll('.toggle button').forEach(function (b) {
+    b.addEventListener('click', function () { setHemi(b.dataset.hemi); });
+  });
+  $('copy').addEventListener('click', function () {
+    var input = $('feed-url'), btn = this;
+    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(done, function () { input.select(); });
+    else { input.select(); try { document.execCommand('copy'); done(); } catch (e) {} }
+  });
+
+  setHemi(hemi);
+  setInterval(tick, 250);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { state = null; tick(); } });
+})();
+</script>
+</body>
+</html>
