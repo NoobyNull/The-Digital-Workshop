@@ -23,13 +23,13 @@ void expectContains(const std::string& source, const char* token) {
 
 } // namespace
 
-TEST(GuidedAccessibilityArchitecture, KeyboardNavigationReachesPrimaryWorkflowActions) {
+TEST(AccessibilityArchitecture, KeyboardNavigationReachesPrimaryWorkflowActions) {
     const auto application = readSource("src/app/application.cpp");
     const auto projectPanel = readSource("src/ui/panels/project_panel.cpp");
     const auto libraryPicker =
         readSource("src/modules/design_library/ui/library_picker_view.cpp");
     const auto libraryItems = readSource("src/ui/panels/library_panel_items.cpp");
-    const auto guidedSurfaces = projectPanel + libraryPicker + libraryItems;
+    const auto workflowSurfaces = projectPanel + libraryPicker + libraryItems;
 
     expectContains(application, "ImGuiConfigFlags_NavEnableKeyboard");
     expectContains(projectPanel, "ImGui::Button");
@@ -37,10 +37,10 @@ TEST(GuidedAccessibilityArchitecture, KeyboardNavigationReachesPrimaryWorkflowAc
     expectContains(libraryPicker, "ImGui::InputText");
     expectContains(libraryPicker, "ImGui::SetKeyboardFocusHere");
     expectContains(libraryItems, "ImGui::Selectable");
-    EXPECT_EQ(guidedSurfaces.find("ImGuiWindowFlags_NoNav"), std::string::npos);
+    EXPECT_EQ(workflowSurfaces.find("ImGuiWindowFlags_NoNav"), std::string::npos);
 }
 
-TEST(GuidedAccessibilityArchitecture, ProjectAndLibraryStateRemainExplicitWithoutColor) {
+TEST(AccessibilityArchitecture, ProjectAndLibraryStateRemainExplicitWithoutColor) {
     const auto projectPanel = readSource("src/ui/panels/project_panel.cpp");
     const auto contextBar =
         readSource("src/modules/workshop/ui/project_context_bar.cpp");
@@ -69,7 +69,7 @@ TEST(GuidedAccessibilityArchitecture, ProjectAndLibraryStateRemainExplicitWithou
     expectContains(libraryItems, "IN PROJECT");
 }
 
-TEST(GuidedAccessibilityArchitecture, ResponsiveChoicesUseAvailableSpaceAndStyleMetrics) {
+TEST(AccessibilityArchitecture, ResponsiveChoicesUseAvailableSpaceAndStyleMetrics) {
     const auto libraryPicker =
         readSource("src/modules/design_library/ui/library_picker_view.cpp");
     const auto contextBar =
@@ -85,7 +85,7 @@ TEST(GuidedAccessibilityArchitecture, ResponsiveChoicesUseAvailableSpaceAndStyle
     expectContains(contextBar, "viewport->WorkSize.x");
 }
 
-TEST(GuidedAccessibilityArchitecture, NarrowLibraryCopyWrapsInOwnedTextBlocks) {
+TEST(AccessibilityArchitecture, NarrowLibraryCopyWrapsInOwnedTextBlocks) {
     const auto libraryPicker =
         readSource("src/modules/design_library/ui/library_picker_view.cpp");
 
@@ -97,7 +97,7 @@ TEST(GuidedAccessibilityArchitecture, NarrowLibraryCopyWrapsInOwnedTextBlocks) {
     expectContains(libraryPicker, "renderWrappedText(presentation.errorText");
 }
 
-TEST(GuidedAccessibilityArchitecture, ProgrammaticLibrarySelectionScrollsIntoView) {
+TEST(AccessibilityArchitecture, ProgrammaticLibrarySelectionScrollsIntoView) {
     const auto picker = readSource("src/ui/panels/library_panel_picker.cpp");
     const auto items = readSource("src/ui/panels/library_panel_items.cpp");
 
@@ -107,16 +107,4 @@ TEST(GuidedAccessibilityArchitecture, ProgrammaticLibrarySelectionScrollsIntoVie
     const std::string lists = readSource("src/ui/panels/library_panel_lists.cpp");
     expectContains(lists, "renderCardListBottomClearance");
     expectContains(lists, "ImGui::GetTextLineHeightWithSpacing()");
-}
-
-TEST(GuidedAccessibilityArchitecture, GuidedLibraryUsesLiveExperienceAndHidesProperties) {
-    const auto picker = readSource("src/app/application_library_picker.cpp");
-    const auto wiring = readSource("src/app/application_wiring_library.cpp");
-
-    expectContains(picker, "libraryExperienceMode() const");
-    expectContains(picker, "NavigateWorkshopIntent{\n            experience");
-    expectContains(picker, "showProperties() = !guided");
-    expectContains(picker, "ReturnFromLibraryIntent{\n                    libraryExperienceMode()");
-    expectContains(wiring, "PreviewLibraryItemIntent{\n                                            libraryExperienceMode()");
-    EXPECT_EQ(wiring.find("workshop::ExperienceMode::Advanced"), std::string::npos);
 }

@@ -10,7 +10,7 @@
 
 #include "core/config/config.h"
 #include "core/config/layout_migration.h"
-#include "modules/workshop/ui/guided_layout_metrics.h"
+#include "modules/workshop/ui/workshop_layout_metrics.h"
 #include "ui/tool_library_access.h"
 #include "ui/panels/viewport_panel.h"
 
@@ -30,14 +30,14 @@ int findPresetIndex(const std::vector<LayoutPreset>& presets, Predicate predicat
 
 void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     const auto* viewport = ImGui::GetMainViewport();
-    const auto dockLayout = workshop::ui::chooseGuidedDockLayout(
+    const auto dockLayout = workshop::ui::chooseWorkshopDockLayout(
         viewport->WorkSize.x, ImGui::GetFontSize());
 
     ImGui::DockBuilderRemoveNode(dockspaceId);
     ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->Size);
 
-    // Split from physical widths so scaled Guided labels remain readable while
+    // Split from physical widths so scaled sidebar labels remain readable while
     // 4K sidebars stay close to their useful content instead of growing to 20%.
     ImGuiID dockLeft = 0;
     ImGuiID dockCenterRight = 0;
@@ -116,14 +116,6 @@ void UIManager::restoreVisibilityFromConfig() {
     m_showDirectCarve = cfg.getShowDirectCarve();
 
     m_activePresetIndex = cfg.getActiveLayoutPresetIndex();
-    if (m_activePresetIndex >= 0 &&
-        m_activePresetIndex < static_cast<int>(cfg.getLayoutPresets().size())) {
-        const auto& active = cfg.getLayoutPresets()[static_cast<std::size_t>(m_activePresetIndex)];
-        if (isGuidedLayout(active) && m_guidedExperienceSetter)
-            m_guidedExperienceSetter(true);
-        else if (isAdvancedLayout(active) && m_guidedExperienceSetter)
-            m_guidedExperienceSetter(false);
-    }
     m_workspaceMode = isBuiltInSenderPreset(m_activePresetIndex)
         ? WorkspaceMode::CNC
         : WorkspaceMode::Model;
@@ -200,11 +192,6 @@ void UIManager::applyLayoutPreset(int presetIndex) {
     else if (isBuiltInSenderPreset(presetIndex))
         m_workspaceMode = WorkspaceMode::CNC;
 
-    if (isGuidedLayout(preset) && m_guidedExperienceSetter)
-        m_guidedExperienceSetter(true);
-    else if (isAdvancedLayout(preset) && m_guidedExperienceSetter)
-        m_guidedExperienceSetter(false);
-
     syncWorkspaceModeToPanels();
     enforceWorkspaceBoundary();
 }
@@ -214,7 +201,7 @@ bool UIManager::isBuiltInWorkshopPreset(int presetIndex) const {
     if (presetIndex < 0 || presetIndex >= static_cast<int>(presets.size()))
         return false;
     const auto& preset = presets[static_cast<std::size_t>(presetIndex)];
-    return isGuidedLayout(preset) || isAdvancedLayout(preset);
+    return isWorkshopLayout(preset);
 }
 
 bool UIManager::isBuiltInSenderPreset(int presetIndex) const {
@@ -223,34 +210,12 @@ bool UIManager::isBuiltInSenderPreset(int presetIndex) const {
            isCncLayout(presets[static_cast<std::size_t>(presetIndex)]);
 }
 
-bool UIManager::guidedExperienceSelected() const {
-    return m_guidedExperienceGetter && m_guidedExperienceGetter();
-}
-
 int UIManager::workshopPresetIndex() const {
-    const auto& presets = Config::instance().getLayoutPresets();
-    const bool guided = guidedExperienceSelected();
-    const int preferred = findPresetIndex(presets, [guided](const LayoutPreset& preset) {
-        return guided ? isGuidedLayout(preset) : isAdvancedLayout(preset);
-    });
-    if (preferred >= 0)
-        return preferred;
-    return findPresetIndex(presets, [](const LayoutPreset& preset) {
-        return isGuidedLayout(preset) || isAdvancedLayout(preset);
-    });
+    return findPresetIndex(Config::instance().getLayoutPresets(), isWorkshopLayout);
 }
 
 int UIManager::senderPresetIndex() const {
     return findPresetIndex(Config::instance().getLayoutPresets(), isCncLayout);
-}
-
-void UIManager::selectGuidedExperience(bool guided) {
-    if (m_cncStreaming)
-        return;
-    if (m_guidedExperienceSetter)
-        m_guidedExperienceSetter(guided);
-    if (m_workspaceMode == WorkspaceMode::Model)
-        applyLayoutPreset(workshopPresetIndex());
 }
 
 LayoutPreset UIManager::captureCurrentLayout(const std::string& name) const {

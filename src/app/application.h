@@ -71,7 +71,6 @@ class ProjectWorkshopController;
 class ProjectResumeCoordinator;
 struct ProjectDisplayFacts;
 struct ProjectItemRef;
-enum class ExperienceMode;
 enum class ProjectClosePurpose;
 } // namespace workshop
 
@@ -145,7 +144,6 @@ class Application {
     void showHome(bool beginNamedProject = false);
     [[nodiscard]] bool showDesignLibrary();
     [[nodiscard]] bool showDesignLibrary(design_library::LibraryPickerPurpose purpose);
-    [[nodiscard]] workshop::ExperienceMode libraryExperienceMode() const;
     [[nodiscard]] bool requestLibraryReturn(std::string& errorMessage);
     void handleCompletedLibraryImports(const std::vector<ImportedLibraryItem>& items);
     void refreshProjectShell();

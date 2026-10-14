@@ -89,7 +89,7 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
         m_integration = std::make_unique<dw::ProjectSessionIntegration>(
             m_session, *m_projects);
         m_workshop = std::make_unique<workshop::ProjectWorkshopController>(
-            m_session, true);
+            m_session);
     }
 
     void TearDown() override {
@@ -139,9 +139,7 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
 
         const auto context = m_session.snapshot();
         const auto navigation = m_workshop->dispatch(
-            workshop::NavigateWorkshopIntent{
-                workshop::ExperienceMode::Guided,
-                context.generation,
+            workshop::NavigateWorkshopIntent{context.generation,
                 workshop::WorkshopRoute::DesignLibrary});
         EXPECT_TRUE(navigation.accepted());
         return opened;
@@ -159,9 +157,7 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
         ASSERT_NE(restore, nullptr);
 
         const auto returned = m_workshop->dispatch(
-            workshop::ReturnFromLibraryIntent{
-                workshop::ExperienceMode::Guided,
-                restore->expectedGeneration});
+            workshop::ReturnFromLibraryIntent{restore->expectedGeneration});
         ASSERT_TRUE(returned.accepted());
         const auto completed = picker.dispatch(
             library::CompleteLibraryRestore{restore->token, true},
@@ -241,9 +237,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
                   m_session.snapshot()).status,
               library::LibraryPickerTransitionStatus::Applied);
     ASSERT_TRUE(m_workshop->dispatch(
-                    workshop::NavigateWorkshopIntent{
-                        workshop::ExperienceMode::Guided,
-                        m_session.snapshot().generation,
+                    workshop::NavigateWorkshopIntent{m_session.snapshot().generation,
                         workshop::WorkshopRoute::DesignLibrary}).accepted());
     ASSERT_EQ(picker.dispatch(
                   library::ReplaceLibrarySelection{{primary}}, m_session.snapshot()).status,
@@ -323,9 +317,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     EXPECT_TRUE(dw::library_workflow_adapter::previewStillCurrent(
         m_libraryWorkflow.get(), &m_session, previewRequest->token, preview));
     const auto presented = m_workshop->dispatch(
-        workshop::PreviewLibraryItemIntent{
-            workshop::ExperienceMode::Guided,
-            m_session.snapshot().generation,
+        workshop::PreviewLibraryItemIntent{m_session.snapshot().generation,
             preview});
     ASSERT_TRUE(presented.accepted());
     const auto previewCompleted = picker.dispatch(
@@ -344,9 +336,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     const workshop::ProjectItemRef modelRef{
         riverProject, workshop::ProjectItemId(modelItem->id)};
     const auto modelSelected = m_workshop->dispatch(
-        workshop::SelectProjectItemIntent{
-            workshop::ExperienceMode::Guided,
-            m_session.snapshot().generation,
+        workshop::SelectProjectItemIntent{m_session.snapshot().generation,
             modelRef});
     ASSERT_TRUE(modelSelected.accepted());
     ASSERT_EQ(modelSelected.context.activeProjectItem, modelRef);
@@ -398,9 +388,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     const workshop::ProjectItemRef operationRef{
         riverProject, workshop::ProjectItemId(*operationId)};
     const auto operationSelected = m_workshop->dispatch(
-        workshop::SelectProjectItemIntent{
-            workshop::ExperienceMode::Guided,
-            m_session.snapshot().generation,
+        workshop::SelectProjectItemIntent{m_session.snapshot().generation,
             operationRef});
     ASSERT_TRUE(operationSelected.accepted());
     ASSERT_EQ(operationSelected.context.activeProjectItem, operationRef);
@@ -506,7 +494,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     dw::ProjectSessionIntegration restartedIntegration(
         restartedSession, *m_projects);
     workshop::ProjectWorkshopController restartedWorkshop(
-        restartedSession, true);
+        restartedSession);
     workshop::ProjectResumeCallbacks callbacks;
     callbacks.inspectProject = [this](const workshop::ProjectResumeBookmark& bookmark) {
         return m_projects->validateProjectStorage(bookmark.project.value) ==
@@ -530,9 +518,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     callbacks.activateItem = [&restartedSession, &restartedWorkshop](
                                  workshop::ProjectItemRef item) {
         const auto selected = restartedWorkshop.dispatch(
-            workshop::SelectProjectItemIntent{
-                workshop::ExperienceMode::Guided,
-                restartedSession.snapshot().generation,
+            workshop::SelectProjectItemIntent{restartedSession.snapshot().generation,
                 item});
         return selected.accepted() ? workshop::ResumeActivationStatus::Applied
                                    : workshop::ResumeActivationStatus::Rejected;

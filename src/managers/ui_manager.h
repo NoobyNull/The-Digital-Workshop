@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "../core/config/layout_preset.h"
-#include "../core/config/workspace_stream_policy.h"
 #include "../core/config/window_catalog.h"
 #include "../core/types.h"
 
@@ -94,8 +93,6 @@ using ModelIdCallback = std::function<void(int64_t)>;
 using PathCallback = std::function<void(const Path&)>;
 using PathsCallback = std::function<void(const std::vector<std::string>&)>;
 using ResetToDefaultsCallback = std::function<std::string()>;
-using ExperienceModeGetter = std::function<bool()>;
-using ExperienceModeSetter = std::function<void(bool)>;
 
 class UIManager {
   public:
@@ -212,11 +209,6 @@ class UIManager {
     void saveCurrentAsPreset(const std::string& name);
     void deletePreset(int index);
     int activePresetIndex() const { return m_activePresetIndex; }
-    void setExperienceModeAccessors(ExperienceModeGetter getter,
-                                    ExperienceModeSetter setter) {
-        m_guidedExperienceGetter = std::move(getter);
-        m_guidedExperienceSetter = std::move(setter);
-    }
 
     // Group panels
     void addGroupPanel();
@@ -256,9 +248,8 @@ class UIManager {
     void setOnDisconnect(ActionCallback cb) { m_onDisconnect = std::move(cb); }
     void setOnPanicStop(ActionCallback cb) { m_onPanicStop = std::move(cb); }
 
-    // CNC streaming state (for panic smash detection)
-    void setCncStreaming(bool streaming,
-                         CncStreamOrigin origin = CncStreamOrigin::ExternalGCode);
+    // CNC streaming state. A stream holds the Sender workspace until it ends.
+    void setCncStreaming(bool streaming);
 
     // CNC state for menu bar display
     void setCncConnected(bool v) { m_cncConnected = v; }
@@ -348,8 +339,6 @@ class UIManager {
     bool isBuiltInSenderPreset(int presetIndex) const;
     int workshopPresetIndex() const;
     int senderPresetIndex() const;
-    bool guidedExperienceSelected() const;
-    void selectGuidedExperience(bool guided);
 
     // Dialog list for batch rendering
     std::vector<Dialog*> m_dialogList;
@@ -359,8 +348,6 @@ class UIManager {
     bool m_suppressAutoContext = false;
     bool m_showSavePresetPopup = false;
     char m_presetNameBuf[64] = {};
-    ExperienceModeGetter m_guidedExperienceGetter;
-    ExperienceModeSetter m_guidedExperienceSetter;
     void checkAutoContextTrigger(const std::string& focusedPanelKey);
     void renderPresetSelector();
     void renderSavePresetPopup();
@@ -441,7 +428,6 @@ class UIManager {
     bool m_cncConnected = false;
     bool m_cncSimulating = false;
     bool m_cncStreaming = false;
-    CncStreamShell m_cncStreamShell = CncStreamShell::Sender;
     std::vector<std::string> m_availablePorts;
 
     // Keyboard smash panic detector

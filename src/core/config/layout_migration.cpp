@@ -10,8 +10,7 @@ namespace dw {
 namespace {
 
 enum class BuiltInKind {
-    Guided,
-    Advanced,
+    Workshop,
     Cnc,
 };
 
@@ -27,13 +26,17 @@ std::optional<BuiltInKind> builtInKind(const LayoutPreset& preset) noexcept {
     if (!preset.builtIn)
         return std::nullopt;
 
-    if (matches(preset.id, GUIDED_LAYOUT_ID, {"guided", "workshop_guided"}) ||
-        matches(preset.name, "Guided Workshop", {"Guided"})) {
-        return BuiltInKind::Guided;
-    }
-    if (matches(preset.id, ADVANCED_LAYOUT_ID, {"advanced", "model", "workshop"}) ||
-        matches(preset.name, "Advanced Workbench", {"Workshop", "Modeling", "Model Workshop"})) {
-        return BuiltInKind::Advanced;
+    // The Guided Workshop and Advanced Workbench built-ins of earlier releases
+    // both become Workshop.
+    if (matches(preset.id,
+                WORKSHOP_LAYOUT_ID,
+                {"advanced_workbench", "advanced", "model", "guided_workshop", "guided",
+                 "workshop_guided"}) ||
+        matches(preset.name,
+                "Workshop",
+                {"Advanced Workbench", "Guided Workshop", "Guided", "Modeling",
+                 "Model Workshop"})) {
+        return BuiltInKind::Workshop;
     }
     if (matches(preset.id, CNC_LAYOUT_ID, {"cnc", "sender"}) ||
         matches(preset.name, "CNC Sender", {"Sender"})) {
@@ -42,33 +45,29 @@ std::optional<BuiltInKind> builtInKind(const LayoutPreset& preset) noexcept {
     return std::nullopt;
 }
 
+constexpr int kBuiltInCount = 2;
+
 int canonicalIndex(BuiltInKind kind) noexcept {
     switch (kind) {
-    case BuiltInKind::Guided:
+    case BuiltInKind::Workshop:
         return 0;
-    case BuiltInKind::Advanced:
-        return 1;
     case BuiltInKind::Cnc:
-        return 2;
+        return 1;
     }
-    return 1;
+    return 0;
 }
 
 } // namespace
 
-bool isGuidedLayout(const LayoutPreset& preset) noexcept {
-    return preset.id == GUIDED_LAYOUT_ID;
-}
-
-bool isAdvancedLayout(const LayoutPreset& preset) noexcept {
-    return preset.id == ADVANCED_LAYOUT_ID;
+bool isWorkshopLayout(const LayoutPreset& preset) noexcept {
+    return preset.id == WORKSHOP_LAYOUT_ID;
 }
 
 bool isCncLayout(const LayoutPreset& preset) noexcept {
     return preset.id == CNC_LAYOUT_ID;
 }
 
-LayoutMigrationResult migrateGuidedLayouts(const LayoutMigrationSnapshot& snapshot) {
+LayoutMigrationResult migrateLayoutPresets(const LayoutMigrationSnapshot& snapshot) {
     if (snapshot.version >= CURRENT_LAYOUT_MIGRATION_VERSION) {
         return {snapshot.version, snapshot.activePresetIndex, snapshot.presets, false};
     }
@@ -76,8 +75,7 @@ LayoutMigrationResult migrateGuidedLayouts(const LayoutMigrationSnapshot& snapsh
     LayoutMigrationResult result;
     result.version = CURRENT_LAYOUT_MIGRATION_VERSION;
     result.presets = {
-        LayoutPreset::guidedDefault(),
-        LayoutPreset::advancedDefault(),
+        LayoutPreset::workshopDefault(),
         LayoutPreset::cncDefault(),
     };
     result.changed = true;
@@ -106,11 +104,9 @@ LayoutMigrationResult migrateGuidedLayouts(const LayoutMigrationSnapshot& snapsh
     if (activeBuiltIn) {
         result.activePresetIndex = canonicalIndex(*activeBuiltIn);
     } else if (activeCustomOrdinal >= 0) {
-        result.activePresetIndex = 3 + activeCustomOrdinal;
+        result.activePresetIndex = kBuiltInCount + activeCustomOrdinal;
     } else {
-        // Existing installs remain on the freeform workbench. Guided becomes
-        // the release default only after the separate acceptance gate.
-        result.activePresetIndex = 1;
+        result.activePresetIndex = canonicalIndex(BuiltInKind::Workshop);
     }
     return result;
 }

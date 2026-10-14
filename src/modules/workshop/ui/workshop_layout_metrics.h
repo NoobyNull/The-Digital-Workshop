@@ -4,7 +4,7 @@
 
 namespace dw::workshop::ui {
 
-struct GuidedDockLayout {
+struct WorkshopDockLayout {
     float leftWidth = 0.0F;
     float rightWidth = 0.0F;
     float centerWidth = 0.0F;
@@ -12,16 +12,16 @@ struct GuidedDockLayout {
     float rightSplitRatio = 0.0F;
 };
 
-struct GuidedHomeLayout {
+struct HomeLayout {
     float contentWidth = 0.0F;
     float horizontalOffset = 0.0F;
     float leftColumnWidth = 0.0F;
     float rightColumnWidth = 0.0F;
 };
 
-// Guided sidebars have long, novice-facing labels. Size them from the rendered
+// Sidebars carry long labels. Size them from the rendered
 // font instead of a viewport percentage, then preserve enough center workspace.
-inline GuidedDockLayout chooseGuidedDockLayout(float workAreaWidth,
+inline WorkshopDockLayout chooseWorkshopDockLayout(float workAreaWidth,
                                                 float fontSize) noexcept {
     constexpr float kMinimumLeftWidth = 260.0F;
     constexpr float kMaximumLeftWidth = 430.0F;
@@ -49,7 +49,7 @@ inline GuidedDockLayout chooseGuidedDockLayout(float workAreaWidth,
     }
 
     const float remainingAfterLeft = std::max(0.0F, width - left);
-    GuidedDockLayout layout;
+    WorkshopDockLayout layout;
     layout.leftWidth = left;
     layout.rightWidth = std::min(right, remainingAfterLeft);
     layout.centerWidth = std::max(0.0F, width - left - layout.rightWidth);
@@ -62,7 +62,7 @@ inline GuidedDockLayout chooseGuidedDockLayout(float workAreaWidth,
 
 // Home should stay compact at ordinary desktop widths and become a centered,
 // readable block instead of stretching its cards across a 4K work area.
-inline GuidedHomeLayout chooseGuidedHomeLayout(float availableWidth,
+inline HomeLayout chooseHomeLayout(float availableWidth,
                                                float columnSpacing) noexcept {
     constexpr float kMaximumContentWidth = 1440.0F;
     constexpr float kLeftColumnShare = 0.55F;
@@ -70,7 +70,7 @@ inline GuidedHomeLayout chooseGuidedHomeLayout(float availableWidth,
     const float width = std::max(0.0F, availableWidth);
     const float spacing = std::clamp(columnSpacing, 0.0F, width);
 
-    GuidedHomeLayout layout;
+    HomeLayout layout;
     layout.contentWidth = std::min(width, kMaximumContentWidth);
     layout.horizontalOffset = (width - layout.contentWidth) * 0.5F;
     layout.leftColumnWidth = layout.contentWidth * kLeftColumnShare;

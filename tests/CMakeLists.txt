@@ -49,7 +49,7 @@ set(DW_TEST_SOURCES
     test_view_cube_orientation.cpp
     test_viewport_presentation.cpp
     test_viewport_ui_architecture.cpp
-    test_guided_accessibility_architecture.cpp
+    test_accessibility_architecture.cpp
     test_archive.cpp
     test_library_manager.cpp
     test_library_source_deletion.cpp
@@ -318,7 +318,7 @@ gtest_discover_tests(dw_tests)
 # Prove the workshop contracts compile and run without the legacy test target's
 # ImGui, GLM, database, or application dependency closure.
 add_executable(dw_workshop_core_tests
-    test_guided_layout_metrics.cpp
+    test_workshop_layout_metrics.cpp
     test_home_flow.cpp
     test_project_resume.cpp
     test_project_item_load_guard.cpp

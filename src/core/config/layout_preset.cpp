@@ -44,15 +44,15 @@ LayoutPreset LayoutPreset::fromJsonString(const std::string& jsonStr) {
 
 // --- Built-in preset factories ---
 
-LayoutPreset LayoutPreset::guidedDefault() {
+LayoutPreset LayoutPreset::workshopDefault() {
     LayoutPreset p;
-    p.id = GUIDED_LAYOUT_ID;
-    p.name = "Guided Workshop";
+    p.id = WORKSHOP_LAYOUT_ID;
+    p.name = "Workshop";
     p.builtIn = true;
     p.visibility = {
         {"viewport", true},       {"library", false},
-        {"properties", false},    {"project", true},
-        {"start_page", true},     {"gcode", false},
+        {"properties", true},     {"project", true},
+        {"start_page", false},    {"gcode", false},
         {"materials", false},     {"tool_browser", false},
         {"cnc_status", false},    {"cnc_jog", false},
         {"cnc_console", false},   {"cnc_wcs", false},
@@ -63,17 +63,8 @@ LayoutPreset LayoutPreset::guidedDefault() {
     return p;
 }
 
-LayoutPreset LayoutPreset::advancedDefault() {
-    LayoutPreset p = guidedDefault();
-    p.id = ADVANCED_LAYOUT_ID;
-    p.name = "Advanced Workbench";
-    p.visibility["properties"] = true;
-    p.visibility["start_page"] = false;
-    return p;
-}
-
 LayoutPreset LayoutPreset::modelDefault() {
-    return advancedDefault();
+    return workshopDefault();
 }
 
 LayoutPreset LayoutPreset::cncDefault() {

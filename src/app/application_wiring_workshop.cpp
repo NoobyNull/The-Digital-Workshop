@@ -54,11 +54,8 @@ void Application::wireWorkshop() {
             return;
         }
         const auto context = m_projectSession->snapshot();
-        const auto experience = m_projectWorkshopController->guidedEnabled()
-                                    ? workshop::ExperienceMode::Guided
-                                    : workshop::ExperienceMode::Advanced;
         const auto transition = m_projectWorkshopController->dispatch(
-            workshop::BackToProjectIntent{experience, context.generation});
+            workshop::BackToProjectIntent{context.generation});
         if (!transition.accepted()) {
             ToastManager::instance().show(
                 ToastType::Warning,

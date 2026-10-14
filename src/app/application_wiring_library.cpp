@@ -153,7 +153,6 @@ void Application::wireLibraryPanel() {
                                     const auto context = m_projectSession->snapshot();
                                     const auto preview = m_projectWorkshopController->dispatch(
                                         workshop::PreviewLibraryItemIntent{
-                                            libraryExperienceMode(),
                                             context.generation,
                                             requestCopy.item});
                                     presented = preview.accepted();
@@ -200,7 +199,6 @@ void Application::wireLibraryPanel() {
                         const auto context = m_projectSession->snapshot();
                         presented = m_projectWorkshopController
                                         ->dispatch(workshop::PreviewLibraryItemIntent{
-                                            libraryExperienceMode(),
                                             context.generation,
                                             request->item})
                                         .accepted();

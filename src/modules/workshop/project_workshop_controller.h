@@ -4,7 +4,7 @@
 #include <string>
 #include <variant>
 
-#include "experience_router.h"
+#include "workshop_contract.h"
 
 namespace dw::workshop {
 
@@ -37,34 +37,28 @@ class ProjectShellSnapshot final {
 };
 
 struct BackToProjectIntent {
-    ExperienceMode source = ExperienceMode::Guided;
     ContextGeneration expectedGeneration;
 };
 
 struct NavigateWorkshopIntent {
-    ExperienceMode source = ExperienceMode::Guided;
     ContextGeneration expectedGeneration;
     WorkshopRoute route = WorkshopRoute::Home;
 };
 
 struct ReturnFromLibraryIntent {
-    ExperienceMode source = ExperienceMode::Guided;
     ContextGeneration expectedGeneration;
 };
 
 struct SelectProjectItemIntent {
-    ExperienceMode source = ExperienceMode::Guided;
     ContextGeneration expectedGeneration;
     ProjectItemRef item;
 };
 
 struct ClearProjectItemIntent {
-    ExperienceMode source = ExperienceMode::Guided;
     ContextGeneration expectedGeneration;
 };
 
 struct PreviewLibraryItemIntent {
-    ExperienceMode source = ExperienceMode::Guided;
     ContextGeneration expectedGeneration;
     LibraryItemRef item;
 };
@@ -78,10 +72,7 @@ using ProjectWorkshopIntent = std::variant<BackToProjectIntent,
 
 class ProjectWorkshopController final {
   public:
-    ProjectWorkshopController(WorkshopCommandTarget& target, bool guidedEnabled) noexcept;
-
-    void setGuidedEnabled(bool enabled) noexcept;
-    [[nodiscard]] bool guidedEnabled() const noexcept;
+    explicit ProjectWorkshopController(WorkshopCommandTarget& target) noexcept;
 
     [[nodiscard]] ProjectShellSnapshot snapshot(const ProjectDisplayFacts& displayFacts,
                                                 const MachineStatusSnapshot& machineStatus) const;
@@ -97,7 +88,6 @@ class ProjectWorkshopController final {
     WorkshopTransition dispatchIntent(const PreviewLibraryItemIntent& intent);
 
     WorkshopCommandTarget& m_target;
-    ExperienceRouter m_router;
 };
 
 } // namespace dw::workshop

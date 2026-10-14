@@ -22,17 +22,8 @@ const MachineStatusSnapshot& ProjectShellSnapshot::machineStatus() const noexcep
     return m_machineStatus;
 }
 
-ProjectWorkshopController::ProjectWorkshopController(WorkshopCommandTarget& target,
-                                                     bool guidedEnabled) noexcept
-    : m_target(target), m_router(target, guidedEnabled) {}
-
-void ProjectWorkshopController::setGuidedEnabled(bool enabled) noexcept {
-    m_router.setGuidedEnabled(enabled);
-}
-
-bool ProjectWorkshopController::guidedEnabled() const noexcept {
-    return m_router.guidedEnabled();
-}
+ProjectWorkshopController::ProjectWorkshopController(WorkshopCommandTarget& target) noexcept
+    : m_target(target) {}
 
 ProjectShellSnapshot ProjectWorkshopController::snapshot(
     const ProjectDisplayFacts& displayFacts, const MachineStatusSnapshot& machineStatus) const {
@@ -48,14 +39,14 @@ WorkshopTransition ProjectWorkshopController::dispatchIntent(const BackToProject
     WorkshopCommand command;
     command.expectedGeneration = intent.expectedGeneration;
     command.payload = NavigateTo{WorkshopRoute::Project};
-    return m_router.dispatch(intent.source, command);
+    return m_target.dispatch(command);
 }
 
 WorkshopTransition ProjectWorkshopController::dispatchIntent(const NavigateWorkshopIntent& intent) {
     WorkshopCommand command;
     command.payload = NavigateTo{intent.route};
     command.expectedGeneration = intent.expectedGeneration;
-    return m_router.dispatch(intent.source, command);
+    return m_target.dispatch(command);
 }
 
 WorkshopTransition ProjectWorkshopController::dispatchIntent(
@@ -63,7 +54,7 @@ WorkshopTransition ProjectWorkshopController::dispatchIntent(
     WorkshopCommand command;
     command.payload = ReturnFromLibrary{};
     command.expectedGeneration = intent.expectedGeneration;
-    return m_router.dispatch(intent.source, command);
+    return m_target.dispatch(command);
 }
 
 WorkshopTransition ProjectWorkshopController::dispatchIntent(
@@ -71,14 +62,14 @@ WorkshopTransition ProjectWorkshopController::dispatchIntent(
     WorkshopCommand command;
     command.payload = SelectProjectItem{intent.item};
     command.expectedGeneration = intent.expectedGeneration;
-    return m_router.dispatch(intent.source, command);
+    return m_target.dispatch(command);
 }
 
 WorkshopTransition ProjectWorkshopController::dispatchIntent(const ClearProjectItemIntent& intent) {
     WorkshopCommand command;
     command.payload = ClearProjectItem{};
     command.expectedGeneration = intent.expectedGeneration;
-    return m_router.dispatch(intent.source, command);
+    return m_target.dispatch(command);
 }
 
 WorkshopTransition ProjectWorkshopController::dispatchIntent(
@@ -92,14 +83,14 @@ WorkshopTransition ProjectWorkshopController::dispatchIntent(
     WorkshopCommand navigate;
     navigate.payload = NavigateTo{WorkshopRoute::DesignLibrary};
     navigate.expectedGeneration = intent.expectedGeneration;
-    const auto navigation = m_router.dispatch(intent.source, navigate);
+    const auto navigation = m_target.dispatch(navigate);
     if (!navigation.accepted())
         return navigation;
 
     WorkshopCommand preview;
     preview.payload = PreviewLibraryItem{intent.item};
     preview.expectedGeneration = navigation.context.generation;
-    return m_router.dispatch(intent.source, preview);
+    return m_target.dispatch(preview);
 }
 
 } // namespace dw::workshop

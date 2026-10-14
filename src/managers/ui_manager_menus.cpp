@@ -188,20 +188,6 @@ void UIManager::renderViewMenu() {
     if (!ImGui::BeginMenu("View"))
         return;
 
-    if (ImGui::BeginMenu("Experience")) {
-        const bool guided = guidedExperienceSelected();
-        if (m_cncStreaming)
-            ImGui::BeginDisabled();
-        if (ImGui::MenuItem("Guided Workshop", nullptr, guided))
-            selectGuidedExperience(true);
-        if (ImGui::MenuItem("Advanced Workbench", nullptr, !guided))
-            selectGuidedExperience(false);
-        if (m_cncStreaming)
-            ImGui::EndDisabled();
-        ImGui::EndMenu();
-    }
-    ImGui::Separator();
-
     bool isModel = (m_workspaceMode == WorkspaceMode::Model);
     bool isCnc = (m_workspaceMode == WorkspaceMode::CNC);
     if (m_cncStreaming)

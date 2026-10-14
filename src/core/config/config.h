@@ -549,7 +549,7 @@ class Config {
 
     // Layout presets
     std::vector<LayoutPreset> m_layoutPresets;
-    int m_activeLayoutPresetIndex = 1;
+    int m_activeLayoutPresetIndex = 0;
     int m_layoutMigrationVersion = CURRENT_LAYOUT_MIGRATION_VERSION;
 };
 

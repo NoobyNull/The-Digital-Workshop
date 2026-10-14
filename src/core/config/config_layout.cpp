@@ -153,7 +153,7 @@ void Config::loadLayoutPresets(const std::string& key,
 }
 
 void Config::resolveLoadedLayoutPresets(std::optional<std::vector<LayoutPreset>>& loaded) {
-    const auto result = migrateGuidedLayouts({
+    const auto result = migrateLayoutPresets({
         m_layoutMigrationVersion,
         m_activeLayoutPresetIndex,
         loaded && !loaded->empty() ? *loaded : m_layoutPresets,
@@ -164,7 +164,7 @@ void Config::resolveLoadedLayoutPresets(std::optional<std::vector<LayoutPreset>>
 
     if (m_activeLayoutPresetIndex < 0 ||
         m_activeLayoutPresetIndex >= static_cast<int>(m_layoutPresets.size())) {
-        m_activeLayoutPresetIndex = 1;
+        m_activeLayoutPresetIndex = 0;
     }
 }
 

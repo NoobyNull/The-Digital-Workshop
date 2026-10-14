@@ -5,7 +5,6 @@
 #include <sstream>
 
 #include "core/config/layout_preset.h"
-#include "core/config/workspace_stream_policy.h"
 #include "core/config/window_catalog.h"
 
 namespace dw {
@@ -89,23 +88,7 @@ TEST(WindowCatalog, DirectCarveIsSharedAcrossWorkshopAndSender) {
     EXPECT_NE(source.str().find("WindowRole::Shared", directCarve), std::string::npos);
 }
 
-TEST(WorkspaceStreamPolicy, OnlyGuidedDirectCarvePreservesWorkshopShell) {
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::DirectCarve, true, true),
-              CncStreamShell::GuidedWorkshop);
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::DirectCarve, false, true),
-              CncStreamShell::Sender);
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::DirectCarve, true, false),
-              CncStreamShell::Sender);
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::ExternalGCode, true, true),
-              CncStreamShell::Sender);
-}
-
 TEST(WindowCatalog, DockableLayoutKeysExistInBuiltInPresets) {
-    const auto guided = LayoutPreset::guidedDefault();
     const auto workshop = LayoutPreset::modelDefault();
     const auto sender = LayoutPreset::cncDefault();
 
@@ -113,7 +96,6 @@ TEST(WindowCatalog, DockableLayoutKeysExistInBuiltInPresets) {
         if (entry.type != WindowType::DockablePanel || !entry.layoutPersistent)
             continue;
 
-        EXPECT_NE(guided.visibility.find(entry.layoutKey), guided.visibility.end()) << entry.key;
         EXPECT_NE(workshop.visibility.find(entry.layoutKey), workshop.visibility.end())
             << entry.key;
         EXPECT_NE(sender.visibility.find(entry.layoutKey), sender.visibility.end())

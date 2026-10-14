@@ -198,8 +198,7 @@ void Application::showHome(bool beginNamedProject) {
     if (m_projectSession && m_projectWorkshopController) {
         const auto context = m_projectSession->snapshot();
         const auto transition = m_projectWorkshopController->dispatch(
-            workshop::NavigateWorkshopIntent{workshop::ExperienceMode::Advanced,
-                                               context.generation,
+            workshop::NavigateWorkshopIntent{context.generation,
                                                workshop::WorkshopRoute::Home});
         if (!transition.accepted()) {
             ToastManager::instance().show(
@@ -240,8 +239,8 @@ Application::ProjectItemActivationStatus Application::activateProjectOpenItem(
     const workshop::ProjectItemRef itemRef{workshop::ProjectId(item.projectId),
                                            workshop::ProjectItemId(item.id)};
     const auto transition =
-        m_projectWorkshopController->dispatch(workshop::SelectProjectItemIntent{
-            workshop::ExperienceMode::Advanced, context.generation, itemRef});
+        m_projectWorkshopController->dispatch(
+            workshop::SelectProjectItemIntent{context.generation, itemRef});
     if (!transition.accepted()) {
         if (transition.status == workshop::TransitionStatus::ConfirmationRequired &&
             transition.confirmation) {
@@ -391,8 +390,8 @@ bool Application::completeProjectItemActivation(const workshop::ProjectItemRef& 
     }
 
     if (!opened) {
-        (void)m_projectWorkshopController->dispatch(workshop::ClearProjectItemIntent{
-            workshop::ExperienceMode::Advanced, context.generation});
+        (void)m_projectWorkshopController->dispatch(
+            workshop::ClearProjectItemIntent{context.generation});
         if (m_uiManager && m_uiManager->projectPanel())
             m_uiManager->projectPanel()->clearSelection();
         clearProjectResumeItem();

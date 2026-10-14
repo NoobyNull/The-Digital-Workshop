@@ -31,15 +31,7 @@ namespace dw {
 void Application::initializeProjectSession() {
     m_projectSession = std::make_unique<workshop::ProjectSession>();
     m_projectWorkshopController =
-        std::make_unique<workshop::ProjectWorkshopController>(*m_projectSession, false);
-    m_uiManager->setExperienceModeAccessors(
-        [this]() {
-            return m_projectWorkshopController && m_projectWorkshopController->guidedEnabled();
-        },
-        [this](bool guided) {
-            if (m_projectWorkshopController)
-                m_projectWorkshopController->setGuidedEnabled(guided);
-        });
+        std::make_unique<workshop::ProjectWorkshopController>(*m_projectSession);
     m_projectDisplayFacts = std::make_unique<workshop::ProjectDisplayFacts>();
     initializeProjectResume();
     m_projectSessionIntegration = std::make_unique<ProjectSessionIntegration>(

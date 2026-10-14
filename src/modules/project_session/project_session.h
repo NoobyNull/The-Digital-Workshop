@@ -2,7 +2,7 @@
 
 #include <optional>
 
-#include "modules/workshop/experience_router.h"
+#include "modules/workshop/workshop_contract.h"
 
 namespace dw::workshop {
 

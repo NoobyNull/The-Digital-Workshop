@@ -49,12 +49,6 @@ bool Application::showDesignLibrary() {
     return showDesignLibrary(LibraryPickerPurpose::ManageLibrary);
 }
 
-workshop::ExperienceMode Application::libraryExperienceMode() const {
-    return m_projectWorkshopController && m_projectWorkshopController->guidedEnabled()
-               ? workshop::ExperienceMode::Guided
-               : workshop::ExperienceMode::Advanced;
-}
-
 bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
     if (!m_libraryWorkflow || !m_projectSession || !m_projectWorkshopController ||
         !m_uiManager) {
@@ -71,8 +65,6 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
         return false;
     }
 
-    const auto experience = libraryExperienceMode();
-    const bool guided = experience == workshop::ExperienceMode::Guided;
     auto& picker = m_libraryWorkflow->picker();
     const auto existing = picker.snapshot();
     if (existing.active) {
@@ -88,7 +80,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
         m_uiManager->showStartPage() = false;
         m_uiManager->showProject() = false;
         m_uiManager->showViewport() = true;
-        m_uiManager->showProperties() = !guided;
+        m_uiManager->showProperties() = true;
         m_uiManager->openWindow("library");
         if (auto* panel = m_uiManager->libraryPanel()) {
             panel->refresh();
@@ -100,7 +92,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
     auto context = m_projectSession->snapshot();
     const auto navigation = m_projectWorkshopController->dispatch(
         workshop::NavigateWorkshopIntent{
-            experience, context.generation, workshop::WorkshopRoute::DesignLibrary});
+            context.generation, workshop::WorkshopRoute::DesignLibrary});
     if (!navigation.accepted()) {
         ToastManager::instance().show(ToastType::Warning,
                                       "Design Library Blocked",
@@ -123,7 +115,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
     if (!flowAccepted(begun)) {
         const auto current = m_projectSession->snapshot();
         (void)m_projectWorkshopController->dispatch(workshop::ReturnFromLibraryIntent{
-            experience, current.generation});
+            current.generation});
         ToastManager::instance().show(ToastType::Warning,
                                       "Design Library Blocked",
                                       pickerFailureMessage(begun.reason));
@@ -134,7 +126,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
     m_uiManager->showStartPage() = false;
     m_uiManager->showProject() = false;
     m_uiManager->showViewport() = true;
-    m_uiManager->showProperties() = !guided;
+    m_uiManager->showProperties() = true;
     m_uiManager->openWindow("library");
     if (auto* panel = m_uiManager->libraryPanel()) {
         panel->refresh();
@@ -172,8 +164,7 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
             }
             returnItem = request->projectItem;
             const auto restored = m_projectWorkshopController->dispatch(
-                workshop::ReturnFromLibraryIntent{
-                    libraryExperienceMode(), request->expectedGeneration});
+                workshop::ReturnFromLibraryIntent{request->expectedGeneration});
             const bool applied = restored.status == workshop::TransitionStatus::Applied;
             const auto completed = picker.dispatch(
                 design_library::CompleteLibraryRestore{request->token, applied},
@@ -192,8 +183,7 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
     auto context = m_projectSession->snapshot();
     if (context.route == workshop::WorkshopRoute::DesignLibrary) {
         const auto recovered = m_projectWorkshopController->dispatch(
-            workshop::ReturnFromLibraryIntent{
-                libraryExperienceMode(), context.generation});
+            workshop::ReturnFromLibraryIntent{context.generation});
         if (!recovered.accepted()) {
             errorMessage = "The previous workspace could not be restored.";
             return false;

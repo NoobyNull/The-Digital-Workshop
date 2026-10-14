@@ -304,37 +304,21 @@ void UIManager::addGroupPanel() {
 }
 
 void UIManager::showCncPanels(bool show) {
-    if (m_cncStreaming && m_cncStreamShell == CncStreamShell::GuidedWorkshop)
-        return;
     for (auto& entry : m_panelRegistry) {
         if (entry.role == WindowRole::Sender)
             *entry.showFlag = show;
     }
 }
 
-void UIManager::setCncStreaming(bool streaming, CncStreamOrigin origin) {
-    if (streaming && !m_cncStreaming) {
-        m_cncStreamShell = cncStreamShellForStart(
-            origin,
-            guidedExperienceSelected(),
-            m_workspaceMode == WorkspaceMode::Model);
-        if (m_cncStreamShell == CncStreamShell::Sender &&
-            m_workspaceMode != WorkspaceMode::CNC) {
-            setWorkspaceMode(WorkspaceMode::CNC);
-        }
-    }
+void UIManager::setCncStreaming(bool streaming) {
+    if (streaming && !m_cncStreaming && m_workspaceMode != WorkspaceMode::CNC)
+        setWorkspaceMode(WorkspaceMode::CNC);
     m_cncStreaming = streaming;
-    if (!m_cncStreaming) m_cncStreamShell = CncStreamShell::Sender;
 }
 
 void UIManager::setWorkspaceMode(WorkspaceMode mode) {
-    if (m_cncStreaming) {
-        const auto lockedMode = m_cncStreamShell == CncStreamShell::GuidedWorkshop
-                                    ? WorkspaceMode::Model
-                                    : WorkspaceMode::CNC;
-        if (mode != lockedMode)
-            return;
-    }
+    if (m_cncStreaming && mode != WorkspaceMode::CNC)
+        return;
     if (m_showLibrary && mode != WorkspaceMode::Model)
         return;
 
