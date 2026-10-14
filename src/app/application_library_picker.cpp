@@ -15,7 +15,6 @@
 #include "core/cnc/cnc_controller.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/model_repository.h"
-#include "core/graph/graph_manager.h"
 #include "core/library/library_manager.h"
 #include "core/project/project.h"
 #include "managers/file_io_manager.h"
@@ -39,7 +38,6 @@ using library_workflow_adapter::pickerFailureMessage;
 
 void Application::initializeLibraryWorkflow() {
     m_libraryManager = std::make_unique<LibraryManager>(*m_database);
-    m_libraryManager->setGraphManager(m_graphManager.get());
     m_projectManager = std::make_unique<ProjectManager>(*m_database);
     m_modelRepo = std::make_unique<ModelRepository>(*m_database);
     m_gcodeRepo = std::make_unique<GCodeRepository>(*m_database);

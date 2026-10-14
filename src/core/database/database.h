@@ -85,17 +85,6 @@ class Database {
     [[nodiscard]] bool commit();
     [[nodiscard]] bool rollback();
 
-    // Extension loading
-    // Enable loading of SQLite extensions (must call before loadExtension)
-    bool enableExtensionLoading();
-
-    // Disable loading of SQLite extensions (call after loading for security)
-    void disableExtensionLoading();
-
-    // Load a SQLite extension from the given path
-    // Returns true on success, sets error on failure
-    bool loadExtension(const std::string& path, std::string& error);
-
     // Get raw sqlite3 handle (needed for advanced operations)
     sqlite3* handle() const { return m_db; }
 

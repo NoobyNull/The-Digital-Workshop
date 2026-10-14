@@ -261,39 +261,6 @@ bool Database::rollback() {
     return execute("ROLLBACK");
 }
 
-bool Database::enableExtensionLoading() {
-    if (!m_db)
-        return false;
-    int rc = sqlite3_enable_load_extension(m_db, 1);
-    if (rc != SQLITE_OK) {
-        log::errorf("Database", "Failed to enable extension loading: %s", sqlite3_errmsg(m_db));
-        return false;
-    }
-    return true;
-}
-
-void Database::disableExtensionLoading() {
-    if (m_db) {
-        sqlite3_enable_load_extension(m_db, 0);
-    }
-}
-
-bool Database::loadExtension(const std::string& path, std::string& error) {
-    if (!m_db) {
-        error = "Database not open";
-        return false;
-    }
-    char* errMsg = nullptr;
-    int rc = sqlite3_load_extension(m_db, path.c_str(), nullptr, &errMsg);
-    if (rc != SQLITE_OK) {
-        error = errMsg ? errMsg : "Unknown error loading extension";
-        if (errMsg)
-            sqlite3_free(errMsg);
-        return false;
-    }
-    return true;
-}
-
 i64 Database::lastInsertId() const {
     return sqlite3_last_insert_rowid(m_db);
 }

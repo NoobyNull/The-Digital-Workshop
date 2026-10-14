@@ -265,7 +265,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/library/image_thumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/core/library/library_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/library/library_source_deletion.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/graph/graph_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_queue.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_path_collector.cpp

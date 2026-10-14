@@ -41,7 +41,6 @@
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
 #include "core/export/project_export_manager.h"
-#include "core/graph/graph_manager.h"
 #include "core/import/background_tagger.h"
 #include "core/import/import_log.h"
 #include "core/import/import_queue.h"
@@ -279,29 +278,6 @@ bool Application::init(bool diagnosticMode) {
     }
 
     {
-        TIME_STARTUP(timer, "GraphManager Extension");
-        // Initialize GraphQLite extension for Cypher graph queries (ORG-03/04/05)
-        m_graphManager = std::make_unique<GraphManager>(*m_database);
-        {
-            // Resolve extension directory relative to the running executable
-            std::error_code ec;
-            Path exeDir;
-#ifdef __linux__
-            Path exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
-            if (!ec)
-                exeDir = exePath.parent_path();
-#endif
-            if (exeDir.empty())
-                exeDir = std::filesystem::current_path();
-
-            if (!m_graphManager->initialize(exeDir)) {
-                log::warning("Application",
-                             "GraphQLite extension not available -- graph queries disabled");
-            }
-        }
-    }
-
-    {
         TIME_STARTUP(timer, "Managers and Repositories");
         initializeLibraryWorkflow();
         m_materialManager = std::make_unique<MaterialManager>(*m_database);
@@ -521,7 +497,6 @@ void Application::shutdown() {
     m_projectManager.reset();
     m_libraryManager.reset();
     m_projectExportManager.reset();
-    m_graphManager.reset(); // Must be destroyed before m_database
     m_database.reset();
 
     // Destroy any multi-viewport platform windows before backend shutdown

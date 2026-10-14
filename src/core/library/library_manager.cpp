@@ -2,7 +2,6 @@
 
 #include "../../render/thumbnail_generator.h"
 #include "image_thumbnail.h"
-#include "../graph/graph_manager.h"
 #include "../import/thumbnail_sidecar.h"
 #include "../loaders/loader_factory.h"
 #include "../mesh/hash.h"
@@ -101,15 +100,6 @@ ImportResult LibraryManager::importModel(const Path& sourcePath) {
         generateThumbnail(*modelId, *mesh);
     }
 
-    // Dual-write: create graph node (non-fatal)
-    if (m_graphManager && m_graphManager->isAvailable()) {
-        if (!m_graphManager->addModelNode(*modelId, record.name, record.hash)) {
-            log::warningf("Library",
-                          "Failed to create graph node for model %lld",
-                          static_cast<long long>(*modelId));
-        }
-    }
-
     result.success = true;
     result.modelId = *modelId;
 
@@ -182,11 +172,6 @@ bool LibraryManager::removeModel(i64 modelId) {
     // Remove thumbnail if exists (best-effort cleanup)
     if (!record->thumbnailPath.empty() && file::exists(record->thumbnailPath)) {
         (void)file::remove(record->thumbnailPath);
-    }
-
-    // Dual-write: remove graph node (non-fatal)
-    if (m_graphManager && m_graphManager->isAvailable()) {
-        m_graphManager->removeModelNode(modelId);
     }
 
     return m_modelRepo.remove(modelId);
@@ -383,56 +368,23 @@ std::optional<i64> LibraryManager::autoDetectModelMatch(const std::string& gcode
     return std::nullopt;
 }
 
-// --- Category management (dual-write to SQLite + graph) ---
+// --- Category management ---
 
 bool LibraryManager::assignCategory(i64 modelId, i64 categoryId) {
-    // SQLite is source of truth
-    bool ok = m_modelRepo.assignCategory(modelId, categoryId);
-    if (!ok)
-        return false;
-
-    // Dual-write: graph edge (non-fatal)
-    if (m_graphManager && m_graphManager->isAvailable()) {
-        m_graphManager->addBelongsToEdge(modelId, categoryId);
-    }
-    return true;
+    return m_modelRepo.assignCategory(modelId, categoryId);
 }
 
 bool LibraryManager::removeModelCategory(i64 modelId, i64 categoryId) {
-    bool ok = m_modelRepo.removeCategory(modelId, categoryId);
-    if (!ok)
-        return false;
-
-    // Dual-write: remove graph edge (non-fatal)
-    if (m_graphManager && m_graphManager->isAvailable()) {
-        m_graphManager->removeBelongsToEdge(modelId, categoryId);
-    }
-    return true;
+    return m_modelRepo.removeCategory(modelId, categoryId);
 }
 
 std::optional<i64> LibraryManager::createCategory(const std::string& name,
                                                   std::optional<i64> parentId) {
-    auto catId = m_modelRepo.createCategory(name, parentId);
-    if (!catId)
-        return std::nullopt;
-
-    // Dual-write: create graph node (non-fatal)
-    if (m_graphManager && m_graphManager->isAvailable()) {
-        m_graphManager->addCategoryNode(*catId, name);
-    }
-    return catId;
+    return m_modelRepo.createCategory(name, parentId);
 }
 
 bool LibraryManager::deleteCategory(i64 categoryId) {
-    bool ok = m_modelRepo.deleteCategory(categoryId);
-    if (!ok)
-        return false;
-
-    // Dual-write: remove graph node (non-fatal)
-    if (m_graphManager && m_graphManager->isAvailable()) {
-        m_graphManager->removeCategoryNode(categoryId);
-    }
-    return true;
+    return m_modelRepo.deleteCategory(categoryId);
 }
 
 std::vector<CategoryRecord> LibraryManager::getAllCategories() {

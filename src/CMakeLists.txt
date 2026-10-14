@@ -111,9 +111,6 @@ set(DW_SOURCES
     core/database/selective_tool_importer.cpp
     core/database/toolbox_repository.cpp
 
-    # Graph
-    core/graph/graph_manager.cpp
-
     # Mesh
     core/mesh/mesh.cpp
     core/mesh/mesh_preview.cpp
@@ -364,9 +361,9 @@ set_target_properties(digital_workshop PROPERTIES
 )
 
 # CPack and cmake --install must fail closed when the release payload is
-# incomplete. Configuration and ordinary development builds may still proceed
-# offline without GraphQLite; only creation/installation of a distributable is
-# blocked until the cached dependency and canonical resources are present.
+# incomplete. Ordinary development builds proceed regardless; only
+# creation/installation of a distributable is blocked until the canonical
+# resources are present.
 set(DW_RELEASE_PAYLOAD_CHECK
     "${CMAKE_CURRENT_BINARY_DIR}/verify_release_payload.cmake")
 configure_file(
@@ -375,17 +372,6 @@ configure_file(
     @ONLY
 )
 install(SCRIPT "${DW_RELEASE_PAYLOAD_CHECK}")
-
-# --- Bundle GraphQLite extension (if available) ---
-if(DW_GRAPHQLITE_AVAILABLE)
-    add_custom_command(TARGET digital_workshop POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${DW_GRAPHQLITE_LIB_PATH}"
-            "$<TARGET_FILE_DIR:digital_workshop>/${GRAPHQLITE_LIB}"
-        COMMENT "Copying GraphQLite extension to build directory"
-    )
-    install(FILES "${DW_GRAPHQLITE_LIB_PATH}" DESTINATION bin)
-endif()
 
 # --- Bundle resources (materials) ---
 # Copy .dwmat files from resources/materials/ to the build output directory.

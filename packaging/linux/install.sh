@@ -4,7 +4,8 @@ set -euo pipefail
 APP_NAME="Digital Workshop"
 BIN_NAME="digital_workshop"
 SETTINGS_BIN="dw_settings"
-GRAPHQLITE_LIB="graphqlite.so"
+# Shipped by releases before 0.8.0; removed on upgrade.
+LEGACY_GRAPHQLITE_LIB="graphqlite.so"
 DESKTOP_ID="digitalworkshop"
 
 # Default to user install, --system for /usr/local
@@ -40,7 +41,6 @@ RESOURCE_SRC="$SCRIPT_DIR/resources"
 for required in \
     "$SCRIPT_DIR/bin/$BIN_NAME" \
     "$SCRIPT_DIR/bin/$SETTINGS_BIN" \
-    "$SCRIPT_DIR/bin/$GRAPHQLITE_LIB" \
     "$SCRIPT_DIR/uninstall.sh" \
     "$RESOURCE_SRC/icons/statue.png" \
     "$RESOURCE_SRC/icons/Digital Workshop.png" \
@@ -70,7 +70,7 @@ fi
 mkdir -p "$BIN_DIR"
 install -m 755 "$SCRIPT_DIR/bin/$BIN_NAME" "$BIN_DIR/$BIN_NAME"
 install -m 755 "$SCRIPT_DIR/bin/$SETTINGS_BIN" "$BIN_DIR/$SETTINGS_BIN"
-install -m 644 "$SCRIPT_DIR/bin/$GRAPHQLITE_LIB" "$BIN_DIR/$GRAPHQLITE_LIB"
+rm -f "$BIN_DIR/$LEGACY_GRAPHQLITE_LIB"
 
 # Install app-owned resources. Runtime also supports this prefix/share layout,
 # so no host-level symlinks or environment changes are required.

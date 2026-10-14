@@ -43,7 +43,6 @@ class StorageManager;
 class MaterialManager;
 class CostRepository;
 class RateCategoryRepository;
-class GraphManager;
 class ModelRepository;
 class GCodeRepository;
 class CutPlanRepository;
@@ -264,9 +263,6 @@ class Application {
 
     // Rate category repository (consumable/tool cost rates)
     std::unique_ptr<RateCategoryRepository> m_rateCatRepo;
-
-    // Graph query engine (Cypher via GraphQLite extension)
-    std::unique_ptr<GraphManager> m_graphManager;
 
     // LM Studio AI material generation service
     std::unique_ptr<LMStudioMaterialService> m_lmStudioService;
