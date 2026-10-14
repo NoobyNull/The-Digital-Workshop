@@ -9,8 +9,6 @@
 #include <vector>
 
 #include "modules/carve_preparation/preparation_identity.h"
-#include "modules/carve_preparation/prepare_carve_flow.h"
-#include "modules/carve_preparation/preparation_step_guidance.h"
 
 namespace {
 
@@ -93,34 +91,6 @@ TEST(CarvePreparationBoundary, CommandsAreLimitedToPreparationRoutingIntents) {
                                  RequestProjectCreation>);
     static_assert(std::is_same_v<std::variant_alternative_t<1, PreparationIdentityCommand>,
                                  BeginPinnedPreparation>);
-    SUCCEED();
-}
-
-TEST(CarvePreparationBoundary, FlowEffectsCannotExpressMachineOrStreamCommands) {
-    using namespace dw::carve_preparation;
-    static_assert(std::variant_size_v<PrepareCarveEffect> == 3);
-    static_assert(std::is_same_v<std::variant_alternative_t<0, PrepareCarveEffect>,
-                                 PreparationPreviewRequest>);
-    static_assert(std::is_same_v<std::variant_alternative_t<1, PrepareCarveEffect>,
-                                 PreparationSaveRequest>);
-    static_assert(std::is_same_v<std::variant_alternative_t<2, PrepareCarveEffect>,
-                                 PreparationReady>);
-    SUCCEED();
-}
-
-TEST(CarvePreparationBoundary, StepViewsCanEmitOnlyTypedPreparationIntents) {
-    using namespace dw::carve_preparation;
-    static_assert(std::variant_size_v<PreparationStepIntent> == 5);
-    static_assert(std::is_same_v<std::variant_alternative_t<0, PreparationStepIntent>,
-                                 OpenPreparationField>);
-    static_assert(std::is_same_v<std::variant_alternative_t<1, PreparationStepIntent>,
-                                 UpdatePreparationField>);
-    static_assert(std::is_same_v<std::variant_alternative_t<2, PreparationStepIntent>,
-                                 SelectPreparationOption>);
-    static_assert(std::is_same_v<std::variant_alternative_t<3, PreparationStepIntent>,
-                                 RequestStepPreviewGeneration>);
-    static_assert(std::is_same_v<std::variant_alternative_t<4, PreparationStepIntent>,
-                                 TogglePreparationAdvanced>);
     SUCCEED();
 }
 

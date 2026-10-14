@@ -4,7 +4,6 @@
 
 #include "app/application.h"
 #include "app/direct_carve_run_effect_adapter.h"
-#include "app/project_plan_run_truth_adapter.h"
 
 #include <cmath>
 #include <cstdio>
@@ -279,20 +278,16 @@ bool Application::init(bool diagnosticMode) {
         m_materialManager = std::make_unique<MaterialManager>(*m_database);
         m_materialManager->seedDefaults();
         m_jobRepo = std::make_unique<JobRepository>(*m_database);
-        m_projectPlanRunTruthAdapter =
-            std::make_unique<ProjectPlanRunTruthAdapter>();
         // Mark any 'running' jobs as interrupted (app crashed during previous session)
         {
             auto running = m_jobRepo->findByStatus("running");
             for (auto& job : running) {
-                if (m_jobRepo->finishJob(job.id,
-                                         "interrupted",
-                                         job.lastAckedLine,
-                                         job.elapsedSeconds,
-                                         job.errorCount,
-                                         job.modalState)) {
-                    m_projectPlanRunTruthAdapter->rememberInterruptedJob(job.id);
-                }
+                (void)m_jobRepo->finishJob(job.id,
+                                           "interrupted",
+                                           job.lastAckedLine,
+                                           job.elapsedSeconds,
+                                           job.errorCount,
+                                           job.modalState);
             }
             if (!running.empty())
                 log::infof("App",
@@ -466,7 +461,6 @@ void Application::shutdown() {
     m_descriptorService.reset();
     m_ollamaRuntime.reset();
     m_lmStudioService.reset();
-    m_projectPlanRunTruthAdapter.reset();
     m_jobRepo.reset();
     m_libraryWorkflow.reset();
     m_gcodeRepo.reset();

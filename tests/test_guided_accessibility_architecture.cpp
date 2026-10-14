@@ -25,15 +25,15 @@ void expectContains(const std::string& source, const char* token) {
 
 TEST(GuidedAccessibilityArchitecture, KeyboardNavigationReachesPrimaryWorkflowActions) {
     const auto application = readSource("src/app/application.cpp");
-    const auto projectPlan = readSource("src/ui/panels/project_plan_view.cpp");
+    const auto projectPanel = readSource("src/ui/panels/project_panel.cpp");
     const auto libraryPicker =
         readSource("src/modules/design_library/ui/library_picker_view.cpp");
     const auto libraryItems = readSource("src/ui/panels/library_panel_items.cpp");
-    const auto guidedSurfaces = projectPlan + libraryPicker + libraryItems;
+    const auto guidedSurfaces = projectPanel + libraryPicker + libraryItems;
 
     expectContains(application, "ImGuiConfigFlags_NavEnableKeyboard");
-    expectContains(projectPlan, "ImGui::Button");
-    expectContains(projectPlan, "ImGui::SmallButton");
+    expectContains(projectPanel, "ImGui::Button");
+    expectContains(projectPanel, "ImGui::SmallButton");
     expectContains(libraryPicker, "ImGui::InputText");
     expectContains(libraryPicker, "ImGui::SetKeyboardFocusHere");
     expectContains(libraryItems, "ImGui::Selectable");
@@ -41,19 +41,18 @@ TEST(GuidedAccessibilityArchitecture, KeyboardNavigationReachesPrimaryWorkflowAc
 }
 
 TEST(GuidedAccessibilityArchitecture, ProjectAndLibraryStateRemainExplicitWithoutColor) {
-    const auto projectPlan = readSource("src/ui/panels/project_plan_view.cpp");
+    const auto projectPanel = readSource("src/ui/panels/project_panel.cpp");
     const auto contextBar =
         readSource("src/modules/workshop/ui/project_context_bar.cpp");
     const auto libraryPicker =
         readSource("src/modules/design_library/ui/library_picker_view.cpp");
     const auto libraryItems = readSource("src/ui/panels/library_panel_items.cpp");
 
-    for (const auto* token : {"stageStateLabel(stage.state)",
-                              "itemStateLabel(node.item.state)",
-                              "nodeRoleLabel(node.role)",
-                              "NEXT STEP:",
+    for (const auto* token : {"projectContentKindLabel(row.kind)",
+                              "row.status",
+                              "Icons::Warning",
                               "Information:"}) {
-        expectContains(projectPlan, token);
+        expectContains(projectPanel, token);
     }
     for (const auto* token : {"presentation.projectLabel",
                               "presentation.machineLabel",

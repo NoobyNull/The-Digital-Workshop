@@ -64,7 +64,6 @@ class UIManager;
 class FileIOManager;
 class ConfigManager;
 class DirectCarveRunEffectAdapter;
-class ProjectPlanRunTruthAdapter;
 
 namespace workshop {
 class ProjectSession;
@@ -286,7 +285,6 @@ class Application {
     std::optional<cam::CamEngineStatus> m_camEngineStatus;
 
     std::unique_ptr<DirectCarveRunEffectAdapter> m_directCarveRunEffectAdapter;
-    std::unique_ptr<ProjectPlanRunTruthAdapter> m_projectPlanRunTruthAdapter;
     uint64_t m_nextPreparationToken = 1;
 
     // Currently focused model ID (for material assignment)

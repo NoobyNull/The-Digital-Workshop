@@ -27,7 +27,6 @@
 #include "core/project/project.h"
 #include "core/project/project_asset_membership.h"
 #include "core/utils/file_utils.h"
-#include "modules/carve_preparation/prepare_carve_flow.h"
 #include "modules/design_library/library_picker_flow.h"
 #include "modules/project_session/project_session.h"
 #include "modules/run_coordination/run_coordinator.h"
@@ -205,43 +204,6 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
               {"toolpath_generated", true}}},
         }.dump();
         return m_projects->updateOpenItem(std::move(*operation));
-    }
-
-    static carve::PreparationReadinessSnapshot designReady(
-        const carve::PrepareCarvePin& pin,
-        std::uint64_t revision) {
-        carve::PreparationReadinessSnapshot facts(
-            pin, carve::PreparationEditRevision{revision});
-        facts.modelLoaded = carve::PreparationEvidence::Satisfied;
-        facts.modelFitsMachine = carve::PreparationEvidence::Satisfied;
-        facts.materialSelected = carve::PreparationEvidence::Unsatisfied;
-        facts.blankSpecified = carve::PreparationEvidence::Unsatisfied;
-        facts.modelFitsBlank = carve::PreparationEvidence::Unsatisfied;
-        facts.finishingToolSelected = carve::PreparationEvidence::Unsatisfied;
-        facts.toolSetupConfirmed = carve::PreparationEvidence::Unsatisfied;
-        facts.toolpathGenerated = carve::PreparationEvidence::Unsatisfied;
-        facts.toolpathFresh = carve::PreparationEvidence::Unsatisfied;
-        facts.hasUnsavedChanges = true;
-        return facts;
-    }
-
-    static carve::PreparationReadinessSnapshot materialReady(
-        const carve::PrepareCarvePin& pin,
-        std::uint64_t revision) {
-        auto facts = designReady(pin, revision);
-        facts.materialSelected = carve::PreparationEvidence::Satisfied;
-        facts.blankSpecified = carve::PreparationEvidence::Satisfied;
-        facts.modelFitsBlank = carve::PreparationEvidence::Satisfied;
-        return facts;
-    }
-
-    static carve::PreparationReadinessSnapshot toolReady(
-        const carve::PrepareCarvePin& pin,
-        std::uint64_t revision) {
-        auto facts = materialReady(pin, revision);
-        facts.finishingToolSelected = carve::PreparationEvidence::Satisfied;
-        facts.toolSetupConfirmed = carve::PreparationEvidence::Satisfied;
-        return facts;
     }
 
     dw::Path m_root;
@@ -457,62 +419,12 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     EXPECT_TRUE(sameLibraryItem(pin.modelSource(), primary));
     EXPECT_EQ(pin.operationItem(), operationRef);
 
-    carve::PrepareCarveFlow preparation;
-    auto transition = preparation.dispatch(
-        carve::BeginPreparation{designReady(pin, 1)});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::DesignAndSize);
-    transition = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::MaterialAndBlank);
-    ASSERT_EQ(preparation.dispatch(
-                  carve::RefreshPreparation{materialReady(pin, 2)})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    transition = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::ChooseTool);
-    ASSERT_EQ(preparation.dispatch(
-                  carve::RefreshPreparation{toolReady(pin, 3)})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    transition = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::CarvePreview);
-    const auto previewGeneration = preparation.dispatch(
-        carve::GeneratePreparationPreview{});
-    ASSERT_EQ(previewGeneration.status,
-              carve::PrepareCarveTransitionStatus::EffectIssued);
-    const auto* generationRequest = std::get_if<carve::PreparationPreviewRequest>(
-        &*previewGeneration.effect);
-    ASSERT_NE(generationRequest, nullptr);
-    EXPECT_EQ(generationRequest->readiness.pin(), pin);
-    ASSERT_EQ(preparation.dispatch(
-                  carve::CompletePreparationPreview{
-                      pin, carve::PreparationEditRevision{3}, true})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    const auto ready = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_TRUE(ready.effect.has_value());
-    const auto* readyEffect = std::get_if<carve::PreparationReady>(&*ready.effect);
-    ASSERT_NE(readyEffect, nullptr);
-    EXPECT_EQ(readyEffect->readiness.pin(), pin);
-
+    // CAM produces the setup; the preparation lock keeps the project pinned
+    // while the setup is saved.
     ASSERT_TRUE(m_session.dispatch(
                     {{workshop::SetPreparationLock{true}}, std::nullopt})
                     .accepted());
-    const auto save = preparation.dispatch(carve::SavePreparation{});
-    ASSERT_EQ(save.status, carve::PrepareCarveTransitionStatus::EffectIssued);
-    const auto* saveRequest =
-        std::get_if<carve::PreparationSaveRequest>(&*save.effect);
-    ASSERT_NE(saveRequest, nullptr);
-    ASSERT_TRUE(persistPreparedOperation(saveRequest->readiness.pin()));
-    ASSERT_EQ(preparation.dispatch(
-                  carve::CompletePreparationSave{
-                      pin, saveRequest->readiness.editRevision(), true})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    EXPECT_FALSE(preparation.snapshot().readiness->hasUnsavedChanges);
+    ASSERT_TRUE(persistPreparedOperation(pin));
     ASSERT_TRUE(m_session.dispatch(
                     {{workshop::SetPreparationLock{false}}, std::nullopt})
                     .accepted());

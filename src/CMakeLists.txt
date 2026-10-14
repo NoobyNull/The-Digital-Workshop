@@ -6,7 +6,6 @@
 add_subdirectory(modules/workshop)
 add_subdirectory(modules/design_library)
 add_subdirectory(modules/project_session)
-add_subdirectory(modules/project_plan)
 add_subdirectory(modules/carve_preparation)
 add_subdirectory(modules/run_coordination)
 add_subdirectory(modules/viewport)
@@ -35,8 +34,7 @@ set(DW_SOURCES
     app/library_workflow_adapter.cpp
     app/library_workflow_coordinator.cpp
     app/direct_carve_run_effect_adapter.cpp
-    app/project_plan_input_adapter.cpp
-    app/project_plan_run_truth_adapter.cpp
+    app/project_contents_adapter.cpp
     app/project_session_integration.cpp
     app/window.cpp
     app/workspace.cpp
@@ -241,10 +239,8 @@ set(DW_SOURCES
     ui/panels/properties_panel.cpp
     ui/panels/project_panel.cpp
     ui/panels/project_panel_lifecycle.cpp
-    ui/panels/project_plan_view.cpp
     ui/panels/gcode_panel.cpp
     ui/panels/gcode_panel_files.cpp
-    ui/panels/gcode_panel_run_truth.cpp
     ui/panels/start_page.cpp
     ui/panels/tool_browser_panel.cpp
     ui/panels/cnc_status_panel.cpp
@@ -301,7 +297,6 @@ target_link_libraries(digital_workshop PRIVATE
     dw_viewport_presentation
     dw_run_coordination
     dw_design_library
-    dw_project_plan
     dw_project_session
     dw_workshop_core
     imgui

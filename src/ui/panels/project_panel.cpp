@@ -1,10 +1,28 @@
 #include "project_panel.h"
 
+#include <string>
+#include <vector>
+
 #include <imgui.h>
 
-#include "project_plan_view.h"
+#include "ui/icons.h"
 
 namespace dw {
+namespace {
+
+const char* contentIcon(ProjectContentKind kind) {
+    switch (kind) {
+    case ProjectContentKind::Design: return Icons::Model;
+    case ProjectContentKind::Setup: return Icons::Settings;
+    case ProjectContentKind::Material: return Icons::Material;
+    case ProjectContentKind::Tool: return Icons::List;
+    case ProjectContentKind::GCode: return Icons::GCode;
+    case ProjectContentKind::Run: return Icons::Play;
+    }
+    return Icons::File;
+}
+
+} // namespace
 
 ProjectPanel::ProjectPanel() : Panel("Project") {}
 
@@ -13,11 +31,10 @@ void ProjectPanel::render() {
 
     applyMinSize(14, 8);
     if (ImGui::Begin(m_title.c_str(), &m_open)) {
-        const auto snapshot = m_projectPlanProvider ? m_projectPlanProvider()
-                                                    : std::nullopt;
+        const auto snapshot = m_snapshotProvider ? m_snapshotProvider() : std::nullopt;
         if (snapshot) {
             renderProjectHeader(*snapshot);
-            renderProjectPlan(*snapshot);
+            renderProjectContents(*snapshot);
             ImGui::Spacing();
             renderProjectDetails(*snapshot);
         } else {
@@ -27,11 +44,73 @@ void ProjectPanel::render() {
     ImGui::End();
 }
 
-void ProjectPanel::renderProjectPlan(const ProjectPanelSnapshot& snapshot) {
-    ProjectPlanViewCallbacks callbacks;
-    callbacks.onNextAction = m_onProjectPlanAction;
-    callbacks.onActivateItem = m_onProjectItemActivated;
-    renderProjectPlanView(snapshot.plan, snapshot.activeItem, callbacks);
+void ProjectPanel::renderProjectContents(const ProjectPanelSnapshot& snapshot) {
+    ImGui::SeparatorText("Contents");
+    if (ImGui::Button("Add Design from Library", ImVec2(-1.0F, 0.0F)) &&
+        m_addFromLibraryCallback) {
+        m_addFromLibraryCallback();
+    }
+    if (snapshot.contents.empty()) {
+        ImGui::TextDisabled("Information: no designs yet. Add one from the Library.");
+        return;
+    }
+    for (std::size_t index = 0; index < snapshot.contents.size(); ++index) {
+        if (!snapshot.contents[index].parent) renderContentRow(snapshot, index);
+    }
+}
+
+void ProjectPanel::renderContentRow(const ProjectPanelSnapshot& snapshot, std::size_t index) {
+    const auto& row = snapshot.contents[index];
+    // Rows arrive depth-first, so a row's children always follow it.
+    std::vector<std::size_t> children;
+    for (std::size_t next = index + 1; next < snapshot.contents.size(); ++next) {
+        if (snapshot.contents[next].parent == row.ref.item) children.push_back(next);
+    }
+
+    const std::string stableId = "project_item_" + std::to_string(row.ref.item.value);
+    ImGui::PushID(stableId.c_str());
+
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
+    if (children.empty())
+        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    // Designs open by default so their setups are visible; deeper G-code and
+    // run history stay folded until asked for.
+    if (row.kind == ProjectContentKind::Design) flags |= ImGuiTreeNodeFlags_DefaultOpen;
+    if (snapshot.activeItem && *snapshot.activeItem == row.ref.item)
+        flags |= ImGuiTreeNodeFlags_Selected;
+
+    const std::string label =
+        std::string(contentIcon(row.kind)) + " " + row.label + "##project_item";
+    const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
+
+    ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+    const std::string metadata =
+        std::string(projectContentKindLabel(row.kind)) + " | " + row.status;
+    if (row.needsAttention) {
+        ImGui::TextWrapped("%s %s", Icons::Warning, metadata.c_str());
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("%s", metadata.c_str());
+        ImGui::PopStyleColor();
+    }
+    if (row.kind == ProjectContentKind::Setup) {
+        if (ImGui::SmallButton("Open in CAM") && m_onProjectItemActivated)
+            m_onProjectItemActivated(row.ref);
+    } else {
+        if (ImGui::SmallButton("Open") && m_onProjectItemActivated)
+            m_onProjectItemActivated(row.ref);
+        if (row.kind == ProjectContentKind::Design) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Open in CAM") && m_onOpenInCam) m_onOpenInCam(row.ref);
+        }
+    }
+    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+
+    if (!children.empty() && open) {
+        for (const auto child : children) renderContentRow(snapshot, child);
+        ImGui::TreePop();
+    }
+    ImGui::PopID();
 }
 
 } // namespace dw

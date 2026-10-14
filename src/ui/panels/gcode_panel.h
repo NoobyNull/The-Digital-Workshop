@@ -26,13 +26,6 @@ class ToolDatabase;
 // Panel mode — View (text listing), Send (real CNC)
 enum class GCodePanelMode { View, Send };
 
-enum class GCodePanelRunState { Running, Paused };
-
-struct GCodePanelRunSnapshot {
-    i64 jobSourceId = 0;
-    GCodePanelRunState state = GCodePanelRunState::Running;
-};
-
 // Console line entry
 struct ConsoleLine {
     std::string text;
@@ -89,11 +82,6 @@ class GCodePanel : public Panel {
     void onGrblAlarm(int code, const std::string& desc);
     void onGrblError(const std::string& message);
     void onGrblRawLine(const std::string& line, bool isSent);
-
-    // Reporting-only identity for the Advanced sender. Project Plan resolves
-    // this cnc_jobs ID back through the current project's persisted hierarchy.
-    [[nodiscard]] std::optional<GCodePanelRunSnapshot>
-    projectPlanRunSnapshot() const noexcept;
 
   private:
     // Render sections

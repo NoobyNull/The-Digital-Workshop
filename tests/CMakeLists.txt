@@ -23,12 +23,7 @@ set(DW_TEST_SOURCES
     test_project_open_item_warnings.cpp
     test_project_open_item_repository.cpp
     test_project_open_item_repository_sync.cpp
-    test_project_plan.cpp
-    test_project_plan_boundary.cpp
-    test_project_plan_presentation.cpp
-    test_project_plan_input_adapter.cpp
-    test_project_plan_run_truth_adapter.cpp
-    test_project_plan_ui_architecture.cpp
+    test_project_contents_adapter.cpp
     test_loader_factory.cpp
     test_project.cpp
     test_project_asset_membership.cpp
@@ -114,8 +109,6 @@ set(DW_TEST_SOURCES
     # Carve (Direct Carve pipeline)
     test_model_fitter.cpp
     test_preparation_identity.cpp
-    test_prepare_carve_flow.cpp
-    test_preparation_step_guidance.cpp
     test_carve_preparation_boundary.cpp
     test_run_package.cpp
     test_run_coordinator.cpp
@@ -270,8 +263,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/app/workspace.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_session_integration.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_resume_file_store.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/project_plan_input_adapter.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/project_plan_run_truth_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/project_contents_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/carve_preparation_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/library_workflow_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/library_workflow_coordinator.cpp
@@ -290,7 +282,6 @@ target_link_libraries(dw_tests PRIVATE
     dw_viewport_presentation
     dw_run_coordination
     dw_design_library
-    dw_project_plan
     dw_project_session
     dw_workshop_core
     GTest::gtest
@@ -381,32 +372,10 @@ target_compile_definitions(dw_project_session_tests PRIVATE
 )
 gtest_discover_tests(dw_project_session_tests TEST_PREFIX "isolated.session.")
 
-# Keep the Project Plan projection independently buildable without persistence,
-# UI, rendering, application, or machine-control dependencies.
-add_executable(dw_project_plan_tests
-    test_project_plan.cpp
-    test_project_plan_boundary.cpp
-    test_project_plan_presentation.cpp
-)
-target_compile_features(dw_project_plan_tests PRIVATE cxx_std_17)
-dw_set_warning_flags(dw_project_plan_tests)
-dw_set_debug_flags(dw_project_plan_tests)
-dw_set_release_flags(dw_project_plan_tests)
-target_link_libraries(dw_project_plan_tests PRIVATE
-    dw_project_plan
-    GTest::gtest_main
-)
-target_compile_definitions(dw_project_plan_tests PRIVATE
-    CMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-)
-gtest_discover_tests(dw_project_plan_tests TEST_PREFIX "isolated.plan.")
-
 # Keep preparation identity independently buildable without application, UI,
 # persistence, rendering, or machine-control dependency graphs.
 add_executable(dw_carve_preparation_tests
     test_preparation_identity.cpp
-    test_prepare_carve_flow.cpp
-    test_preparation_step_guidance.cpp
     test_carve_preparation_boundary.cpp
 )
 target_compile_features(dw_carve_preparation_tests PRIVATE cxx_std_17)

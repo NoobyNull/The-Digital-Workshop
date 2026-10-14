@@ -1,10 +1,6 @@
 add_library(dw_carve_preparation STATIC
-    prepare_carve_flow.cpp
-    prepare_carve_flow.h
     preparation_identity.cpp
     preparation_identity.h
-    preparation_step_guidance.cpp
-    preparation_step_guidance.h
 )
 
 add_library(dw::carve_preparation ALIAS dw_carve_preparation)

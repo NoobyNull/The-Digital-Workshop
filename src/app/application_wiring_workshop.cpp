@@ -2,10 +2,8 @@
 // owns UI intent wiring only; ProjectSession remains the policy authority.
 
 #include "app/application.h"
-#include "app/direct_carve_run_effect_adapter.h"
 #include "app/library_workflow_coordinator.h"
-#include "app/project_plan_input_adapter.h"
-#include "app/project_plan_run_truth_adapter.h"
+#include "app/project_contents_adapter.h"
 
 #include <cstdint>
 #include <string>
@@ -21,7 +19,6 @@
 #include "managers/file_io_manager.h"
 #include "managers/ui_manager.h"
 #include "modules/project_session/project_session.h"
-#include "modules/project_plan/project_plan.h"
 #include "modules/workshop/project_item_load_guard.h"
 #include "modules/workshop/project_resume.h"
 #include "modules/workshop/project_workshop_controller.h"
@@ -134,22 +131,7 @@ void Application::wireProjectPanel() {
     if (!panel)
         return;
 
-    auto activateRef = [this](workshop::ProjectItemRef ref) {
-        if (!m_projectManager || !ref.valid()) return false;
-        const auto item = m_projectManager->findOpenItem(ref.item.value);
-        if (!item || item->projectId != ref.project.value) {
-            ToastManager::instance().show(
-                ToastType::Warning,
-                "Project Item Unavailable",
-                "The project changed. Refresh the Project Plan and try again.");
-            return false;
-        }
-        if (item->itemType == ProjectOpenItemType::Operation)
-            return beginPrepareCarve(ref);
-        return activateProjectOpenItem(*item) != ProjectItemActivationStatus::Rejected;
-    };
-
-    panel->setProjectPlanProvider([this]() -> std::optional<ProjectPanelSnapshot> {
+    panel->setProjectSnapshotProvider([this]() -> std::optional<ProjectPanelSnapshot> {
         if (!m_projectManager || !m_projectSession) return std::nullopt;
         const auto project = m_projectManager->currentProject();
         const auto context = m_projectSession->snapshot();
@@ -165,141 +147,35 @@ void Application::wireProjectPanel() {
         snapshot.notes = project->record().notes;
         snapshot.modified = project->isModified();
         snapshot.hasModels = !project->modelIds().empty();
+        snapshot.contents =
+            makeProjectContents(*context.activeProject, m_projectManager->currentOpenItems());
         if (context.activeProjectItem &&
             context.activeProjectItem->project == *context.activeProject) {
             snapshot.activeItem = context.activeProjectItem->item;
         }
-
-        const auto items = m_projectManager->currentOpenItems();
-        auto input = makeProjectPlanInput(*context.activeProject,
-                                          project->name(),
-                                          items,
-                                          context.activeProjectItem);
-        std::optional<ProjectPlanRunSourceSnapshot> protectedRun;
-        if (m_directCarveRunEffectAdapter) {
-            const auto& run = m_directCarveRunEffectAdapter->snapshot();
-            const bool running = run.state == DirectCarveRunControlState::Streaming;
-            const bool paused = run.state == DirectCarveRunControlState::Paused;
-            if (run.identity && run.jobId && (running || paused)) {
-                protectedRun = ProjectPlanRunSourceSnapshot{
-                    *run.jobId,
-                    paused ? project_plan::RunState::Paused
-                           : project_plan::RunState::Running,
-                    run.identity->setup().toolpath().operationItem(),
-                };
-            }
-        }
-        std::optional<ProjectPlanRunSourceSnapshot> advancedRun;
-        if (const auto* gcodePanel = m_uiManager->gcodePanel()) {
-            if (const auto run = gcodePanel->projectPlanRunSnapshot()) {
-                advancedRun = ProjectPlanRunSourceSnapshot{
-                    run->jobSourceId,
-                    run->state == GCodePanelRunState::Paused
-                        ? project_plan::RunState::Paused
-                        : project_plan::RunState::Running,
-                    std::nullopt,
-                };
-            }
-        }
-        if (m_projectPlanRunTruthAdapter) {
-            const auto runTruth = m_projectPlanRunTruthAdapter->resolve(
-                {*context.activeProject, &items, protectedRun, advancedRun});
-            if (runTruth.resolved()) input.liveRun = runTruth.snapshot;
-        }
-        snapshot.plan = project_plan::ProjectPlanBuilder().build(input);
         return snapshot;
     });
-    panel->setOnProjectItemActivated([activateRef](workshop::ProjectItemRef ref) {
-        (void)activateRef(ref);
-    });
-    panel->setOnProjectPlanAction([this, activateRef](const project_plan::NextAction& action) {
-        using project_plan::NextActionKind;
-        if (action.kind == NextActionKind::None) return;
-        if (action.kind == NextActionKind::AddDesignFromLibrary) {
-            (void)showDesignLibrary(design_library::LibraryPickerPurpose::AddToProject);
-            return;
-        }
-        if (action.kind == NextActionKind::RepairItem) {
+    panel->setOnProjectItemActivated([this](workshop::ProjectItemRef ref) {
+        if (!m_projectManager || !ref.valid()) return;
+        const auto item = m_projectManager->findOpenItem(ref.item.value);
+        if (!item || item->projectId != ref.project.value) {
             ToastManager::instance().show(
                 ToastType::Warning,
-                "Project Item Needs Repair",
-                "Refresh, re-import, or replace the changed source before continuing.");
+                "Project Item Unavailable",
+                "The project changed. Try opening the item again.");
             return;
         }
-        const bool prepareAction =
-            action.kind == NextActionKind::OpenDesignAndSize ||
-            action.kind == NextActionKind::OpenMaterialAndBlank ||
-            action.kind == NextActionKind::OpenToolSelection ||
-            action.kind == NextActionKind::OpenCarvePreview ||
-            action.kind == NextActionKind::OpenMachineSetup ||
-            action.kind == NextActionKind::OpenReviewAndRun;
-        if (prepareAction) {
-            if (action.target) (void)beginPrepareCarve(*action.target);
+        if (item->itemType == ProjectOpenItemType::Operation) {
+            (void)beginPrepareCarve(ref);
             return;
         }
-        const bool runAction = action.kind == NextActionKind::MonitorRun ||
-                               action.kind == NextActionKind::ReconcileRunState ||
-                               action.kind == NextActionKind::ReviewInterruptedRun;
-        if (runAction) {
-            const auto project = m_projectManager
-                                     ? m_projectManager->currentProject()
-                                     : nullptr;
-            if (!action.target || !project || !m_uiManager) return;
-            const auto items = m_projectManager->currentOpenItems();
-            const auto route = resolveProjectPlanRunActionRoute(
-                workshop::ProjectId(project->id()), items, *action.target);
-            if (!route.ready()) {
-                ToastManager::instance().show(
-                    ToastType::Warning, "Run Details Unavailable",
-                    "The saved job hierarchy changed. Refresh the Project Plan.");
-                return;
-            }
-
-            if (action.kind == NextActionKind::MonitorRun) {
-                bool exactLiveRun = false;
-                if (m_directCarveRunEffectAdapter && route.operation) {
-                    const auto& direct = m_directCarveRunEffectAdapter->snapshot();
-                    const bool live = direct.state == DirectCarveRunControlState::Streaming ||
-                                      direct.state == DirectCarveRunControlState::Paused;
-                    exactLiveRun = live && direct.jobId && direct.identity &&
-                                   *direct.jobId == route.jobSourceId &&
-                                   direct.identity->setup().toolpath().operationItem() ==
-                                       *route.operation;
-                    if (exactLiveRun) m_uiManager->openWindow("direct_carve");
-                }
-                if (!exactLiveRun) {
-                    const auto* gcode = m_uiManager->gcodePanel();
-                    const auto advanced = gcode
-                                              ? gcode->projectPlanRunSnapshot()
-                                              : std::nullopt;
-                    exactLiveRun = advanced &&
-                                   advanced->jobSourceId == route.jobSourceId;
-                    if (exactLiveRun) m_uiManager->openWindow("gcode_viewer");
-                }
-                if (!exactLiveRun) {
-                    ToastManager::instance().show(
-                        ToastType::Warning, "Run State Changed",
-                        "The machine run changed. Refresh the Project Plan.");
-                }
-                return;
-            }
-
-            if (m_cncController && m_cncController->isStreaming()) {
-                m_uiManager->openWindow(
-                    route.surface == ProjectPlanRunActionSurface::DirectCarve
-                        ? "direct_carve"
-                        : "gcode_viewer");
-                return;
-            }
-            if (route.surface == ProjectPlanRunActionSurface::DirectCarve &&
-                route.operation) {
-                (void)beginPrepareCarve(*route.operation);
-            } else {
-                (void)activateRef(route.program);
-            }
-            return;
-        }
-        if (action.target) (void)activateRef(*action.target);
+        (void)activateProjectOpenItem(*item);
+    });
+    panel->setOnOpenInCam([this](workshop::ProjectItemRef design) {
+        (void)beginPrepareCarve(design);
+    });
+    panel->setAddFromLibraryCallback([this]() {
+        (void)showDesignLibrary(design_library::LibraryPickerPurpose::AddToProject);
     });
     panel->setOpenHomeCallback([this]() { showHome(); });
     panel->setCloseProjectCallback([this]() {
