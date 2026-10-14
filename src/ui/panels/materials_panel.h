@@ -9,7 +9,6 @@
 #include <glad/gl.h>
 #include <imgui.h>
 
-#include "../../core/database/stock_size_repository.h"
 #include "../../core/materials/material_manager.h"
 #include "panel.h"
 
@@ -80,13 +79,6 @@ class MaterialsPanel : public Panel {
     void renderEditForm();
     void renderDeleteConfirm();
 
-    // Detail view (stock sizes)
-    void renderDetailView();
-    void renderStockSizeTable();
-    void renderStockAddEditPopup();
-    void renderStockDeleteConfirm();
-    void refreshStockSizes();
-
     // Register context menu entries with ContextMenuManager
     void registerContextMenuEntries();
 
@@ -142,22 +134,6 @@ class MaterialsPanel : public Panel {
 
     bool m_modelLoaded = false;
     float m_thumbnailSize = 96.0f;
-
-    // Detail view state
-    bool m_showDetailView = false;
-    i64 m_detailMaterialId = -1;
-    std::vector<StockSize> m_stockSizes;
-
-    // Stock size add/edit state
-    bool m_showStockAddPopup = false;
-    bool m_showStockDeleteConfirm = false;
-    i64 m_editingStockId = -1; // -1 = adding new, >0 = editing existing
-    StockSize m_stockEditBuffer;
-    i64 m_stockDeleteId = -1;
-    char m_stockDimBufs[3][64]{};  // Width, Height, Thickness input buffers
-    char m_stockPriceBuf[32]{};
-    char m_stockNameBuf[128]{};
-    int m_stockUnitIndex = 0; // Index into unit labels array
 
     // Context menu manager (lazy initialized)
     ContextMenuManager* m_contextMenuManager = nullptr;

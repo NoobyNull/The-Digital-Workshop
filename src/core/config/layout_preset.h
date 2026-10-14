@@ -41,12 +41,11 @@ inline constexpr const char* CNC_LAYOUT_ID = "cnc_sender";
 // All valid panel keys (for validation and iteration)
 inline constexpr const char* PANEL_KEYS[] = {
     "viewport",      "library",     "properties",   "project",
-    "gcode",         "cut_optimizer", "project_costing", "materials",
-    "tool_browser",  "start_page",
+    "gcode",         "materials",   "tool_browser", "start_page",
     "cnc_status",    "cnc_jog",     "cnc_console",  "cnc_wcs",
     "cnc_tool",      "cnc_job",     "cnc_safety",   "cnc_settings",
     "cnc_macros",    "direct_carve",
 };
-inline constexpr int PANEL_KEY_COUNT = 20;
+inline constexpr int PANEL_KEY_COUNT = 18;
 
 } // namespace dw

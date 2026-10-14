@@ -7,8 +7,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../database/cost_repository.h"
-#include "../database/cut_plan_repository.h"
 #include "../database/gcode_repository.h"
 #include "../database/material_repository.h"
 #include "../database/model_repository.h"
@@ -96,8 +94,6 @@ class ProjectExportManager {
         std::string projectNotes;
         std::vector<ManifestModel> models;
         std::vector<ManifestGCode> gcode;
-        std::vector<CostingRecord> costingRecords;
-        std::vector<CutPlanRecord> cutPlans;
     };
 
     std::string buildManifestJson(
@@ -106,14 +102,8 @@ class ProjectExportManager {
         const std::unordered_map<i64, i64>& modelIdToMaterialId,
         const std::unordered_map<std::string, std::string>& hashToThumbnailPath,
         const std::vector<ManifestGCode>& gcodeEntries,
-        const std::string& projectNotes,
-        bool hasCosts,
-        bool hasCutPlans);
-    std::string buildCostsJson(const std::vector<CostingRecord>& estimates);
-    std::string buildCutPlansJson(const std::vector<CutPlanRecord>& plans);
+        const std::string& projectNotes);
     bool parseManifest(const std::string& json, Manifest& out, std::string& error);
-    std::vector<CostingRecord> parseCostsJson(const std::string& json);
-    std::vector<CutPlanRecord> parseCutPlansJson(const std::string& json);
     std::optional<i64> getModelMaterialId(i64 modelId);
 
     Database& m_db;

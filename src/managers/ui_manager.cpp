@@ -40,8 +40,6 @@
 #include "ui/panels/cnc_status_panel.h"
 #include "ui/panels/cnc_tool_panel.h"
 #include "ui/panels/cnc_wcs_panel.h"
-#include "ui/panels/cost_panel.h"
-#include "ui/panels/cut_optimizer_panel.h"
 #include "ui/panels/cam_placeholder_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/group_panel.h"
@@ -69,21 +67,15 @@ UIManager::~UIManager() {
 void UIManager::init(LibraryManager* libraryManager,
                      ProjectManager* /*projectManager*/,
                      MaterialManager* materialManager,
-                     CostRepository* costRepo,
-                     RateCategoryRepository* rateCatRepo,
                      ModelRepository* /*modelRepo*/,
-                     GCodeRepository* /*gcodeRepo*/,
-                     CutPlanRepository* /*cutPlanRepo*/) {
+                     GCodeRepository* /*gcodeRepo*/) {
     m_viewportPanel = std::make_unique<ViewportPanel>();
     m_libraryPanel = std::make_unique<LibraryPanel>(libraryManager);
     m_propertiesPanel = std::make_unique<PropertiesPanel>();
     m_projectPanel = std::make_unique<ProjectPanel>();
     m_gcodePanel = std::make_unique<GCodePanel>();
     m_logViewerPanel = std::make_unique<LogViewerPanel>();
-    m_cutOptimizerPanel = std::make_unique<CutOptimizerPanel>();
     m_materialsPanel = std::make_unique<MaterialsPanel>(materialManager);
-    if (costRepo)
-        m_costPanel = std::make_unique<CostingPanel>(costRepo, rateCatRepo);
     m_startPage = std::make_unique<StartPage>();
     m_toolBrowserPanel = std::make_unique<ToolBrowserPanel>();
     m_cncStatusPanel = std::make_unique<CncStatusPanel>();
@@ -173,8 +165,6 @@ void UIManager::shutdown() {
     m_projectPanel.reset();
     m_gcodePanel.reset();
     m_logViewerPanel.reset();
-    m_cutOptimizerPanel.reset();
-    m_costPanel.reset();
     m_materialsPanel.reset();
     m_toolBrowserPanel.reset();
     m_cncStatusPanel.reset();
@@ -209,10 +199,6 @@ void UIManager::buildPanelRegistry() {
          m_gcodePanel.get(), false, WindowRole::Sender},
         {"log_viewer",      &m_showLogViewer,       "Log Viewer",        "Log Viewer",
          m_logViewerPanel.get(), true, WindowRole::Shared},
-        {"cut_optimizer",   &m_showCutOptimizer,    "Cut Optimizer",     "Cut Optimizer",
-         m_cutOptimizerPanel.get(), false, WindowRole::Workshop},
-        {"project_costing", &m_showProjectCosting,  "Project Costing",   "Project Costing",
-         m_costPanel.get(), true, WindowRole::Workshop},
         {"materials",       &m_showMaterials,       "Materials",         "Materials",
          m_materialsPanel.get(), true, WindowRole::Workshop},
         {"tool_browser",    &m_showToolBrowser,     kToolLibraryMenuLabel, kToolLibraryWindowTitle,

@@ -36,22 +36,11 @@ void Workspace::clearFocusedToolpath() {
     m_focusedToolpath.reset();
 }
 
-void Workspace::setFocusedCutPlan(std::shared_ptr<CutPlan> plan) {
-    ASSERT_MAIN_THREAD();
-    m_focusedCutPlan = std::move(plan);
-}
-
-void Workspace::clearFocusedCutPlan() {
-    ASSERT_MAIN_THREAD();
-    m_focusedCutPlan.reset();
-}
-
 void Workspace::clearAll() {
     ASSERT_MAIN_THREAD();
     m_focusedMesh.reset();
     m_focusedGCode.reset();
     m_focusedToolpath.reset();
-    m_focusedCutPlan.reset();
 }
 
 } // namespace dw

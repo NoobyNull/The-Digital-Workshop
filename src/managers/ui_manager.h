@@ -44,8 +44,6 @@ class PropertiesPanel;
 class ProjectPanel;
 class GCodePanel;
 class LogViewerPanel;
-class CostingPanel;
-class CutOptimizerPanel;
 class MaterialsPanel;
 class StartPage;
 class ToolBrowserPanel;
@@ -75,9 +73,6 @@ class ProjectManager;
 class MaterialManager;
 class ModelRepository;
 class GCodeRepository;
-class CutPlanRepository;
-class CostRepository;
-class RateCategoryRepository;
 class ImportQueue;
 class Workspace;
 
@@ -119,11 +114,8 @@ class UIManager {
     void init(LibraryManager* libraryManager,
               ProjectManager* projectManager,
               MaterialManager* materialManager,
-              CostRepository* costRepo = nullptr,
-              RateCategoryRepository* rateCatRepo = nullptr,
               ModelRepository* modelRepo = nullptr,
-              GCodeRepository* gcodeRepo = nullptr,
-              CutPlanRepository* cutPlanRepo = nullptr);
+              GCodeRepository* gcodeRepo = nullptr);
 
     // Shutdown and destroy all UI resources
     void shutdown();
@@ -155,9 +147,7 @@ class UIManager {
     ProjectPanel* projectPanel() { return m_projectPanel.get(); }
     GCodePanel* gcodePanel() { return m_gcodePanel.get(); }
     LogViewerPanel* logViewerPanel() { return m_logViewerPanel.get(); }
-    CutOptimizerPanel* cutOptimizerPanel() { return m_cutOptimizerPanel.get(); }
     MaterialsPanel* materialsPanel() { return m_materialsPanel.get(); }
-    CostingPanel* costPanel() { return m_costPanel.get(); }
     StartPage* startPage() { return m_startPage.get(); }
     ToolBrowserPanel* toolBrowserPanel() { return m_toolBrowserPanel.get(); }
     CncStatusPanel* cncStatusPanel() { return m_cncStatusPanel.get(); }
@@ -190,8 +180,6 @@ class UIManager {
     bool& showProject() { return m_showProject; }
     bool& showGCode() { return m_showGCode; }
     bool& showLogViewer() { return m_showLogViewer; }
-    bool& showCutOptimizer() { return m_showCutOptimizer; }
-    bool& showProjectCosting() { return m_showProjectCosting; }
     bool& showMaterials() { return m_showMaterials; }
     bool& showToolBrowser() { return m_showToolBrowser; }
     bool& showCncStatus() { return m_showCncStatus; }
@@ -301,9 +289,7 @@ class UIManager {
     std::unique_ptr<ProjectPanel> m_projectPanel;
     std::unique_ptr<GCodePanel> m_gcodePanel;
     std::unique_ptr<LogViewerPanel> m_logViewerPanel;
-    std::unique_ptr<CutOptimizerPanel> m_cutOptimizerPanel;
     std::unique_ptr<MaterialsPanel> m_materialsPanel;
-    std::unique_ptr<CostingPanel> m_costPanel;
     std::unique_ptr<StartPage> m_startPage;
     std::unique_ptr<ToolBrowserPanel> m_toolBrowserPanel;
     std::unique_ptr<CncStatusPanel> m_cncStatusPanel;
@@ -324,8 +310,6 @@ class UIManager {
     bool m_showProject = true;
     bool m_showGCode = false;
     bool m_showLogViewer = false;
-    bool m_showCutOptimizer = false;
-    bool m_showProjectCosting = false;
     bool m_showMaterials = false;
     bool m_showToolBrowser = false;
     bool m_showCncStatus = false;

@@ -2,8 +2,6 @@
 
 #include <gtest/gtest.h>
 
-#include "core/database/cost_repository.h"
-#include "core/database/cut_plan_repository.h"
 #include "core/database/database.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/material_repository.h"
@@ -558,7 +556,7 @@ TEST_F(ProjectExportTest, RoundTripPreservesMaterialsAndThumbnails) {
     EXPECT_GE(allMaterials.size(), 1u) << "Should have at least one imported material";
 }
 
-// --- Test 6: Round-trip with all asset types (models, gcode, costs, cut plans, notes) ---
+// --- Test 6: Round-trip with all asset types (models, gcode, notes) ---
 
 TEST_F(ProjectExportTest, RoundTripAllAssetTypes) {
     // 1. Create project with notes
@@ -593,47 +591,19 @@ TEST_F(ProjectExportTest, RoundTripAllAssetTypes) {
     ASSERT_TRUE(gcodeId.has_value());
     ASSERT_TRUE(gcodeRepo.addToProject(*projId, *gcodeId));
 
-    // 4. Insert costing record
-    dw::CostRepository costRepo(m_db);
-    dw::CostingRecord costRec;
-    costRec.name = "Material Cost";
-    costRec.projectId = *projId;
-    costRec.items.push_back({0, "Plywood Sheet", dw::CostCategory::Material, 2.0, 45.0, 90.0, ""});
-    costRec.items.push_back({0, "Router Bit", dw::CostCategory::Tool, 1.0, 25.0, 25.0, ""});
-    costRec.recalculate();
-    auto costId = costRepo.insert(costRec);
-    ASSERT_TRUE(costId.has_value());
-
-    // 5. Insert cut plan
-    dw::CutPlanRepository cutPlanRepo(m_db);
-    dw::CutPlanRecord cutPlan;
-    cutPlan.name = "Main Cut Plan";
-    cutPlan.projectId = *projId;
-    cutPlan.algorithm = "guillotine";
-    cutPlan.allowRotation = true;
-    cutPlan.kerf = 3.2f;
-    cutPlan.margin = 5.0f;
-    cutPlan.sheetsUsed = 2;
-    cutPlan.efficiency = 0.85f;
-    cutPlan.sheetConfigJson = R"({"width":2440,"height":1220})";
-    cutPlan.partsJson = "[]";
-    cutPlan.resultJson = "{}";
-    auto cutPlanId = cutPlanRepo.insert(cutPlan);
-    ASSERT_TRUE(cutPlanId.has_value());
-
-    // 6. Build Project object for export
+    // 4. Build Project object for export
     auto project = std::make_shared<dw::Project>();
     project->record().id = *projId;
     project->record().name = projRec.name;
     project->record().notes = projRec.notes;
     project->addModel(modelId);
 
-    // 7. Export
+    // 5. Export
     dw::ProjectExportManager exporter(m_db);
     auto exportResult = exporter.exportProject(*project, m_archivePath);
     ASSERT_TRUE(exportResult.success) << exportResult.error;
 
-    // 8. Import into fresh DB
+    // 6. Import into fresh DB
     dw::Database db2;
     ASSERT_TRUE(db2.open(":memory:"));
     ASSERT_TRUE(dw::Schema::initialize(db2));
@@ -645,18 +615,18 @@ TEST_F(ProjectExportTest, RoundTripAllAssetTypes) {
 
     auto importedProjId = *importResult.importedProjectId;
 
-    // 9. Verify project metadata
+    // 7. Verify project metadata
     dw::ProjectRepository projRepo2(db2);
     auto importedProj = projRepo2.findById(importedProjId);
     ASSERT_TRUE(importedProj.has_value());
     EXPECT_EQ(importedProj->name, "Full Asset Project");
     EXPECT_EQ(importedProj->notes, "These are project notes for the round-trip test.");
 
-    // 10. Verify models
+    // 8. Verify models
     auto importedModelIds = projRepo2.getModelIds(importedProjId);
     EXPECT_EQ(importedModelIds.size(), 1u);
 
-    // 11. Verify gcode
+    // 9. Verify gcode
     dw::GCodeRepository gcodeRepo2(db2);
     auto importedGcodes = gcodeRepo2.findByProject(importedProjId);
     ASSERT_EQ(importedGcodes.size(), 1u);
@@ -669,25 +639,41 @@ TEST_F(ProjectExportTest, RoundTripAllAssetTypes) {
         EXPECT_EQ(importedGcodes[0].toolNumbers[1], 3);
     }
 
-    // 12. Verify cost estimates
-    dw::CostRepository costRepo2(db2);
-    auto importedCosts = costRepo2.findByProject(importedProjId);
-    ASSERT_EQ(importedCosts.size(), 1u);
-    EXPECT_EQ(importedCosts[0].name, "Material Cost");
-    ASSERT_EQ(importedCosts[0].items.size(), 2u);
-    EXPECT_EQ(importedCosts[0].items[0].name, "Plywood Sheet");
-    EXPECT_EQ(importedCosts[0].items[1].name, "Router Bit");
-    EXPECT_DOUBLE_EQ(importedCosts[0].items[0].quantity, 2.0);
-    EXPECT_DOUBLE_EQ(importedCosts[0].items[0].rate, 45.0);
+    // 10. Costing and cut plans are no longer part of the archive
+    mz_zip_archive zip{};
+    ASSERT_TRUE(mz_zip_reader_init_file(&zip, m_archivePath.c_str(), 0));
+    EXPECT_LT(mz_zip_reader_locate_file(&zip, "costs.json", nullptr, 0), 0);
+    EXPECT_LT(mz_zip_reader_locate_file(&zip, "cut_plans.json", nullptr, 0), 0);
+    mz_zip_reader_end(&zip);
+}
 
-    // 13. Verify cut plans
-    dw::CutPlanRepository cutPlanRepo2(db2);
-    auto importedPlans = cutPlanRepo2.findByProject(importedProjId);
-    ASSERT_EQ(importedPlans.size(), 1u);
-    EXPECT_EQ(importedPlans[0].name, "Main Cut Plan");
-    EXPECT_EQ(importedPlans[0].algorithm, "guillotine");
-    EXPECT_EQ(importedPlans[0].sheetsUsed, 2);
-    EXPECT_FLOAT_EQ(importedPlans[0].efficiency, 0.85f);
-    EXPECT_FLOAT_EQ(importedPlans[0].kerf, 3.2f);
-    EXPECT_FALSE(importedPlans[0].sheetConfigJson.empty());
+// --- Test 7: Archives from releases with costing still import ---
+
+TEST_F(ProjectExportTest, ImportIgnoresLegacyCostingAndCutPlanEntries) {
+    nlohmann::json manifest;
+    manifest["format_version"] = 2;
+    manifest["app_version"] = "0.7.0";
+    manifest["created_at"] = "2026-03-05T10:30:00Z";
+    manifest["project_id"] = 9;
+    manifest["project_name"] = "Costed Project";
+    manifest["models"] = nlohmann::json::array();
+    manifest["gcode"] = nlohmann::json::array();
+    manifest["has_costs"] = true;
+    manifest["has_cut_plans"] = true;
+
+    createArchiveWithManifest(
+        m_archivePath,
+        manifest,
+        {{"costs.json", R"([{"name":"Material Cost","items":[]}])"},
+         {"cut_plans.json", R"([{"name":"Main Cut Plan","algorithm":"guillotine"}])"}});
+
+    dw::ProjectExportManager importer(m_db);
+    const auto result = importer.importProject(m_archivePath);
+    ASSERT_TRUE(result.success) << result.error;
+    ASSERT_TRUE(result.importedProjectId.has_value());
+
+    dw::ProjectRepository projects(m_db);
+    const auto project = projects.findById(*result.importedProjectId);
+    ASSERT_TRUE(project.has_value());
+    EXPECT_EQ(project->name, "Costed Project");
 }

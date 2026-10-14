@@ -8,10 +8,8 @@
 #include "app/project_session_integration.h"
 #include "app/workspace.h"
 #include "core/cnc/cnc_controller.h"
-#include "core/database/cut_plan_repository.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/model_repository.h"
-#include "core/optimizer/cut_list_file.h"
 #include "core/paths/path_resolver.h"
 #include "core/project/project.h"
 #include "core/project/project_directory.h"
@@ -21,8 +19,6 @@
 #include "modules/workshop/project_resume.h"
 #include "modules/workshop/project_workshop_controller.h"
 #include "ui/dialogs/message_dialog.h"
-#include "ui/panels/cost_panel.h"
-#include "ui/panels/cut_optimizer_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/project_panel.h"
@@ -371,8 +367,6 @@ void Application::invalidateProjectFocus() {
         if (auto* panel = m_uiManager->projectPanel())
             panel->clearSelection();
         if (auto* panel = m_uiManager->gcodePanel())
-            panel->clear();
-        if (auto* panel = m_uiManager->cutOptimizerPanel())
             panel->clear();
     }
     m_activeMaterialTexture.reset();

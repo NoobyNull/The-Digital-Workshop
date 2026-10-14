@@ -49,19 +49,6 @@ bool completeModelBounds(const nlohmann::json& snapshot) {
     return true;
 }
 
-bool sourceKeysChanged(const nlohmann::json& snapshot,
-                       const std::vector<std::string>& currentKeys) {
-    std::vector<std::string> snapshotKeys;
-    if (snapshot.contains("source_keys") && snapshot["source_keys"].is_array()) {
-        for (const auto& value : snapshot["source_keys"]) {
-            if (value.is_string()) {
-                snapshotKeys.push_back(value.get<std::string>());
-            }
-        }
-    }
-    return snapshotKeys != currentKeys;
-}
-
 } // namespace
 
 int ProjectRepository::validateOpenItemsForProject(i64 projectId) {
@@ -145,27 +132,6 @@ int ProjectRepository::validateOpenItemsForProject(i64 projectId) {
                     snapshot.value("archive_path", stmt.getText(4)) != stmt.getText(4) ||
                     snapshot.value("thumbnail_path", stmt.getText(5)) != stmt.getText(5);
             }
-        } else if (item.sourceTable == "stock_sizes" && item.sourceId.has_value()) {
-            auto stmt = m_db.prepare(R"(
-                SELECT s.material_id, mat.name, s.name, s.width_mm, s.height_mm,
-                       s.thickness_mm, s.price_per_unit, s.unit_label
-                FROM stock_sizes s
-                INNER JOIN materials mat ON mat.id = s.material_id
-                WHERE s.id = ?
-            )");
-            if (!stmt.isValid() || !stmt.bindInt(1, *item.sourceId) || !stmt.step()) {
-                sourceExists = false;
-            } else {
-                sourceChanged = snapshot.value("material_id", stmt.getInt(0)) != stmt.getInt(0) ||
-                                snapshot.value("material_name", stmt.getText(1)) !=
-                                    stmt.getText(1) ||
-                                snapshot.value("stock_name", stmt.getText(2)) != stmt.getText(2) ||
-                                doubleChanged(snapshot, "width_mm", stmt.getDouble(3)) ||
-                                doubleChanged(snapshot, "height_mm", stmt.getDouble(4)) ||
-                                doubleChanged(snapshot, "thickness_mm", stmt.getDouble(5)) ||
-                                doubleChanged(snapshot, "price_per_unit", stmt.getDouble(6)) ||
-                                snapshot.value("unit_label", stmt.getText(7)) != stmt.getText(7);
-            }
         } else if (item.sourceTable == "gcode_files" && item.sourceId.has_value()) {
             auto stmt = m_db.prepare(R"(
                 SELECT hash, file_path, file_size, estimated_time, feed_rates, tool_numbers
@@ -197,40 +163,6 @@ int ProjectRepository::validateOpenItemsForProject(i64 projectId) {
             } else {
                 sourceChanged = snapshot.value("model_id", stmt.getInt(0)) != stmt.getInt(0) ||
                                 snapshot.value("name", stmt.getText(1)) != stmt.getText(1);
-            }
-        } else if (item.sourceTable == "cut_plans" && item.sourceId.has_value()) {
-            auto stmt = m_db.prepare(R"(
-                SELECT algorithm, allow_rotation, kerf, margin, sheets_used, efficiency
-                FROM cut_plans
-                WHERE id = ?
-            )");
-            if (!stmt.isValid() || !stmt.bindInt(1, *item.sourceId) || !stmt.step()) {
-                sourceExists = false;
-            } else {
-                sourceChanged = snapshot.value("algorithm", stmt.getText(0)) != stmt.getText(0) ||
-                                snapshot.value("allow_rotation", stmt.getInt(1) != 0) !=
-                                    (stmt.getInt(1) != 0) ||
-                                doubleChanged(snapshot, "kerf", stmt.getDouble(2)) ||
-                                doubleChanged(snapshot, "margin", stmt.getDouble(3)) ||
-                                snapshot.value("sheets_used", stmt.getInt(4)) != stmt.getInt(4) ||
-                                doubleChanged(snapshot, "efficiency", stmt.getDouble(5));
-            }
-        } else if (item.sourceTable == "costing_records" && item.sourceId.has_value()) {
-            auto stmt = m_db.prepare(R"(
-                SELECT subtotal, tax_amount, discount_amount, total, items
-                FROM costing_records
-                WHERE id = ?
-            )");
-            if (!stmt.isValid() || !stmt.bindInt(1, *item.sourceId) || !stmt.step()) {
-                sourceExists = false;
-            } else {
-                auto sourceKeys =
-                    project_open_item_detail::autoCostSourceKeysFromItemsJson(stmt.getText(4));
-                sourceChanged = doubleChanged(snapshot, "subtotal", stmt.getDouble(0)) ||
-                                doubleChanged(snapshot, "tax_amount", stmt.getDouble(1)) ||
-                                doubleChanged(snapshot, "discount_amount", stmt.getDouble(2)) ||
-                                doubleChanged(snapshot, "total", stmt.getDouble(3)) ||
-                                sourceKeysChanged(snapshot, sourceKeys);
             }
         } else if (item.sourceTable == "cnc_jobs" && item.sourceId.has_value()) {
             auto stmt = m_db.prepare(R"(

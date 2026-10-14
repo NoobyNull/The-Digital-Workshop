@@ -243,10 +243,6 @@ void UIManager::renderViewMenu() {
         if (ImGui::MenuItem("Properties", nullptr, isWindowVisible("properties")))
             toggleWindow("properties");
         ImGui::Separator();
-        if (ImGui::MenuItem("Cut Optimizer", nullptr, isWindowVisible("cut_optimizer")))
-            toggleWindow("cut_optimizer");
-        if (ImGui::MenuItem("Project Costing", nullptr, isWindowVisible("project_costing")))
-            toggleWindow("project_costing");
         if (ImGui::MenuItem("Materials", nullptr, isWindowVisible("materials")))
             toggleWindow("materials");
     } else if (ImGui::BeginMenu("Sender Panels")) {

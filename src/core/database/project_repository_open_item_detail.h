@@ -14,9 +14,6 @@ class Database;
 namespace project_open_item_detail {
 
 [[nodiscard]] std::string jsonEscape(const std::string& value);
-[[nodiscard]] std::vector<std::string> autoCostSourceKeysFromItemsJson(
-    const std::string& itemsJson);
-[[nodiscard]] std::string jsonStringArray(const std::vector<std::string>& values);
 using GeneratedDirectCarvePrograms = std::map<i64, i64>;
 [[nodiscard]] GeneratedDirectCarvePrograms explicitGeneratedDirectCarvePrograms(
     Database& database,

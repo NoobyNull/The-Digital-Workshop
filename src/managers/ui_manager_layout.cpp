@@ -73,8 +73,6 @@ void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
     // Hidden panels — docked as tabs in existing areas
     ImGui::DockBuilderDockWindow("Home###Start Page", dockCenter);
     ImGui::DockBuilderDockWindow("G-code", dockCenter);
-    ImGui::DockBuilderDockWindow("Cut Optimizer", dockCenter);
-    ImGui::DockBuilderDockWindow("Project Costing", dockLeftBottom);
     ImGui::DockBuilderDockWindow("Materials", dockLeftBottom);
     ImGui::DockBuilderDockWindow("Tool & Material", dockRight);
     ImGui::DockBuilderDockWindow(kToolLibraryWindowTitle, dockRight);
@@ -103,8 +101,6 @@ void UIManager::restoreVisibilityFromConfig() {
     m_showProject = cfg.getShowProject();
     m_showMaterials = cfg.getShowMaterials();
     m_showGCode = cfg.getShowGCode();
-    m_showCutOptimizer = cfg.getShowCutOptimizer();
-    m_showProjectCosting = cfg.getShowProjectCosting();
     m_showToolBrowser = cfg.getShowToolBrowser();
     m_showStartPage = cfg.getShowStartPage();
 
@@ -144,8 +140,6 @@ void UIManager::saveVisibilityToConfig() {
     cfg.setShowProject(m_showProject);
     cfg.setShowMaterials(m_showMaterials);
     cfg.setShowGCode(m_showGCode);
-    cfg.setShowCutOptimizer(m_showCutOptimizer);
-    cfg.setShowProjectCosting(m_showProjectCosting);
     cfg.setShowToolBrowser(m_showToolBrowser);
     cfg.setShowStartPage(m_showStartPage);
 

@@ -2,7 +2,7 @@
 
 // Digital Workshop - Workspace
 // Central state manager for the application's "focused object" design.
-// Panels observe and act on the currently focused model, g-code, or cut plan.
+// Panels observe and act on the currently focused model or g-code.
 
 #include <memory>
 
@@ -11,7 +11,6 @@ namespace dw {
 // Forward declarations - these will be implemented in core modules
 class Mesh;
 class GCodeFile;
-class CutPlan;
 
 class Workspace {
   public:
@@ -36,12 +35,6 @@ class Workspace {
     auto hasFocusedToolpath() const -> bool { return m_focusedToolpath != nullptr; }
     void clearFocusedToolpath();
 
-    // Focused cut plan (2D optimizer result)
-    void setFocusedCutPlan(std::shared_ptr<CutPlan> plan);
-    auto getFocusedCutPlan() const -> std::shared_ptr<CutPlan> { return m_focusedCutPlan; }
-    auto hasFocusedCutPlan() const -> bool { return m_focusedCutPlan != nullptr; }
-    void clearFocusedCutPlan();
-
     // Clear all focused objects
     void clearAll();
 
@@ -49,7 +42,6 @@ class Workspace {
     std::shared_ptr<Mesh> m_focusedMesh;
     std::shared_ptr<GCodeFile> m_focusedGCode;
     std::shared_ptr<Mesh> m_focusedToolpath;
-    std::shared_ptr<CutPlan> m_focusedCutPlan;
 };
 
 } // namespace dw

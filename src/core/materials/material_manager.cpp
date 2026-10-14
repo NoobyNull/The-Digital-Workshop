@@ -12,7 +12,7 @@
 
 namespace dw {
 
-MaterialManager::MaterialManager(Database& db) : m_db(db), m_repo(db), m_stockRepo(db) {}
+MaterialManager::MaterialManager(Database& db) : m_db(db), m_repo(db) {}
 
 // ---------------------------------------------------------------------------
 // seedDefaults
@@ -370,26 +370,6 @@ Path MaterialManager::uniqueArchivePath(const std::string& originalFilename) con
 
     // Fallback (should never happen in practice)
     return materialsDir / (originalFilename + ".dwmat");
-}
-
-// ---------------------------------------------------------------------------
-// Stock size delegation
-// ---------------------------------------------------------------------------
-
-std::vector<StockSize> MaterialManager::getStockSizes(i64 materialId) {
-    return m_stockRepo.findByMaterial(materialId);
-}
-
-std::optional<i64> MaterialManager::addStockSize(const StockSize& size) {
-    return m_stockRepo.insert(size);
-}
-
-bool MaterialManager::updateStockSize(const StockSize& size) {
-    return m_stockRepo.update(size);
-}
-
-bool MaterialManager::removeStockSize(i64 id) {
-    return m_stockRepo.remove(id);
 }
 
 } // namespace dw

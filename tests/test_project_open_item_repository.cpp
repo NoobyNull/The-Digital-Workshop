@@ -3,15 +3,12 @@
 #include <gtest/gtest.h>
 
 #include "core/database/database.h"
-#include "core/database/cost_repository.h"
-#include "core/database/cut_plan_repository.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/job_repository.h"
 #include "core/database/material_repository.h"
 #include "core/database/model_repository.h"
 #include "core/database/project_repository.h"
 #include "core/database/schema.h"
-#include "core/database/stock_size_repository.h"
 
 namespace {
 
@@ -86,19 +83,6 @@ class ProjectOpenItemRepoTest : public ::testing::Test {
         material.jankaHardness = 1010.0f;
         material.grainDirectionDeg = 90.0f;
         return materialRepo.insert(material).value();
-    }
-
-    dw::i64 insertStockSize(dw::i64 materialId, const std::string& name) {
-        dw::StockSizeRepository stockRepo(m_db);
-        dw::StockSize stock;
-        stock.materialId = materialId;
-        stock.name = name;
-        stock.widthMm = 203.2;
-        stock.heightMm = 609.6;
-        stock.thicknessMm = 19.05;
-        stock.pricePerUnit = 24.5;
-        stock.unitLabel = "each";
-        return stockRepo.insert(stock).value();
     }
 
     dw::Database m_db;
@@ -401,27 +385,21 @@ TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesMaterialItemsFo
               std::string::npos);
 }
 
-TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesStockItemsForProjectMaterials) {
-    auto projectId = insertProject("Assigned Stock");
-    auto modelId = insertModel("Part", "part-hash");
-    auto materialId = insertMaterial("Black Walnut");
-    auto stockId = insertStockSize(materialId, "Walnut blank");
-    ASSERT_TRUE(m_repo->addModel(projectId, modelId));
+TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_PrunesRetiredCostingItemTypes) {
+    auto projectId = insertProject("Costed Before Removal");
+    for (const char* retiredType : {"stock", "cut_plan", "cost"}) {
+        auto stmt = m_db.prepare(R"(
+            INSERT INTO project_open_items (project_id, item_type, status, display_name)
+            VALUES (?, ?, 'ready', 'Retired')
+        )");
+        ASSERT_TRUE(stmt.bindInt(1, projectId));
+        ASSERT_TRUE(stmt.bindText(2, retiredType));
+        ASSERT_TRUE(stmt.execute());
+    }
+    ASSERT_EQ(m_repo->listOpenItemsForProject(projectId).size(), 3u);
 
-    auto stmt = m_db.prepare("UPDATE models SET material_id = ? WHERE id = ?");
-    ASSERT_TRUE(stmt.bindInt(1, materialId));
-    ASSERT_TRUE(stmt.bindInt(2, modelId));
-    ASSERT_TRUE(stmt.execute());
-
-    EXPECT_EQ(m_repo->ensureOpenItemsForProject(projectId), 3);
-
-    auto stockItems = m_repo->findOpenItemsBySource(projectId, "stock_sizes", stockId);
-    ASSERT_EQ(stockItems.size(), 1u);
-    EXPECT_EQ(stockItems[0].itemType, dw::ProjectOpenItemType::Stock);
-    EXPECT_EQ(stockItems[0].status, dw::ProjectOpenItemStatus::Ready);
-    EXPECT_EQ(stockItems[0].displayName, "Walnut blank");
-    EXPECT_NE(stockItems[0].snapshotJson.find(R"("price_per_unit":24.5)"), std::string::npos);
-    EXPECT_NE(stockItems[0].snapshotJson.find(R"("unit_label":"each")"), std::string::npos);
+    EXPECT_EQ(m_repo->ensureOpenItemsForProject(projectId), 0);
+    EXPECT_TRUE(m_repo->listOpenItemsForProject(projectId).empty());
 }
 
 TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesOperationItemForDirectCarveGroup) {
@@ -484,82 +462,6 @@ TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesToolItemsFromGC
     EXPECT_EQ(secondTool[0].displayName, "Tool 3");
 }
 
-TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesCutPlanAndCostItems) {
-    auto projectId = insertProject("Plans and Costs");
-
-    dw::CutPlanRepository cutPlanRepo(m_db);
-    dw::CutPlanRecord plan;
-    plan.projectId = projectId;
-    plan.name = "Sheet Layout";
-    plan.algorithm = "guillotine";
-    plan.sheetConfigJson = R"({"width":2440,"height":1220})";
-    plan.partsJson = R"([{"name":"Panel","quantity":2}])";
-    plan.resultJson = R"({"placements":2})";
-    plan.allowRotation = false;
-    plan.kerf = 3.175f;
-    plan.margin = 6.35f;
-    plan.sheetsUsed = 1;
-    plan.efficiency = 0.82f;
-    auto planId = cutPlanRepo.insert(plan);
-    ASSERT_TRUE(planId.has_value());
-
-    dw::CostRepository costRepo(m_db);
-    dw::CostingRecord cost;
-    cost.name = "Project Estimate";
-    cost.projectId = projectId;
-    dw::CostItem carveMaterial;
-    carveMaterial.name = "Walnut blank";
-    carveMaterial.category = dw::CostCategory::Material;
-    carveMaterial.quantity = 1.0;
-    carveMaterial.rate = 90.0;
-    carveMaterial.total = 90.0;
-    carveMaterial.notes = "[auto:direct-carve:relief]";
-    dw::CostItem shopLabor;
-    shopLabor.name = "Setup";
-    shopLabor.category = dw::CostCategory::Labor;
-    shopLabor.quantity = 1.0;
-    shopLabor.rate = 35.0;
-    shopLabor.total = 35.0;
-    shopLabor.notes = "manual setup";
-    cost.items = {carveMaterial, shopLabor};
-    cost.subtotal = 125.0;
-    cost.total = 135.0;
-    auto costId = costRepo.insert(cost);
-    ASSERT_TRUE(costId.has_value());
-
-    EXPECT_EQ(m_repo->ensureOpenItemsForProject(projectId), 2);
-
-    auto cutPlanItems = m_repo->findOpenItemsBySource(projectId, "cut_plans", *planId);
-    ASSERT_EQ(cutPlanItems.size(), 1u);
-    EXPECT_EQ(cutPlanItems[0].itemType, dw::ProjectOpenItemType::CutPlan);
-    EXPECT_EQ(cutPlanItems[0].displayName, "Sheet Layout");
-    EXPECT_NE(cutPlanItems[0].snapshotJson.find(R"("sheets_used":1)"), std::string::npos);
-    EXPECT_NE(cutPlanItems[0].snapshotJson.find(R"("efficiency":0.82)"), std::string::npos);
-
-    auto costItems = m_repo->findOpenItemsBySource(projectId, "costing_records", *costId);
-    ASSERT_EQ(costItems.size(), 1u);
-    EXPECT_EQ(costItems[0].itemType, dw::ProjectOpenItemType::Cost);
-    EXPECT_EQ(costItems[0].displayName, "Project Estimate");
-    EXPECT_NE(costItems[0].snapshotJson.find(R"("total":135)"), std::string::npos);
-    EXPECT_NE(costItems[0].snapshotJson.find(R"("source_keys":["[auto:direct-carve:relief]"])"),
-              std::string::npos);
-
-    auto costOpenItemId = costItems[0].id;
-    cost.id = *costId;
-    cost.items[0].notes = "[auto:clo]";
-    cost.total = 150.0;
-    ASSERT_TRUE(costRepo.update(cost));
-
-    EXPECT_EQ(m_repo->ensureOpenItemsForProject(projectId), 0);
-
-    auto updatedCostItems = m_repo->findOpenItemsBySource(projectId, "costing_records", *costId);
-    ASSERT_EQ(updatedCostItems.size(), 1u);
-    EXPECT_EQ(updatedCostItems[0].id, costOpenItemId);
-    EXPECT_NE(updatedCostItems[0].snapshotJson.find(R"("total":150)"), std::string::npos);
-    EXPECT_NE(updatedCostItems[0].snapshotJson.find(R"("source_keys":["[auto:clo]"])"),
-              std::string::npos);
-}
-
 TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesJobItemsForProjectGCodeRuns) {
     auto projectId = insertProject("Runtime Trace");
     auto gcodeId = insertGCode("Relief Finish", "finish-hash");
@@ -611,7 +513,6 @@ TEST_F(ProjectOpenItemRepoTest, ValidateOpenItemsForProject_MarksChangedSourcesS
     auto projectId = insertProject("Changed Sources");
     auto modelId = insertModel("Relief", "model-v1");
     auto materialId = insertMaterial("Black Walnut");
-    auto stockId = insertStockSize(materialId, "Walnut blank");
     auto gcodeId = insertGCode("Relief Finish", "gcode-v1");
     ASSERT_TRUE(m_repo->addModel(projectId, modelId));
 
@@ -622,24 +523,20 @@ TEST_F(ProjectOpenItemRepoTest, ValidateOpenItemsForProject_MarksChangedSourcesS
 
     dw::GCodeRepository gcodeRepo(m_db);
     ASSERT_TRUE(gcodeRepo.addToProject(projectId, gcodeId));
-    ASSERT_EQ(m_repo->ensureOpenItemsForProject(projectId), 6);
+    ASSERT_EQ(m_repo->ensureOpenItemsForProject(projectId), 5);
 
     ASSERT_TRUE(m_db.execute("UPDATE models SET hash = 'model-v2' WHERE id = " +
                              std::to_string(modelId)));
     ASSERT_TRUE(m_db.execute("UPDATE materials SET janka_hardness = 1200 WHERE id = " +
                              std::to_string(materialId)));
-    ASSERT_TRUE(m_db.execute("UPDATE stock_sizes SET price_per_unit = 30 WHERE id = " +
-                             std::to_string(stockId)));
     ASSERT_TRUE(m_db.execute("UPDATE gcode_files SET hash = 'gcode-v2' WHERE id = " +
                              std::to_string(gcodeId)));
 
-    EXPECT_EQ(m_repo->validateOpenItemsForProject(projectId), 4);
+    EXPECT_EQ(m_repo->validateOpenItemsForProject(projectId), 3);
 
     EXPECT_EQ(m_repo->findOpenItemsBySource(projectId, "models", modelId)[0].status,
               dw::ProjectOpenItemStatus::Stale);
     EXPECT_EQ(m_repo->findOpenItemsBySource(projectId, "materials", materialId)[0].status,
-              dw::ProjectOpenItemStatus::Stale);
-    EXPECT_EQ(m_repo->findOpenItemsBySource(projectId, "stock_sizes", stockId)[0].status,
               dw::ProjectOpenItemStatus::Stale);
     EXPECT_EQ(m_repo->findOpenItemsBySource(projectId, "gcode_files", gcodeId)[0].status,
               dw::ProjectOpenItemStatus::Stale);

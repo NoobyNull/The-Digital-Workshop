@@ -30,13 +30,10 @@
 #include "core/cnc/serial_port.h"
 #include "core/config/config.h"
 #include "core/database/connection_pool.h"
-#include "core/database/cost_repository.h"
-#include "core/database/cut_plan_repository.h"
 #include "core/database/database.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/job_repository.h"
 #include "core/database/model_repository.h"
-#include "core/database/rate_category_repository.h"
 #include "core/database/schema.h"
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
@@ -49,7 +46,6 @@
 #include "core/materials/lmstudio_descriptor_service.h"
 #include "core/materials/lmstudio_material_service.h"
 #include "core/materials/material_manager.h"
-#include "core/optimizer/cut_list_file.h"
 #include "core/paths/app_paths.h"
 #include "core/project/project.h"
 #include "core/storage/storage_manager.h"
@@ -285,7 +281,6 @@ bool Application::init(bool diagnosticMode) {
         m_jobRepo = std::make_unique<JobRepository>(*m_database);
         m_projectPlanRunTruthAdapter =
             std::make_unique<ProjectPlanRunTruthAdapter>();
-        m_cutPlanRepo = std::make_unique<CutPlanRepository>(*m_database);
         // Mark any 'running' jobs as interrupted (app crashed during previous session)
         {
             auto running = m_jobRepo->findByStatus("running");
@@ -308,10 +303,6 @@ bool Application::init(bool diagnosticMode) {
 
     {
         TIME_STARTUP(timer, "Storage and Tool Systems");
-        m_cutListFile = std::make_unique<CutListFile>();
-        m_cutListFile->setDirectory(paths::getDataDir() / "cutlists");
-        m_costRepo = std::make_unique<CostRepository>(*m_database);
-        m_rateCatRepo = std::make_unique<RateCategoryRepository>(*m_database);
         m_lmStudioService = std::make_unique<LMStudioMaterialService>();
         m_descriptorService = std::make_unique<LMStudioDescriptorService>();
         m_ollamaRuntime = std::make_unique<OllamaRuntime>();
@@ -384,11 +375,8 @@ bool Application::init(bool diagnosticMode) {
         m_uiManager->init(m_libraryManager.get(),
                           m_projectManager.get(),
                           m_materialManager.get(),
-                          m_costRepo.get(),
-                          m_rateCatRepo.get(),
                           m_modelRepo.get(),
-                          m_gcodeRepo.get(),
-                          m_cutPlanRepo.get());
+                          m_gcodeRepo.get());
 
         initializeProjectSession();
         initializeFileIOManager();
@@ -478,10 +466,6 @@ void Application::shutdown() {
     m_descriptorService.reset();
     m_ollamaRuntime.reset();
     m_lmStudioService.reset();
-    m_costRepo.reset();
-    m_rateCatRepo.reset();
-    m_cutPlanRepo.reset();
-    m_cutListFile.reset();
     m_projectPlanRunTruthAdapter.reset();
     m_jobRepo.reset();
     m_libraryWorkflow.reset();

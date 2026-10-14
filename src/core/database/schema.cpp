@@ -40,22 +40,6 @@ bool createMaterialsTable(Database& db) {
     )");
 }
 
-bool createStockSizesTable(Database& db) {
-    return db.execute(R"(
-        CREATE TABLE IF NOT EXISTS stock_sizes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            material_id INTEGER NOT NULL,
-            name TEXT DEFAULT '',
-            width_mm REAL DEFAULT NULL,
-            height_mm REAL DEFAULT NULL,
-            thickness_mm REAL NOT NULL DEFAULT 0,
-            price_per_unit REAL NOT NULL DEFAULT 0,
-            unit_label TEXT NOT NULL DEFAULT 'sheet',
-            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
-        )
-    )");
-}
-
 bool createModelsTable(Database& db) {
     return db.execute(R"(
         CREATE TABLE IF NOT EXISTS models (
@@ -144,27 +128,6 @@ bool createProjectOpenItemsTable(Database& db) {
     )");
 }
 
-bool createCostingRecordsTable(Database& db) {
-    return db.execute(R"(
-        CREATE TABLE IF NOT EXISTS costing_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            project_id INTEGER,
-            items TEXT DEFAULT '[]',
-            subtotal REAL DEFAULT 0,
-            tax_rate REAL DEFAULT 0,
-            tax_amount REAL DEFAULT 0,
-            discount_rate REAL DEFAULT 0,
-            discount_amount REAL DEFAULT 0,
-            total REAL DEFAULT 0,
-            notes TEXT DEFAULT '',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            modified_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
-        )
-    )");
-}
-
 bool createProjectGcodeTable(Database& db) {
     return db.execute(R"(
         CREATE TABLE IF NOT EXISTS project_gcode (
@@ -175,28 +138,6 @@ bool createProjectGcodeTable(Database& db) {
             PRIMARY KEY (project_id, gcode_id),
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
             FOREIGN KEY (gcode_id) REFERENCES gcode_files(id) ON DELETE CASCADE
-        )
-    )");
-}
-
-bool createCutPlansTable(Database& db) {
-    return db.execute(R"(
-        CREATE TABLE IF NOT EXISTS cut_plans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id INTEGER,
-            name TEXT NOT NULL,
-            algorithm TEXT NOT NULL,
-            sheet_config TEXT NOT NULL,
-            parts TEXT NOT NULL,
-            result TEXT NOT NULL,
-            allow_rotation INTEGER DEFAULT 1,
-            kerf REAL DEFAULT 0,
-            margin REAL DEFAULT 0,
-            sheets_used INTEGER DEFAULT 0,
-            efficiency REAL DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            modified_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
         )
     )");
 }
@@ -333,18 +274,6 @@ void createModelsFtsTriggers(Database& db) {
     )");
 }
 
-bool createRateCategoriesTable(Database& db) {
-    return db.execute(R"(
-        CREATE TABLE IF NOT EXISTS rate_categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            rate_per_cu_unit REAL NOT NULL DEFAULT 0,
-            project_id INTEGER DEFAULT 0,
-            notes TEXT DEFAULT ''
-        )
-    )");
-}
-
 bool createToolboxToolsTable(Database& db) {
     return db.execute(R"(
         CREATE TABLE IF NOT EXISTS toolbox_tools (
@@ -382,8 +311,6 @@ bool createCncJobsTable(Database& db) {
 void createIndexes(Database& db) {
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_materials_name ON materials(name)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_materials_category ON materials(category)");
-    (void)db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_stock_sizes_material ON stock_sizes(material_id)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_models_hash ON models(hash)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_models_name ON models(name)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_models_format ON models(file_format)");
@@ -399,14 +326,10 @@ void createIndexes(Database& db) {
                      "project_open_items(project_id, source_table, source_id)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_project_open_items_source_key ON "
                      "project_open_items(project_id, source_key)");
-    (void)db.execute("CREATE INDEX IF NOT EXISTS idx_costing_records_project ON "
-                     "costing_records(project_id)");
     (void)db.execute(
         "CREATE INDEX IF NOT EXISTS idx_project_gcode_project ON project_gcode(project_id)");
     (void)db.execute(
         "CREATE INDEX IF NOT EXISTS idx_project_gcode_gcode ON project_gcode(gcode_id)");
-    (void)db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_cut_plans_project ON cut_plans(project_id)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_gcode_hash ON gcode_files(hash)");
     (void)db.execute("CREATE INDEX IF NOT EXISTS idx_gcode_name ON gcode_files(name)");
     (void)db.execute(
@@ -424,11 +347,6 @@ void createIndexes(Database& db) {
         "CREATE INDEX IF NOT EXISTS idx_cnc_jobs_started ON cnc_jobs(started_at)");
     (void)db.execute(
         "CREATE INDEX IF NOT EXISTS idx_cnc_jobs_status ON cnc_jobs(status)");
-    (void)db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_rate_categories_project ON rate_categories(project_id)");
-    (void)db.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_rate_categories_name_project ON "
-        "rate_categories(name, project_id)");
 }
 
 } // anonymous namespace
@@ -498,14 +416,11 @@ bool Schema::createTables(Database& db) {
     // Core tables
     if (!createSchemaVersionTable(db)) return false;
     if (!createMaterialsTable(db)) return false;
-    if (!createStockSizesTable(db)) return false;
     if (!createModelsTable(db)) return false;
     if (!createProjectsTable(db)) return false;
     if (!createProjectModelsTable(db)) return false;
     if (!createProjectOpenItemsTable(db)) return false;
-    if (!createCostingRecordsTable(db)) return false;
     if (!createProjectGcodeTable(db)) return false;
-    if (!createCutPlansTable(db)) return false;
 
     // G-code subsystem
     if (!createGcodeFilesTable(db)) return false;
@@ -521,7 +436,6 @@ bool Schema::createTables(Database& db) {
     createModelsFtsTriggers(db);
 
     // Auxiliary tables
-    if (!createRateCategoriesTable(db)) return false;
     if (!createToolboxToolsTable(db)) return false;
     if (!createCncJobsTable(db)) return false;
 
@@ -633,7 +547,7 @@ bool Schema::migrate(Database& db, int fromVersion) {
     }
 
     if (fromVersion < 9) {
-        // v9: project_gcode junction, cut_plans table, notes column on projects
+        // v9: project_gcode junction, notes column on projects
         const char* v9[] = {
             "CREATE TABLE IF NOT EXISTS project_gcode ("
             "project_id INTEGER NOT NULL, gcode_id INTEGER NOT NULL, "
@@ -643,21 +557,12 @@ bool Schema::migrate(Database& db, int fromVersion) {
             "FOREIGN KEY (gcode_id) REFERENCES gcode_files(id) ON DELETE CASCADE)",
             "CREATE INDEX IF NOT EXISTS idx_project_gcode_project ON project_gcode(project_id)",
             "CREATE INDEX IF NOT EXISTS idx_project_gcode_gcode ON project_gcode(gcode_id)",
-            "CREATE TABLE IF NOT EXISTS cut_plans ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, "
-            "name TEXT NOT NULL, algorithm TEXT NOT NULL, "
-            "sheet_config TEXT NOT NULL, parts TEXT NOT NULL, result TEXT NOT NULL, "
-            "allow_rotation INTEGER DEFAULT 1, kerf REAL DEFAULT 0, margin REAL DEFAULT 0, "
-            "sheets_used INTEGER DEFAULT 0, efficiency REAL DEFAULT 0, "
-            "created_at TEXT DEFAULT CURRENT_TIMESTAMP, modified_at TEXT DEFAULT CURRENT_TIMESTAMP, "
-            "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL)",
-            "CREATE INDEX IF NOT EXISTS idx_cut_plans_project ON cut_plans(project_id)",
             "ALTER TABLE projects ADD COLUMN notes TEXT DEFAULT ''",
         };
         for (const auto* sql : v9) {
             if (!db.execute(sql)) return false;
         }
-        log::info("Schema", "Added project_gcode, cut_plans tables and notes column on projects");
+        log::info("Schema", "Added project_gcode table and notes column on projects");
     }
 
     if (fromVersion < 10) {
@@ -760,48 +665,14 @@ bool Schema::migrate(Database& db, int fromVersion) {
     }
 
     if (fromVersion < 15) {
-        (void)db.execute(R"(
-            CREATE TABLE IF NOT EXISTS stock_sizes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                material_id INTEGER NOT NULL,
-                name TEXT DEFAULT '',
-                width_mm REAL DEFAULT NULL,
-                height_mm REAL DEFAULT NULL,
-                thickness_mm REAL NOT NULL DEFAULT 0,
-                price_per_unit REAL NOT NULL DEFAULT 0,
-                unit_label TEXT NOT NULL DEFAULT 'sheet',
-                FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
-            )
-        )");
-        (void)db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_stock_sizes_material ON stock_sizes(material_id)");
+        // v15 also added stock sizes and renamed cost estimates; both features
+        // have since been removed, so only the materials cleanup remains.
         // Drop legacy cost_per_board_foot column (SQLite 3.35.0+)
         (void)db.execute("ALTER TABLE materials DROP COLUMN cost_per_board_foot");
-        // Rename cost_estimates -> costing_records (SQLite 3.25.0+)
-        (void)db.execute("ALTER TABLE cost_estimates RENAME TO costing_records");
-        (void)db.execute("DROP INDEX IF EXISTS idx_cost_estimates_project");
-        (void)db.execute("CREATE INDEX IF NOT EXISTS idx_costing_records_project ON costing_records(project_id)");
-        log::info("Schema", "v15: Added stock_sizes table, removed cost_per_board_foot, renamed cost_estimates to costing_records");
+        log::info("Schema", "v15: Removed cost_per_board_foot from materials");
     }
 
-    if (fromVersion < 16) {
-        // project_id=0 means global default (no FK for sentinel value)
-        (void)db.execute(R"(
-            CREATE TABLE IF NOT EXISTS rate_categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                rate_per_cu_unit REAL NOT NULL DEFAULT 0,
-                project_id INTEGER DEFAULT 0,
-                notes TEXT DEFAULT ''
-            )
-        )");
-        (void)db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_rate_categories_project ON rate_categories(project_id)");
-        (void)db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_rate_categories_name_project ON "
-            "rate_categories(name, project_id)");
-        log::info("Schema", "v16: Added rate_categories table");
-    }
+    // v16 added rate_categories for project costing, which has been removed.
 
     if (!migrateProjectSessionSchema(db, fromVersion)) return false;
 

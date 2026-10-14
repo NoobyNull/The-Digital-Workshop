@@ -13,12 +13,9 @@
 #include "app/project_resume_file_store.h"
 #include "core/cnc/cnc_controller.h"
 #include "core/config/config.h"
-#include "core/database/cost_repository.h"
-#include "core/database/cut_plan_repository.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/model_repository.h"
 #include "core/materials/material_manager.h"
-#include "core/optimizer/cut_list_file.h"
 #include "core/paths/path_resolver.h"
 #include "core/project/project.h"
 #include "core/project/project_directory.h"
@@ -27,8 +24,6 @@
 #include "modules/workshop/project_item_load_guard.h"
 #include "modules/workshop/project_resume.h"
 #include "modules/workshop/project_workshop_controller.h"
-#include "ui/panels/cost_panel.h"
-#include "ui/panels/cut_optimizer_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/project_panel.h"
@@ -371,36 +366,7 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
         }
         return ProjectItemContentStatus::Unavailable;
     case ProjectOpenItemType::Cost:
-        if (sourceId <= 0 || !m_costRepo || !m_costRepo->findById(sourceId))
-            return ProjectItemContentStatus::Unavailable;
-        if (auto* costs = m_uiManager->costPanel()) {
-            m_uiManager->openWindow("project_costing");
-            costs->selectRecord(sourceId);
-            return ProjectItemContentStatus::Opened;
-        }
-        return ProjectItemContentStatus::Unavailable;
-    case ProjectOpenItemType::CutPlan: {
-        if (sourceId <= 0)
-            return ProjectItemContentStatus::Unavailable;
-        const auto record = m_cutPlanRepo ? m_cutPlanRepo->findById(sourceId) : std::nullopt;
-        if (!record || !m_cutListFile || !m_uiManager->cutOptimizerPanel())
-            return ProjectItemContentStatus::Unavailable;
-        CutListFile::LoadResult result;
-        result.name = record->name;
-        result.algorithm = record->algorithm;
-        result.allowRotation = record->allowRotation;
-        result.kerf = record->kerf;
-        result.margin = record->margin;
-        if (!record->sheetConfigJson.empty())
-            result.sheet = CutPlanRepository::jsonToSheet(record->sheetConfigJson);
-        if (!record->partsJson.empty())
-            result.parts = CutPlanRepository::jsonToParts(record->partsJson);
-        if (!record->resultJson.empty())
-            result.result = CutPlanRepository::jsonToCutPlan(record->resultJson);
-        m_uiManager->openWindow("cut_optimizer");
-        m_uiManager->cutOptimizerPanel()->loadCutPlan(result);
-        return ProjectItemContentStatus::Opened;
-    }
+    case ProjectOpenItemType::CutPlan:
     case ProjectOpenItemType::Stock:
     case ProjectOpenItemType::Tool:
     case ProjectOpenItemType::Job:

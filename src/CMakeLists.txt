@@ -60,7 +60,6 @@ set(DW_SOURCES
     core/utils/string_utils.cpp
     core/utils/lmstudio_http.cpp
     core/utils/unit_conversion.cpp
-    core/utils/board_foot.cpp
 
     # Threading
     core/threading/main_thread_queue.cpp
@@ -99,10 +98,6 @@ set(DW_SOURCES
     core/database/project_repository_open_items.cpp
     core/database/gcode_repository.cpp
     core/database/job_repository.cpp
-    core/database/cost_repository.cpp
-    core/database/stock_size_repository.cpp
-    core/database/rate_category_repository.cpp
-    core/database/cut_plan_repository.cpp
     core/database/tool_database.cpp
     core/database/tool_database_machine_material.cpp
     core/database/tool_database_schema.cpp
@@ -134,8 +129,6 @@ set(DW_SOURCES
     core/project/gcode_project_context.cpp
     core/project/project_open_item_warnings.cpp
     core/project/project_directory.cpp
-    core/project/project_costing_io.cpp
-    core/project/costing_engine.cpp
 
     # Storage
     core/storage/storage_manager.cpp
@@ -189,15 +182,6 @@ set(DW_SOURCES
     core/cnc/machine_units.cpp
     core/cnc/macro_manager.cpp
     core/cnc/gamepad_input.cpp
-
-    # Optimizer
-    core/optimizer/cut_optimizer.cpp
-    core/optimizer/cut_list_file.cpp
-    core/optimizer/bin_packer.cpp
-    core/optimizer/guillotine.cpp
-    core/optimizer/waste_breakdown.cpp
-    core/optimizer/multi_stock_optimizer.cpp
-    core/optimizer/clo_result_file.cpp
 
     # Carve (Direct Carve pipeline)
     core/carve/model_fitter.cpp
@@ -254,7 +238,6 @@ set(DW_SOURCES
     ui/panels/log_viewer_panel.cpp
     ui/panels/materials_panel.cpp
     ui/panels/materials_panel_dialogs.cpp
-    ui/panels/materials_panel_stock.cpp
     ui/panels/properties_panel.cpp
     ui/panels/project_panel.cpp
     ui/panels/project_panel_lifecycle.cpp
@@ -262,8 +245,6 @@ set(DW_SOURCES
     ui/panels/gcode_panel.cpp
     ui/panels/gcode_panel_files.cpp
     ui/panels/gcode_panel_run_truth.cpp
-    ui/panels/cost_panel.cpp
-    ui/panels/cut_optimizer_panel.cpp
     ui/panels/start_page.cpp
     ui/panels/tool_browser_panel.cpp
     ui/panels/cnc_status_panel.cpp

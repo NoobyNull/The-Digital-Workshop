@@ -42,20 +42,26 @@ TEST(WindowCatalog, HomePreservesTheStartPageLayoutIdentity) {
     EXPECT_EQ(canonicalWindowKey("home"), "start_page");
 }
 
-TEST(WindowCatalog, ProjectCostingPreservesItsLegacyLayoutAlias) {
-    const auto* entry = findWindowCatalogEntry("cost_estimator");
+TEST(WindowCatalog, MachineSettingsPreservesItsLegacyLayoutAliases) {
+    const auto* entry = findWindowCatalogEntry("firmware_settings");
     ASSERT_NE(entry, nullptr);
-    EXPECT_EQ(entry->key, "project_costing");
-    EXPECT_EQ(entry->layoutKey, "project_costing");
+    EXPECT_EQ(entry->key, "machine_settings");
+    EXPECT_EQ(entry->layoutKey, "cnc_settings");
+}
+
+TEST(WindowCatalog, RemovedPanelsHaveNoCatalogEntry) {
+    EXPECT_EQ(findWindowCatalogEntry("cut_optimizer"), nullptr);
+    EXPECT_EQ(findWindowCatalogEntry("project_costing"), nullptr);
+    EXPECT_EQ(findWindowCatalogEntry("cost_estimator"), nullptr);
 }
 
 TEST(WindowCatalog, LegacyVisibilityKeysResolveWithoutRewritingCustomPreset) {
     LayoutPreset custom;
     custom.name = "Legacy aliases";
-    custom.visibility = {{"cost_estimator", true}, {"home", false}};
+    custom.visibility = {{"firmware_settings", true}, {"home", false}};
     const auto before = custom.toJsonString();
 
-    EXPECT_EQ(layoutPresetVisibility(custom, "project_costing"), true);
+    EXPECT_EQ(layoutPresetVisibility(custom, "machine_settings"), true);
     EXPECT_EQ(layoutPresetVisibility(custom, "start_page"), false);
     EXPECT_EQ(custom.toJsonString(), before);
 }

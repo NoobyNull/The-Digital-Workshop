@@ -242,10 +242,10 @@ TEST(Database, SchemaMigration_v8_to_v9) {
         "SELECT name FROM sqlite_master WHERE type='table' AND name='project_gcode'");
     EXPECT_TRUE(stmt1.step());
 
-    // Verify cut_plans table exists
+    // Cut plans were removed with the Cut Optimizer; migration no longer adds them
     auto stmt2 = db.prepare(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='cut_plans'");
-    EXPECT_TRUE(stmt2.step());
+    EXPECT_FALSE(stmt2.step());
 
     // Verify notes column was added to projects
     ASSERT_TRUE(db.execute("INSERT INTO projects (name, notes) VALUES ('test', 'some notes')"));

@@ -41,15 +41,11 @@ class ImportQueue;
 class MainThreadQueue;
 class StorageManager;
 class MaterialManager;
-class CostRepository;
-class RateCategoryRepository;
 class ModelRepository;
 class GCodeRepository;
-class CutPlanRepository;
 class LMStudioMaterialService;
 class LMStudioDescriptorService;
 class ProjectExportManager;
-class CutListFile;
 class CncController;
 class JobRepository;
 class ToolDatabase;
@@ -253,16 +249,6 @@ class Application {
     // Repositories for project asset navigator
     std::unique_ptr<ModelRepository> m_modelRepo;
     std::unique_ptr<GCodeRepository> m_gcodeRepo;
-    std::unique_ptr<CutPlanRepository> m_cutPlanRepo;
-
-    // File-based cut list persistence
-    std::unique_ptr<CutListFile> m_cutListFile;
-
-    // Cost estimation repository
-    std::unique_ptr<CostRepository> m_costRepo;
-
-    // Rate category repository (consumable/tool cost rates)
-    std::unique_ptr<RateCategoryRepository> m_rateCatRepo;
 
     // LM Studio AI material generation service
     std::unique_ptr<LMStudioMaterialService> m_lmStudioService;

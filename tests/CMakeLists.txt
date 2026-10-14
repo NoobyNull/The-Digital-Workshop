@@ -10,7 +10,6 @@ set(DW_TEST_SOURCES
     test_hash.cpp
     test_gcode_parser.cpp
     test_gcode_document.cpp
-    test_optimizer.cpp
     # Tier 0 — added in first pass
     test_string_utils.cpp
     test_file_utils.cpp
@@ -68,11 +67,6 @@ set(DW_TEST_SOURCES
     test_app_paths.cpp
     test_path_resolver.cpp
     test_network_location.cpp
-    test_cost_repository.cpp
-    test_stock_size_repository.cpp
-    test_rate_category_repository.cpp
-    test_project_costing_io.cpp
-    test_cut_plan_repository.cpp
     test_gcode_repository.cpp
     test_material_archive.cpp
     test_material_manager.cpp
@@ -130,11 +124,6 @@ set(DW_TEST_SOURCES
     test_direct_carve_run_effect_adapter.cpp
     test_carve_preparation_adapter.cpp
     test_unit_conversion.cpp
-    test_costing_engine.cpp
-    test_board_foot.cpp
-    test_waste_breakdown.cpp
-    test_multi_stock_optimizer.cpp
-    test_clo_result_file.cpp
     # Tier 2 — lint/format compliance (no GL/SDL required)
     test_lint_compliance.cpp
     # Tier 3 — workspace tests (no GL/SDL required)
@@ -169,7 +158,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/utils/string_utils.cpp
     ${CMAKE_SOURCE_DIR}/src/core/utils/file_utils.cpp
     ${CMAKE_SOURCE_DIR}/src/core/utils/unit_conversion.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/utils/board_foot.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh_repair.cpp
@@ -215,12 +203,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/cnc/unified_settings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/machine_units.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/macro_manager.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/cut_optimizer.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/bin_packer.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/guillotine.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/waste_breakdown.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/multi_stock_optimizer.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/clo_result_file.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/connection_pool.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/schema.cpp
@@ -233,12 +215,8 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/database/project_repository_open_item_sync.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/project_repository_open_item_validation.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/project_repository_open_items.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/cost_repository.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/stock_size_repository.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/rate_category_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/gcode_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/job_repository.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/cut_plan_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/tool_database.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/tool_database_machine_material.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/tool_database_schema.cpp
@@ -254,8 +232,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/project/gcode_project_context.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_open_item_warnings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_directory.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/project/project_costing_io.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/project/costing_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/export/model_exporter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/archive/archive.cpp
     ${CMAKE_SOURCE_DIR}/src/core/materials/material_archive.cpp
