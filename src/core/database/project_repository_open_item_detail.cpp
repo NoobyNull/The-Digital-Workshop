@@ -170,12 +170,13 @@ void pruneOpenItemsForProject(Database& database, i64 projectId) {
         (void)pruneJobs.execute();
     }
 
-    // Stock sizes, cut plans, and cost estimates were removed with costing
-    // and the Cut Optimizer. Their index rows no longer resolve to anything.
+    // Item types retired with costing, the Cut Optimizer, and the Project
+    // Plan. Schema v19 removes them once; this keeps any that reappear (for
+    // example from an older client sharing the database) out of the project.
     auto pruneRetired = database.prepare(R"(
         DELETE FROM project_open_items
         WHERE project_id = ?
-          AND item_type IN ('stock', 'cut_plan', 'cost')
+          AND item_type IN ('stock', 'cut_plan', 'cost', 'labor', 'consumable', 'zeroing')
     )");
     if (pruneRetired.isValid() && pruneRetired.bindInt(1, projectId)) {
         (void)pruneRetired.execute();

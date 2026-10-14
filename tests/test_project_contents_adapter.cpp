@@ -89,14 +89,12 @@ TEST(ProjectContentsAdapter, OrphansAndCyclesStayVisibleAtTheRoot) {
     for (const auto& row : rows) EXPECT_FALSE(row.parent.has_value()) << row.label;
 }
 
-TEST(ProjectContentsAdapter, DropsForeignProjectItemsAndRetiredTypes) {
+TEST(ProjectContentsAdapter, DropsItemsFromAnotherProject) {
     auto foreign = item(1, ProjectOpenItemType::Model, "Someone else's");
     foreign.projectId = kProject + 1;
     const std::vector<ProjectOpenItem> items = {
         foreign,
         item(2, ProjectOpenItemType::Model, "Mine"),
-        item(3, ProjectOpenItemType::Cost, "Old estimate"),
-        item(4, ProjectOpenItemType::CutPlan, "Old cut plan"),
     };
 
     const auto rows = dw::makeProjectContents(workshop::ProjectId(kProject), items);

@@ -58,8 +58,8 @@ class ToolpathIdentity final {
     std::string m_contentFingerprint;
 };
 
-// The setup identity is the only bridge from Prepare Carve into Run. It is a
-// value snapshot: RunCoordinator receives no preparation flow or repository.
+// The setup identity is the only bridge from a project's CAM setup into Run.
+// It is a value snapshot: RunCoordinator receives no CAM state or repository.
 class RunSetupIdentity final {
   public:
     RunSetupIdentity(carve_preparation::PrepareCarvePin preparation,

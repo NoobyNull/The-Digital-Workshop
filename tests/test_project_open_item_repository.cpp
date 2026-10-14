@@ -110,23 +110,6 @@ TEST_F(ProjectOpenItemRepoTest, InsertOpenItem_PersistsIntentAndSnapshot) {
     EXPECT_EQ(found->snapshotJson, R"({"hash":"abc123","bounds":{"x":10}})");
 }
 
-TEST_F(ProjectOpenItemRepoTest, InsertOpenItem_PersistsZeroingType) {
-    auto projectId = insertProject("Zeroing Type Project");
-    auto item = makeItem(projectId, "Zeroing: Sienci AutoZero");
-    item.itemType = dw::ProjectOpenItemType::Zeroing;
-    item.sourceTable.clear();
-    item.sourceId.reset();
-    item.sourceKey = "direct_carve:relief:zeroing";
-
-    auto id = m_repo->insertOpenItem(item);
-
-    ASSERT_TRUE(id.has_value());
-    auto found = m_repo->findOpenItemById(id.value());
-    ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->itemType, dw::ProjectOpenItemType::Zeroing);
-    EXPECT_EQ(found->displayName, "Zeroing: Sienci AutoZero");
-}
-
 TEST_F(ProjectOpenItemRepoTest, ListOpenItemsForProject_OrdersParentsBeforeChildren) {
     auto projectId = insertProject("Tree Project");
 
@@ -385,9 +368,10 @@ TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_CreatesMaterialItemsFo
               std::string::npos);
 }
 
-TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_PrunesRetiredCostingItemTypes) {
+TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_PrunesRetiredItemTypes) {
     auto projectId = insertProject("Costed Before Removal");
-    for (const char* retiredType : {"stock", "cut_plan", "cost"}) {
+    for (const char* retiredType :
+         {"stock", "cut_plan", "cost", "labor", "consumable", "zeroing"}) {
         auto stmt = m_db.prepare(R"(
             INSERT INTO project_open_items (project_id, item_type, status, display_name)
             VALUES (?, ?, 'ready', 'Retired')
@@ -396,7 +380,7 @@ TEST_F(ProjectOpenItemRepoTest, EnsureOpenItemsForProject_PrunesRetiredCostingIt
         ASSERT_TRUE(stmt.bindText(2, retiredType));
         ASSERT_TRUE(stmt.execute());
     }
-    ASSERT_EQ(m_repo->listOpenItemsForProject(projectId).size(), 3u);
+    ASSERT_EQ(m_repo->listOpenItemsForProject(projectId).size(), 6u);
 
     EXPECT_EQ(m_repo->ensureOpenItemsForProject(projectId), 0);
     EXPECT_TRUE(m_repo->listOpenItemsForProject(projectId).empty());

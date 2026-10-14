@@ -364,14 +364,8 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
             return ProjectItemContentStatus::Opened;
         }
         return ProjectItemContentStatus::Unavailable;
-    case ProjectOpenItemType::Cost:
-    case ProjectOpenItemType::CutPlan:
-    case ProjectOpenItemType::Stock:
     case ProjectOpenItemType::Tool:
     case ProjectOpenItemType::Job:
-    case ProjectOpenItemType::Labor:
-    case ProjectOpenItemType::Consumable:
-    case ProjectOpenItemType::Zeroing:
         // These item types currently have no dedicated detail surface. Restoring
         // their project identity is still a truthful, useful resume result.
         return ProjectItemContentStatus::IdentityOnly;

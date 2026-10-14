@@ -5,6 +5,9 @@
 #include "core/database/database.h"
 #include "core/database/schema.h"
 
+#include <string>
+#include <vector>
+
 namespace {
 
 // Fixture: provides an in-memory database per test
@@ -235,7 +238,7 @@ TEST(Database, SchemaMigration_v8_to_v9) {
     ASSERT_TRUE(dw::Schema::initialize(db));
 
     // Verify version is now current
-    EXPECT_EQ(dw::Schema::getVersion(db), 18);
+    EXPECT_EQ(dw::Schema::getVersion(db), 19);
 
     // Verify project_gcode table exists
     auto stmt1 = db.prepare(
@@ -252,6 +255,37 @@ TEST(Database, SchemaMigration_v8_to_v9) {
     auto stmt3 = db.prepare("SELECT notes FROM projects WHERE name = 'test'");
     ASSERT_TRUE(stmt3.step());
     EXPECT_EQ(stmt3.getText(0), "some notes");
+}
+
+TEST(Database, SchemaMigration_v19RemovesRetiredProjectItems) {
+    dw::Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    ASSERT_TRUE(db.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)"));
+    ASSERT_TRUE(db.execute("INSERT INTO schema_version (version) VALUES (18)"));
+    ASSERT_TRUE(db.execute(R"(
+        CREATE TABLE project_open_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            item_type TEXT NOT NULL,
+            display_name TEXT NOT NULL DEFAULT ''
+        )
+    )"));
+    for (const char* type : {"model", "gcode", "operation", "stock", "cut_plan", "cost", "labor",
+                             "consumable", "zeroing"}) {
+        auto insert = db.prepare(
+            "INSERT INTO project_open_items (project_id, item_type) VALUES (1, ?)");
+        ASSERT_TRUE(insert.bindText(1, type));
+        ASSERT_TRUE(insert.execute());
+    }
+
+    ASSERT_TRUE(dw::Schema::initialize(db));
+    EXPECT_EQ(dw::Schema::getVersion(db), 19);
+
+    std::vector<std::string> remaining;
+    auto query = db.prepare("SELECT item_type FROM project_open_items ORDER BY id");
+    while (query.step())
+        remaining.push_back(query.getText(0));
+    EXPECT_EQ(remaining, (std::vector<std::string>{"model", "gcode", "operation"}));
 }
 
 TEST(Database, SchemaMigration_v17PersistsTemporaryProjectOwnership) {
@@ -273,7 +307,7 @@ TEST(Database, SchemaMigration_v17PersistsTemporaryProjectOwnership) {
     ASSERT_TRUE(db.execute("INSERT INTO projects (name) VALUES ('Legacy')"));
 
     ASSERT_TRUE(dw::Schema::initialize(db));
-    EXPECT_EQ(dw::Schema::getVersion(db), 18);
+    EXPECT_EQ(dw::Schema::getVersion(db), 19);
 
     auto query = db.prepare("SELECT temporary FROM projects WHERE name = 'Legacy'");
     ASSERT_TRUE(query.step());

@@ -45,10 +45,8 @@ std::string ProjectDirectory::sanitizeName(const std::string& raw) {
 bool ProjectDirectory::createSubdirs() {
     bool ok = true;
     ok &= file::createDirectories(modelsDir());
-    ok &= file::createDirectories(heightmapsDir());
     ok &= file::createDirectories(gcodeDir());
     ok &= file::createDirectories(imagesDir());
-    ok &= file::createDirectories(costingDir());
     return ok;
 }
 
@@ -62,7 +60,6 @@ bool ProjectDirectory::create(const Path& root,
     m_name = name;
     m_description = description;
     m_models.clear();
-    m_heightmaps.clear();
     m_gcodeFiles.clear();
 
     if (!file::createDirectories(m_root)) {
@@ -118,16 +115,6 @@ bool ProjectDirectory::load(const Path& root, bool restoreSubdirectories) {
             }
         }
 
-        m_heightmaps.clear();
-        if (j.contains("heightmaps")) {
-            for (const auto& h : j["heightmaps"]) {
-                ProjectHeightmapEntry e;
-                e.filename = h.value("filename", "");
-                e.resolutionMmPerPx = h.value("resolutionMmPerPx", 0.0f);
-                m_heightmaps.push_back(std::move(e));
-            }
-        }
-
         m_gcodeFiles.clear();
         if (j.contains("gcode")) {
             for (const auto& g : j["gcode"]) {
@@ -165,12 +152,6 @@ bool ProjectDirectory::save() {
     j["models"] = nlohmann::json::array();
     for (const auto& m : m_models) {
         j["models"].push_back({{"filename", m.filename}, {"hash", m.hash}});
-    }
-
-    j["heightmaps"] = nlohmann::json::array();
-    for (const auto& h : m_heightmaps) {
-        j["heightmaps"].push_back(
-            {{"filename", h.filename}, {"resolutionMmPerPx", h.resolutionMmPerPx}});
     }
 
     j["gcode"] = nlohmann::json::array();
@@ -267,19 +248,6 @@ bool ProjectDirectory::addGCodeFile(const Path& sourcePath, const std::string& t
 
     m_gcodeFiles.push_back({destName, toolDescription});
     return true;
-}
-
-// --- addHeightmap ---
-
-void ProjectDirectory::addHeightmap(const std::string& filename, f32 resolutionMmPerPx) {
-    // Update existing entry or add new
-    for (auto& h : m_heightmaps) {
-        if (h.filename == filename) {
-            h.resolutionMmPerPx = resolutionMmPerPx;
-            return;
-        }
-    }
-    m_heightmaps.push_back({filename, resolutionMmPerPx});
 }
 
 // --- addGCode ---

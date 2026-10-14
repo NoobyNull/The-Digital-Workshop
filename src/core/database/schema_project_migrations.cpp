@@ -47,6 +47,18 @@ bool migrateProjectSessionSchema(Database& database, int fromVersion) {
         }
         log::info("Schema", "v18: Persisted temporary project ownership");
     }
+
+    if (fromVersion < 19) {
+        // Costing, the Cut Optimizer, and the Project Plan were removed. Their
+        // project index rows point at nothing the app can open; the source
+        // tables themselves are left untouched. Best-effort: a database that
+        // predates project_open_items has nothing to remove.
+        (void)database.execute(R"(
+            DELETE FROM project_open_items
+            WHERE item_type IN ('stock', 'cut_plan', 'cost', 'labor', 'consumable', 'zeroing')
+        )");
+        log::info("Schema", "v19: Removed project items for retired features");
+    }
     return true;
 }
 

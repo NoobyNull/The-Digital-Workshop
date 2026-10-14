@@ -7,7 +7,7 @@
 namespace dw {
 namespace {
 
-std::optional<ProjectContentKind> contentKind(ProjectOpenItemType type) {
+ProjectContentKind contentKind(ProjectOpenItemType type) {
     switch (type) {
     case ProjectOpenItemType::Model: return ProjectContentKind::Design;
     case ProjectOpenItemType::Operation: return ProjectContentKind::Setup;
@@ -15,15 +15,8 @@ std::optional<ProjectContentKind> contentKind(ProjectOpenItemType type) {
     case ProjectOpenItemType::Tool: return ProjectContentKind::Tool;
     case ProjectOpenItemType::Gcode: return ProjectContentKind::GCode;
     case ProjectOpenItemType::Job: return ProjectContentKind::Run;
-    case ProjectOpenItemType::Stock:
-    case ProjectOpenItemType::CutPlan:
-    case ProjectOpenItemType::Cost:
-    case ProjectOpenItemType::Labor:
-    case ProjectOpenItemType::Consumable:
-    case ProjectOpenItemType::Zeroing:
-        return std::nullopt;
     }
-    return std::nullopt;
+    return ProjectContentKind::Design;
 }
 
 const char* statusLabel(ProjectContentKind kind, ProjectOpenItemStatus status) {
@@ -51,7 +44,7 @@ ProjectContents makeProjectContents(workshop::ProjectId project,
     std::vector<const ProjectOpenItem*> shown;
     std::unordered_set<i64> shownIds;
     for (const auto& item : items) {
-        if (item.projectId != project.value || !contentKind(item.itemType)) continue;
+        if (item.projectId != project.value) continue;
         if (shownIds.insert(item.id).second) shown.push_back(&item);
     }
 
@@ -70,7 +63,7 @@ ProjectContents makeProjectContents(workshop::ProjectId project,
     rows.reserve(shown.size());
     std::unordered_set<i64> emitted;
     const auto emit = [&](const ProjectOpenItem& item, bool asRoot) {
-        const auto kind = *contentKind(item.itemType);
+        const auto kind = contentKind(item.itemType);
         ProjectContentRow row;
         row.ref = {project, workshop::ProjectItemId(item.id)};
         if (!asRoot && item.parentItemId)
