@@ -1,44 +1,59 @@
 # Digital Workshop
 
-A project-centered desktop workshop for CNC hobbyists. It keeps the active
-project, reusable Design Library, preparation steps, toolpath preview, and
-protected machine run connected in one offline application.
+A desktop workshop for CNC woodworkers with three jobs: manage your design
+library, turn designs into G-code (CAM), and send that G-code to the machine.
+Projects tie them together the way a 3D-printing slicer project does: the
+designs, the CAM setups made from them, the G-code those setups produced, and
+the runs of that G-code.
 
 Built with C++17, OpenGL 3.3, and Dear ImGui. Runs on Linux, Windows, and macOS.
 
 ## Why
 
-A typical CNC woodworking workflow touches half a dozen disconnected tools: a slicer for CAM, a separate G-code viewer to sanity-check toolpaths, a spreadsheet to track material costs, a folder full of STL files with cryptic names, and maybe a cut-list optimizer that only runs on Windows. None of them talk to each other. You end up context-switching between apps, re-entering dimensions, and mentally stitching together information that should live in one place.
+A typical CNC woodworking workflow touches several disconnected tools: a folder full of STL files with cryptic names, a CAM program, a separate G-code viewer to sanity-check toolpaths, and a sender to run the job. None of them talk to each other, so you re-enter dimensions and mentally stitch together information that should live in one place.
 
-Digital Workshop exists to collapse that into a single workspace. Import your
-models, preview the toolpaths your CAM software generated, figure out how to cut
-the parts from the stock you have on hand, and keep it organized by project.
-The Design Library stays a reusable catalog; adding or previewing a design is an
-explicit choice, so browsing cannot silently change the project.
+Digital Workshop collapses that into one workspace: find the design, set up
+the cut, check the toolpath, and run it, with every piece kept together in the
+project.
 
 It's also fully offline and open source. Your files stay on your machine, the database is a single SQLite file, and every dependency uses a permissive license. There's no account to create, no telemetry, and no feature that stops working if a server goes down.
 
 ## Features
 
-### Project-Centered Workshop
-- Home is the one place to create, open, resume, or start a project from a Library design
-- A persistent context bar shows the active project, selected item or Library preview, current area, and Back to Project
-- One six-stage Project Plan leads through Design & Size, Material & Blank, Choose Tool, Carve Preview, Machine Setup, and Review & Run
-- CAM is being rebuilt on the PureCutCNC engine for v0.8.0; external G-code workflows (import, preview, and Run) are unaffected in the meantime
-- Run CNC accepts an immutable, preflight-checked package and protects the active project with pause, resume, abort, and emergency-stop priority
-- Guided Workshop and Advanced Workbench share the same project data and can be selected from the Experience menu
-
-The Guided carve flow is part of the v0.8.0 CAM rebuild on the PureCutCNC
-engine; it is not available in the current build. Advanced Workbench remains
-the default experience.
-
-### 3D Model Library
+### Design Library
 - Import STL, OBJ, and 3MF files with drag-and-drop (including recursive folders)
 - Content-addressable storage with SHA-based deduplication
 - Automatic thumbnail generation via offscreen OpenGL rendering
 - Full-text search across names, tags, filenames, and categories
 - Two-level category hierarchy, batch operations, and multi-select
-- Graph-based relationship queries between models, materials, and projects
+- Library maintenance, missing-file recovery, and workspace relocation
+- Optional AI-assisted tagging via a local LM Studio or Ollama model
+
+### Projects
+- Organized like a slicer project: each design, its CAM setups, the G-code each
+  setup produced, and the runs of that G-code
+- G-code whose design or setup changed since it was generated reads **Out of
+  date**; a run cut short reads **Interrupted**
+- Home is the one place to create, open, resume, or start a project from a Library design
+- Preview Library designs without adding them, then return to the exact prior project selection
+- Export projects as portable `.dwproj` ZIP archives with models and G-code included
+- Full round-trip: export on one machine, import on another with deduplication
+
+### CAM
+- CAM is being rebuilt on the [PureCutCNC](https://github.com/PureCutCNC/purecutcnc)
+  toolpath engine, which runs as a local sidecar process. Digital Workshop uses
+  it for toolpath math only; the CAM workspace itself is native. See
+  `.planning/WORKSHOP-SCOPE.md` for the plan.
+- External G-code from any CAM program imports, previews, and runs today
+
+### Sender and Machine Control
+- GRBL-family controllers over USB serial or TCP, plus a built-in virtual CNC
+- Real-time status (position, feed rate, spindle speed, overrides) and feed, rapid, and spindle overrides
+- Jog (keyboard and gamepad), MDI console, work zero and coordinate systems, macros
+- Firmware settings, machine profiles with per-axis configuration, preflight checks, and safety controls
+- Job progress, history, and resume after interruption
+- A protected Run package keyed on the exact setup and G-code fingerprint, ready
+  for CAM output; the Sender streams G-code files directly today
 
 ### G-code Analysis
 - Parses G0/G1/G2/G3 (linear, rapid, arc), coordinate modes, tool changes, and spindle commands
@@ -51,28 +66,13 @@ the default experience.
 - OpenGL 3.3 Core Profile renderer with orbit camera and ViewCube navigation
 - Adjustable directional lighting, wireframe mode, grid, and axis indicator
 - Material texture mapping with planar UV projection
-- Color-coded 3D toolpath rendering as extruded quads
+- Color-coded 3D toolpath rendering with simulation playback
 
-### Materials System
+### Materials
 - 32 built-in material archives covering hardwoods, softwoods, composites, metals, and plastics
-- Two-source loading: user materials override bundled defaults, bundled materials load directly from the install directory
-- Material properties: Janka hardness, feed rate, spindle speed, depth of cut, cost per board-foot, grain direction
+- Material properties used by feeds and speeds: Janka hardness, feed rate, spindle speed, depth of cut, grain direction
 - Bundled materials can be hidden but not deleted; user materials are fully removable
 - `.dwmat` archive format for sharing materials between users
-- Optional AI-assisted tagging and material profile generation via local LM Studio
-
-### 2D Cut Optimization
-- First-Fit Decreasing and Guillotine packing algorithms
-- Per-part rotation and grain direction constraints
-- Cost breakdown estimation with efficiency metrics
-- Cut plans saved to database and linked to projects
-
-### Project Management
-- Associate models, G-code, materials, cut plans, cost estimates, and notes with durable project/item identity
-- Hierarchical Project Plan with one deterministic Continue action and visible blockers
-- Preview Library assets without adding them, then return to the exact prior project selection
-- Export projects as portable `.dwproj` ZIP archives with all assets included
-- Full round-trip: export on one machine, import on another with deduplication
 
 ### CNC Tool Database
 - Vectric-compatible `.vtdb` format — tools can be shared with Aspire/VCarve
@@ -87,13 +87,6 @@ the default experience.
 - Machine rigidity derating by drive type: belt (80%), lead screw (90%), ball screw/rack & pinion (100%)
 - Automatic power limiting — reduces depth of cut when spindle wattage is exceeded
 - One-click "Apply to Cutting Data" writes calculated values directly to the tool database
-
-### GRBL CNC Controller
-- Serial port communication with RX buffer accounting (128-byte buffer)
-- Feed, rapid, and spindle override commands
-- Real-time machine status polling (position, feed rate, spindle speed, overrides)
-- Machine profile dialog for per-axis configuration
-- Protected Run CNC handoff with exact toolpath fingerprint, preflight facts, authoritative run lock, progress, history, and terminal cleanup
 
 ### Settings
 - Companion `dw_settings` application with hot-reload (no restart needed)
@@ -189,10 +182,10 @@ Or use the packaging scripts to create a distributable installer:
 ./build/tests/dw_tests
 ```
 
-1,496 tests cover loaders, parsers, database repositories, project
-lifecycle and restart resume, contextual Library navigation, Project Plan
-derivation, pinned preparation, protected Run coordination, layout migration,
-viewport identity, the optimizer, tool calculator, and import/export pipelines.
+1,258 tests cover loaders, parsers, database repositories,
+project lifecycle and restart resume, project contents, contextual Library
+navigation, pinned CAM setups, protected Run coordination, layout migration,
+viewport identity, the tool calculator, and import/export pipelines.
 
 The render-independent workflow boundaries also have focused test executables:
 
@@ -200,7 +193,6 @@ The render-independent workflow boundaries also have focused test executables:
 ./build/tests/dw_workshop_core_tests
 ./build/tests/dw_project_session_tests
 ./build/tests/dw_design_library_tests
-./build/tests/dw_project_plan_tests
 ./build/tests/dw_carve_preparation_tests
 ./build/tests/dw_run_coordination_tests
 ./build/tests/dw_viewport_presentation_tests
@@ -225,8 +217,6 @@ not cross the 750-line hard ceiling.
 | Option | Default | Description |
 |--------|---------|-------------|
 | `DW_BUILD_TESTS` | `ON` | Build the test suite |
-| `DW_BUILD_TOOLS` | `OFF` | Build developer tools (matgen, texgen) |
-| `DW_ENABLE_GRAPHQLITE` | `ON` | Enable Cypher graph queries via GraphQLite |
 
 ## Architecture
 
@@ -234,21 +224,20 @@ not cross the 750-line hard ceiling.
 src/
   app/          Application shell, window management, workspace wiring
   managers/     UIManager, FileIOManager, ConfigManager
-  modules/      UI-free project, Library, plan, preparation, run, and viewport policy
+  modules/      UI-free project session, Library, setup identity, run, and viewport policy
   core/
     archive/    ZIP archive wrapper (miniz)
     config/     Configuration, input bindings, config hot-reload
     database/   SQLite (WAL mode), connection pool, schema, repositories
     export/     .dwproj export/import
+    cam/        PureCutCNC engine sidecar client and runtime
     cnc/        CNC controller, tool calculator, serial port
     gcode/      G-code parser, analyzer, machine profiles
-    graph/      Cypher queries via GraphQLite
     import/     Background import queue with thread pool
     library/    Library manager
     loaders/    STL, OBJ, 3MF, G-code, texture loaders
     materials/  Material types, manager, archives, AI generation
     mesh/       Mesh data structures, content hashing
-    optimizer/  Bin packing + guillotine cut optimization
     paths/      Application paths, path resolver
     storage/    Content-addressable blob store
     threading/  Thread pool, main-thread dispatch queue
@@ -256,7 +245,7 @@ src/
   render/       OpenGL 3.3 renderer, camera, shaders, framebuffers
   ui/
     dialogs/    File, message, lighting, machine profile dialogs
-    panels/     Viewport, library, materials, properties, project, G-code, cost, cut optimizer, tool browser
+    panels/     Viewport, library, materials, properties, project, G-code, CAM, sender, tool browser
     widgets/    Status bar, toast notifications, binding recorder
 ```
 
@@ -273,11 +262,10 @@ All dependencies are fetched automatically via CMake FetchContent (no vcpkg or C
 | GLAD | 2.0.6 | OpenGL 3.3 Core loader |
 | GLM | 1.0.1 | Math |
 | SQLite3 | 3.38.2 | Database |
-| GraphQLite | 0.3.5 | Cypher queries over SQLite |
 | nlohmann/json | 3.11.3 | JSON serialization |
 | miniz | 3.0.2 | ZIP archives |
 | stb | latest | Image loading |
-| libcurl | system | HTTP (AI features) |
+| libcurl | system | HTTP (CAM engine, AI tagging) |
 | D-Bus | system (Linux) | Reconnect durable network locations through KIO-FUSE |
 | GoogleTest | 1.14.0 | Testing |
 

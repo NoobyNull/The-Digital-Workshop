@@ -34,9 +34,15 @@
 
 ## Active
 
+### v0.8.0 PureCutCNC CAM Integration
+**Started:** 2026-08-23
+**Status:** Phases 1–2 complete. Scope reset 2026-10-14 to library management, CAM, and the sender; remaining phases revised in `.planning/WORKSHOP-SCOPE.md`.
+
+## Frozen
+
 ### v0.7.0 Project-Centered Workshop (Phases 40-48)
 **Started:** 2026-07-10
-**Status:** Engineering and 72-state visual validation complete; Guided-default human acceptance pending
+**Status:** Frozen as an engineering candidate. The Guided-default human acceptance gate was retired, and the Project Plan and Guided experience were removed in the 2026-10-14 scope reset.
 **Scope:** Persistent project context, contextual Design Library, one Project Plan, modular Prepare Carve, protected Run CNC, layout migration, Advanced compatibility, and targeted de-monolith work.
 **Stats:** 9 phases, 18 bounded sessions, 43 requirements.
 **Master plan:** `.planning/PROJECT-CENTERED-WORKSHOP-PLAN.md`
@@ -47,5 +53,5 @@
 **Human protocol:** `.planning/PROJECT-CENTERED-WORKSHOP-USABILITY.md`
 
 ---
-*Last phase completed: Phase 47 — Layout, Viewport, and Advanced Compatibility*
-*Current phase: Phase 48 — human release acceptance; Advanced remains default*
+*Last phase completed: v0.8.0 Phase 2 — Sidecar*
+*Next: v0.8.0 Phase 3 as revised in `.planning/WORKSHOP-SCOPE.md`*

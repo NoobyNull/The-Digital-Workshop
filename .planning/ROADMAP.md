@@ -9,7 +9,8 @@
 - [x] **v0.5.0 Codebase Cleanup & Simplification** - Phases 27-30 (completed 2026-04-18)
 - [x] **v0.5.5 Unified 3D Viewport** - Phases 31-35 (completed 2026-03-09, P35 back-filled 2026-04-18)
 - [x] **v0.6.0 Technical Debt Cleanup** - Phases 36-39 (completed 2026-03-29)
-- [ ] **v0.7.0 Project-Centered Workshop** - Phases 40-48 (engineering and 72-state visual validation complete 2026-07-11; Guided-default human gate pending)
+- [x] **v0.7.0 Project-Centered Workshop** - Phases 40-48 (frozen; Project Plan and Guided experience removed in the 2026-10-14 scope reset)
+- [ ] **v0.8.0 PureCutCNC CAM Integration** - Phases 1-2 complete; remaining phases revised in `.planning/WORKSHOP-SCOPE.md`
 
 ## Phases
 
