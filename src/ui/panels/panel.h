@@ -24,7 +24,14 @@ class Panel {
 
     const std::string& title() const { return m_title; }
 
+    // A page window is placed by a main tab's fixed layout and has no close
+    // button; a floating window (Materials, Tool Library) keeps one.
+    void setPageWindow(bool pageWindow) { m_pageWindow = pageWindow; }
+
   protected:
+    // Pass to ImGui::Begin as p_open.
+    bool* closeHandle() { return m_pageWindow ? nullptr : &m_open; }
+
     // Apply minimum window size constraints before ImGui::Begin().
     // widthChars/heightLines are in font-relative units for DPI scaling.
     void applyMinSize(float widthChars, float heightLines) const {
@@ -37,6 +44,7 @@ class Panel {
 
     std::string m_title;
     bool m_open = true;
+    bool m_pageWindow = false;
 };
 
 } // namespace dw

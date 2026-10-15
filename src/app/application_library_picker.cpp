@@ -76,12 +76,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
                                           "Finish or cancel the current Library task first.");
             return false;
         }
-        m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-        m_uiManager->showStartPage() = false;
-        m_uiManager->showProject() = false;
-        m_uiManager->showViewport() = true;
-        m_uiManager->showProperties() = true;
-        m_uiManager->openWindow("library");
+        (void)m_uiManager->selectTab(workshop::MainTab::Library);
         if (auto* panel = m_uiManager->libraryPanel()) {
             panel->refresh();
             panel->setPickerState(existing);
@@ -122,12 +117,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
         return false;
     }
 
-    m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-    m_uiManager->showStartPage() = false;
-    m_uiManager->showProject() = false;
-    m_uiManager->showViewport() = true;
-    m_uiManager->showProperties() = true;
-    m_uiManager->openWindow("library");
+    (void)m_uiManager->selectTab(workshop::MainTab::Library);
     if (auto* panel = m_uiManager->libraryPanel()) {
         panel->refresh();
         panel->setPickerState(begun.snapshot);
@@ -193,17 +183,11 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
     if (!returnItem && context.activeProjectItem)
         returnItem = context.activeProjectItem;
 
-    m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-    m_uiManager->showLibrary() = false;
     if (auto* panel = m_uiManager->libraryPanel())
         panel->clearPickerState();
 
     if (context.route == workshop::WorkshopRoute::Project && context.activeProject) {
-        m_uiManager->showStartPage() = false;
-        m_uiManager->showProject() = true;
-        m_uiManager->showViewport() = true;
-        m_uiManager->showProperties() = true;
-        m_uiManager->openWindow("project");
+        (void)m_uiManager->selectTab(workshop::MainTab::Prepare);
         if (returnItem && returnItem->project == *context.activeProject && m_projectManager) {
             const auto item = m_projectManager->findOpenItem(returnItem->item.value);
             if (item && item->projectId == returnItem->project.value)
@@ -213,10 +197,7 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
         }
     } else {
         invalidateProjectFocus();
-        m_uiManager->showProject() = false;
-        m_uiManager->showViewport() = false;
-        m_uiManager->showProperties() = false;
-        m_uiManager->openWindow("start_page");
+        (void)m_uiManager->selectTab(workshop::MainTab::Home);
     }
     return true;
 }

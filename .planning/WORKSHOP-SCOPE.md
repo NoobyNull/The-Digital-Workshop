@@ -77,6 +77,36 @@ index already derives them; they carry no costing data.
   presets and a visible "modified" marker, the way a slicer chains printer →
   filament → process.
 
+## The screen works like a slicer too
+
+The app copies the Bambu Studio / OrcaSlicer layout so it is familiar on
+first launch: a top bar of tabs and one fixed page per tab, with no
+rearrangeable panels or saved layouts.
+
+| Slicer tab | Digital Workshop tab | Page |
+|---|---|---|
+| Home | Home | New, open, recent projects; import |
+| (MakerWorld) | Library | Design browser beside a preview and properties |
+| Prepare | Prepare | Sidebar (Tool & Material, project contents, CAM \| Properties) beside the 3D canvas |
+| Preview | Preview | G-code statistics and listing beside the toolpath and playback |
+| Device | Device | Live view and job (G-code, progress, MDI) with status, jog, and safety on the right |
+| Project | Project | Project contents and details |
+
+- **Primary actions** sit top right: **Generate** (the slicer's "Slice") and
+  **Send to Machine** ("Print"). Generate stays disabled, with the reason in
+  its tooltip, until the CAM rebuild produces toolpaths. Send to Machine
+  opens the loaded G-code in Device; it never starts the machine by itself.
+- **Tab rules** live in `src/modules/workshop/main_tabs.*` and are unit
+  tested. A running job holds the Device tab, as the Sender workspace did.
+- **Opening things picks the tab**: a design opens in Prepare, G-code in
+  Preview, the Library in Library. Leaving Library runs its return path so a
+  Library preview never lingers in the project.
+- **Floating windows** are kept for editors a slicer also shows as dialogs:
+  Materials, Tool Library, Machine Profiles, Lighting, and the Log Viewer.
+- **Layouts** are built from ImGui dock nodes, locked against undocking and
+  rebuilt when the tab changes. Section widths come from the font size
+  (`workshop_layout_metrics.h`), so high UI scales stay readable.
+
 ## PureCutCNC: the math and the CAM process only
 
 PureCutCNC is used as a toolpath engine, not as an application to mirror.
@@ -138,6 +168,8 @@ Phases 1 (yank) and 2 (sidecar) are complete. The rest of
 | Six-stage Project Plan | Replaced by the contents tree above |
 | Guided carve step flow (`PrepareCarveFlow`, step guidance) | Unused by the application; the setup identity it fed is kept for Run |
 | Guided Workshop experience and its layout | Saved layouts migrate to the single Workshop layout (layout migration v2) |
+| Free-form docking, layout presets, group panels, and the Workshop/Sender switch | Replaced by the slicer tabs above |
+| Project context bar ("Back to Project") | The top bar shows the project and machine; the tabs replace Back |
 | `DW_BUILD_TOOLS` | Pointed at directories that do not exist |
 
 Kept on purpose: the Materials list (feeds and speeds read it), AI tagging
@@ -150,6 +182,9 @@ picker.
 - **Materials**: the app has two material systems — the Materials panel
   (`.dwmat` archives) and the `.vtdb` tool database's own material table that
   holds cutting data. They should become one.
-- **Home and the Design Library picker**: simplify toward a slicer start
-  screen and a plain "Add from Library".
+- **Home and the Design Library picker**: the tabs are in place; Home could
+  still become a slicer-style start screen with project thumbnails, and the
+  Library's picker modes could fold into a plain "Add to Project".
+- **Saved layout presets** in the config are no longer read by the UI. Their
+  storage and migration can be removed once no setting depends on them.
 - **`web/season-countdown/`**: an unrelated app living in this repository.

@@ -35,7 +35,7 @@ void CncMacroPanel::render() {
     if (!m_open) return;
 
     applyMinSize(14, 8);
-    if (!ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (!ImGui::Begin(m_title.c_str(), closeHandle())) {
         ImGui::End();
         return;
     }

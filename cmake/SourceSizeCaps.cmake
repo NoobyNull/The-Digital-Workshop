@@ -2,7 +2,7 @@
 # A cap is a ratchet, not an allowance to grow. When a file shrinks, lower its
 # cap in the same session. New oversized files are never added to this list.
 set(DW_SOURCE_SIZE_CAPS
-    "src/ui/panels/gcode_panel.cpp|1226"
+    "src/ui/panels/gcode_panel.cpp|1211"
     "src/ui/panels/tool_browser_panel.cpp|1264"
     "src/ui/panels/cnc_settings_panel.cpp|1161"
     "src/core/library/library_manager.cpp|1044"

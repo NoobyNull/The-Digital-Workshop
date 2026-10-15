@@ -1,5 +1,6 @@
-// Application composition for the project-centered workshop shell. This file
-// owns UI intent wiring only; ProjectSession remains the policy authority.
+// Application composition for the project-centered workshop shell and its
+// slicer-style main tabs. This file owns UI intent wiring only; ProjectSession
+// remains the policy authority.
 
 #include "app/application.h"
 #include "app/library_workflow_coordinator.h"
@@ -36,39 +37,61 @@ void Application::wireWorkshop() {
     wireLibraryPanel();
     wireProjectPanel();
 
-    m_uiManager->setOnBackToProject([this]() {
-        if (m_libraryWorkflow && m_libraryWorkflow->picker().snapshot().active) {
-            std::string error;
-            (void)requestLibraryReturn(error);
-            return;
-        }
-        if (!m_projectSession || !m_projectWorkshopController)
-            return;
-        const bool machineActionActive =
-            m_cncController && m_cncController->isStreaming();
-        if (machineActionActive) {
-            ToastManager::instance().show(
-                ToastType::Warning,
-                "Run CNC Is Active",
-                "Pause or stop the active run before returning to the project.");
-            return;
-        }
+    m_uiManager->setOnMainTabRequested(
+        [this](workshop::MainTab tab) { navigateToTab(tab); });
+}
+
+bool Application::leaveDesignLibrary() {
+    const bool libraryOpen =
+        m_uiManager->activeTab() == workshop::MainTab::Library ||
+        (m_libraryWorkflow && m_libraryWorkflow->picker().snapshot().active);
+    if (!libraryOpen)
+        return true;
+    // The Library's return path restores the project selection it replaced,
+    // so a Library preview never lingers in the project's viewport.
+    std::string error;
+    if (requestLibraryReturn(error))
+        return true;
+    ToastManager::instance().show(
+        ToastType::Warning,
+        "Library Task Still Open",
+        error.empty() ? "Finish or cancel the current Library task first." : error);
+    return false;
+}
+
+void Application::navigateToTab(workshop::MainTab tab) {
+    if (!m_uiManager)
+        return;
+    if (tab == workshop::MainTab::Library) {
+        (void)showDesignLibrary();
+        return;
+    }
+    if (!leaveDesignLibrary())
+        return;
+    if (tab == workshop::MainTab::Home) {
+        showHome();
+        return;
+    }
+
+    // Prepare, Preview, and Project work inside the open project, the way
+    // Back to Project used to.
+    if (!workshop::isMachineTab(tab) && m_projectSession && m_projectWorkshopController) {
         const auto context = m_projectSession->snapshot();
-        const auto transition = m_projectWorkshopController->dispatch(
-            workshop::BackToProjectIntent{context.generation});
-        if (!transition.accepted()) {
-            ToastManager::instance().show(
-                ToastType::Warning,
-                "Project Navigation Blocked",
-                transition.reason == workshop::TransitionReason::ActiveRun
-                    ? "Finish or stop the active run before leaving Run CNC."
-                    : "The project context changed. Try Back to Project again.");
-            return;
+        if (context.activeProject && context.route != workshop::WorkshopRoute::Project) {
+            const auto transition = m_projectWorkshopController->dispatch(
+                workshop::BackToProjectIntent{context.generation});
+            if (!transition.accepted()) {
+                ToastManager::instance().show(
+                    ToastType::Warning,
+                    "Project Navigation Blocked",
+                    transition.reason == workshop::TransitionReason::ActiveRun
+                        ? "Finish or stop the active run before leaving Device."
+                        : "The project context changed. Try again.");
+                return;
+            }
         }
-        m_uiManager->showStartPage() = false;
-        m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-        m_uiManager->openWindow("project");
-    });
+    }
+    (void)m_uiManager->selectTab(tab);
 }
 
 void Application::refreshProjectShell() {

@@ -111,9 +111,7 @@ void Application::initializeProjectResume() {
                 (void)m_projectSessionIntegration->closeProject();
                 return workshop::ResumeActivationStatus::Rejected;
             }
-            m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-            m_uiManager->showStartPage() = false;
-            m_uiManager->openWindow("project");
+            (void)m_uiManager->selectTab(workshop::MainTab::Prepare);
             return workshop::ResumeActivationStatus::Applied;
         }
         if (context.generation.value != expectedGeneration)
@@ -208,12 +206,7 @@ void Application::showHome(bool beginNamedProject) {
             return;
         }
     }
-    m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-    m_uiManager->showLibrary() = false;
-    m_uiManager->showProject() = false;
-    m_uiManager->showProperties() = false;
-    m_uiManager->showViewport() = false;
-    m_uiManager->openWindow("start_page");
+    (void)m_uiManager->selectTab(workshop::MainTab::Home);
     if (m_uiManager->startPage()) {
         m_uiManager->startPage()->requestFocus();
         if (beginNamedProject)
@@ -312,10 +305,10 @@ Application::ProjectItemContentStatus Application::openProjectItemContent(
             panel->clear();
             return ProjectItemContentStatus::Unavailable;
         }
-        // Project G-code opens as geometry first. The sender remains an
+        // Project G-code opens in Preview first. Send to Machine remains an
         // explicit action so inspecting a file cannot accidentally imply that
         // it is ready to run.
-        m_uiManager->openWindow("viewport");
+        (void)m_uiManager->selectTab(workshop::MainTab::Preview);
         return ProjectItemContentStatus::Opened;
     }
     case ProjectOpenItemType::Operation: {

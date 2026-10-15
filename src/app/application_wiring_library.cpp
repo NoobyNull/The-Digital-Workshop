@@ -299,15 +299,12 @@ void Application::wireLibraryPanel() {
                                     return;
                                 }
 
-                                m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-                                m_uiManager->showStartPage() = false;
+                                // An asynchronous start keeps the Library tab
+                                // for two frames so its name prompt closes.
                                 const bool asynchronous = probe->initialCallReturned;
-                                m_uiManager->showLibrary() = asynchronous;
                                 m_deferredLibraryCloseFrames = asynchronous ? 2 : 0;
-                                m_uiManager->showProject() = true;
-                                m_uiManager->showViewport() = true;
-                                m_uiManager->showProperties() = true;
-                                m_uiManager->openWindow("project");
+                                if (!asynchronous)
+                                    (void)m_uiManager->selectTab(workshop::MainTab::Prepare);
                                 if (auto* livePanel = m_uiManager->libraryPanel())
                                     livePanel->clearPickerState();
 

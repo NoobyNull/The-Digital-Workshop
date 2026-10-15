@@ -66,6 +66,10 @@ class GCodePanel : public Panel {
                           const gcode::PreparedDocument& document);
     void clear();
     bool hasGCode() const { return m_program.commands.size() > 0; }
+    // View inspects a program; Send streams it. The shell picks the mode from
+    // the main tab (Preview or Device).
+    void setMode(GCodePanelMode mode) { m_mode = mode; }
+    GCodePanelMode mode() const { return m_mode; }
 
     // Get raw G-code lines for resume-from-line feature
     std::vector<std::string> getRawLines() const;
@@ -87,7 +91,6 @@ class GCodePanel : public Panel {
     // Render sections
     void renderToolbar();
     void renderRecentFiles();
-    void renderModeTabs();
     void renderMachineProfileSelector();
     void renderStatistics();
     void renderConnectionBar();

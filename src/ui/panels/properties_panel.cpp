@@ -24,7 +24,7 @@ void PropertiesPanel::render() {
     }
 
     applyMinSize(16, 10);
-    if (ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (ImGui::Begin(m_title.c_str(), closeHandle())) {
         if (m_mesh && m_mesh->isValid()) {
             renderMeshInfo();
             ImGui::Spacing();

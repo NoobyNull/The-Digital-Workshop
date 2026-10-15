@@ -44,6 +44,7 @@ set(DW_SOURCES
     managers/ui_manager_workshop.cpp
     managers/ui_manager_menus.cpp
     managers/ui_manager_layout.cpp
+    managers/ui_manager_top_bar.cpp
     managers/file_io_manager.cpp
     managers/file_io_projects.cpp
     managers/config_manager.cpp
@@ -252,12 +253,10 @@ set(DW_SOURCES
     ui/panels/cnc_safety_panel.cpp
     ui/panels/cnc_settings_panel.cpp
     ui/panels/cnc_macro_panel.cpp
-    ui/panels/group_panel.cpp
 
     # UI Widgets
     ui/widgets/binding_recorder.cpp
     ui/widgets/status_bar.cpp
-    modules/workshop/ui/project_context_bar.cpp
     ui/widgets/status_tips.cpp
     ui/widgets/toast.cpp
     ui/widgets/tool_profile_preview.cpp

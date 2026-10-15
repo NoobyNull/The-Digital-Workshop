@@ -4,7 +4,6 @@
 #include <type_traits>
 
 #include "modules/workshop/workshop_contract.h"
-#include "modules/workshop/ui/project_context_bar_model.h"
 
 namespace dw::workshop {
 
@@ -57,41 +56,6 @@ TEST(WorkshopCore, LibraryPreviewOverlaysRatherThanReplacesProjectSelection) {
     EXPECT_EQ(context.activeProjectItem->item, ProjectItemId(11));
     EXPECT_EQ(context.libraryPreview->item, LibraryItemId(99));
     EXPECT_EQ(context.libraryReturnRoute, WorkshopRoute::Project);
-}
-
-TEST(WorkshopCore, ContextBarStacksBeforeMeasuredColumnsCanOverlap) {
-    EXPECT_TRUE(projectContextBarUsesTwoRows(1334.0F,
-                                             350.0F,
-                                             700.0F,
-                                             260.0F,
-                                             16.0F));
-    EXPECT_FALSE(projectContextBarUsesTwoRows(3840.0F,
-                                              350.0F,
-                                              700.0F,
-                                              260.0F,
-                                              16.0F));
-}
-
-TEST(WorkshopCore, ContextBarKeepsOneRowWhenMeasuredContentExactlyFits) {
-    EXPECT_FALSE(projectContextBarUsesTwoRows(1032.0F,
-                                              300.0F,
-                                              400.0F,
-                                              300.0F,
-                                              16.0F));
-    EXPECT_TRUE(projectContextBarUsesTwoRows(0.0F, 0.0F, 0.0F, 0.0F, 0.0F));
-}
-
-TEST(WorkshopCore, ContextBarOneRowReservesEdgesAndGivesFocusTheRemainder) {
-    const auto columns = projectContextBarOneRowColumns(
-        1334.0F, 150.0F, 180.0F, 16.0F);
-
-    EXPECT_FLOAT_EQ(columns.project, 150.0F);
-    EXPECT_FLOAT_EQ(columns.action, 180.0F);
-    EXPECT_FLOAT_EQ(columns.context, 972.0F);
-    EXPECT_FALSE(projectContextBarUsesTwoRows(
-        1334.0F, 150.0F, 700.0F, 180.0F, 16.0F));
-    EXPECT_TRUE(projectContextBarUsesTwoRows(
-        900.0F, 150.0F, 700.0F, 180.0F, 16.0F));
 }
 
 } // namespace dw::workshop

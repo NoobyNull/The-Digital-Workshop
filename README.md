@@ -20,6 +20,24 @@ It's also fully offline and open source. Your files stay on your machine, the da
 
 ## Features
 
+### Interface
+Laid out like a 3D-printing slicer (Bambu Studio, OrcaSlicer), with one fixed
+page per tab:
+
+| Tab | What it holds |
+|---|---|
+| **Home** | New, open, and recent projects; import designs |
+| **Library** | The design browser beside a preview |
+| **Prepare** | Tool and material, the project's contents, and CAM in a sidebar beside the 3D canvas |
+| **Preview** | G-code statistics and listing beside the toolpath, with playback |
+| **Device** | The live machine view and job, with position, jog, and safety controls on the right |
+| **Project** | The project's contents and details on one page |
+
+**Generate** and **Send to Machine** sit top right where a slicer puts Slice
+and Print. Generate waits for the CAM rebuild; Send to Machine opens the
+loaded G-code in Device. Ctrl+1 to Ctrl+6 switch tabs, and a running job keeps
+Device open until it stops.
+
 ### Design Library
 - Import STL, OBJ, and 3MF files with drag-and-drop (including recursive folders)
 - Content-addressable storage with SHA-based deduplication
@@ -182,9 +200,10 @@ Or use the packaging scripts to create a distributable installer:
 ./build/tests/dw_tests
 ```
 
-1,258 tests cover loaders, parsers, database repositories,
-project lifecycle and restart resume, project contents, contextual Library
-navigation, pinned CAM setups, protected Run coordination, layout migration,
+1,261 tests cover loaders, parsers, database repositories,
+project lifecycle and restart resume, project contents, main tab rules,
+contextual Library navigation, pinned CAM setups, protected Run coordination,
+layout migration,
 viewport identity, the tool calculator, and import/export pipelines.
 
 The render-independent workflow boundaries also have focused test executables:

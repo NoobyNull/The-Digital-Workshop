@@ -1,12 +1,14 @@
 // Digital Workshop - UI Manager (core)
-// Init, shutdown, panel rendering, background UI, panel registry.
+// Init, shutdown, panel registry, panel rendering, and main tab selection.
+// Top bar → ui_manager_top_bar.cpp
 // Menu/keyboard code → ui_manager_menus.cpp
-// Layout/preset code → ui_manager_layout.cpp
+// Page host and per-tab layouts → ui_manager_layout.cpp
 
 #include "managers/ui_manager.h"
 
 #include <algorithm>
 #include <cstring>
+#include <utility>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -16,7 +18,6 @@
 #include "core/import/import_task.h"
 #include "core/threading/loading_state.h"
 #include "core/utils/thread_utils.h"
-#include "modules/workshop/ui/project_context_bar.h"
 #include "ui/context_menu_manager.h"
 #include "ui/dialogs/dialog.h"
 #include "ui/dialogs/file_dialog.h"
@@ -42,7 +43,6 @@
 #include "ui/panels/cnc_wcs_panel.h"
 #include "ui/panels/cam_placeholder_panel.h"
 #include "ui/panels/gcode_panel.h"
-#include "ui/panels/group_panel.h"
 #include "ui/panels/library_panel.h"
 #include "ui/panels/log_viewer_panel.h"
 #include "ui/panels/materials_panel.h"
@@ -106,7 +106,6 @@ void UIManager::init(LibraryManager* libraryManager,
     m_settingsImportDialog = std::make_unique<SettingsImportDialog>();
     m_supplierToolImportDialog = std::make_unique<SupplierToolImportDialog>();
     m_statusBar = std::make_unique<StatusBar>();
-    m_projectContextBar = std::make_unique<ProjectContextBar>();
     m_statusBar->setOnOpenToolLibrary([this]() { openToolLibrary(); });
     m_contextMenuManager = std::make_unique<ContextMenuManager>();
 
@@ -116,13 +115,13 @@ void UIManager::init(LibraryManager* libraryManager,
         m_materialsPanel->setContextMenuManager(m_contextMenuManager.get());
     if (m_viewportPanel) {
         m_viewportPanel->setContextMenuManager(m_contextMenuManager.get());
-        m_viewportPanel->setSenderWorkspaceActive(m_workspaceMode == WorkspaceMode::CNC);
         m_lightingDialog->setSettings(&m_viewportPanel->renderSettings());
     }
     if (m_gcodePanel)
         m_gcodePanel->setFileDialog(m_fileDialog.get());
 
     buildPanelRegistry();
+    (void)selectTab(workshop::MainTab::Home);
     m_dialogList = {
         m_fileDialog.get(),
         m_importSummaryDialog.get(),
@@ -153,10 +152,6 @@ void UIManager::shutdown() {
 
     // Destroy widgets
     m_statusBar.reset();
-    m_projectContextBar.reset();
-
-    // Destroy group panels
-    m_groupPanels.clear();
 
     // Destroy panels
     m_viewportPanel.reset();
@@ -181,63 +176,69 @@ void UIManager::shutdown() {
 }
 
 void UIManager::buildPanelRegistry() {
-    // key, showFlag, menuLabel, windowTitle, panel*, syncClose
+    // key, showFlag, windowTitle, panel*, syncClose, floating
     // syncClose: panels that pass p_open to ImGui::Begin and need X-button sync
     // clang-format off
+    // Order is the tab order inside each tabbed page section.
     m_panelRegistry = {
-        {"start_page",      &m_showStartPage,      "Home",              "Home###Start Page",
-         m_startPage.get(), true, WindowRole::Workshop},
-        {"viewport",        &m_showViewport,        "Viewport",          "Viewport",
-         m_viewportPanel.get(), false, WindowRole::Shared},
-        {"library",         &m_showLibrary,         "Library",           "Library",
-         m_libraryPanel.get(), false, WindowRole::Workshop},
-        {"properties",      &m_showProperties,      "Properties",        "Properties",
-         m_propertiesPanel.get(), false, WindowRole::Workshop},
-        {"project",         &m_showProject,         "Project",           "Project",
-         m_projectPanel.get(), false, WindowRole::Shared},
-        {"gcode",           &m_showGCode,           "G-code Viewer",     "G-code",
-         m_gcodePanel.get(), false, WindowRole::Sender},
-        {"log_viewer",      &m_showLogViewer,       "Log Viewer",        "Log Viewer",
-         m_logViewerPanel.get(), true, WindowRole::Shared},
-        {"materials",       &m_showMaterials,       "Materials",         "Materials",
-         m_materialsPanel.get(), true, WindowRole::Workshop},
-        {"tool_browser",    &m_showToolBrowser,     kToolLibraryMenuLabel, kToolLibraryWindowTitle,
-         m_toolBrowserPanel.get(), true, WindowRole::Shared},
-        {"cnc_status",      &m_showCncStatus,       "Status",            "CNC Status",
-         m_cncStatusPanel.get(), true, WindowRole::Sender},
-        {"cnc_jog",         &m_showCncJog,          "Jog Control",       "Jog Control",
-         m_cncJogPanel.get(), true, WindowRole::Sender},
-        {"cnc_console",     &m_showCncConsole,      "MDI Console",       "MDI Console",
-         m_cncConsolePanel.get(), true, WindowRole::Sender},
-        {"cnc_wcs",         &m_showCncWcs,          "Work Zero / WCS",   "WCS",
-         m_cncWcsPanel.get(), true, WindowRole::Sender},
-        {"cnc_tool",        &m_showCncTool,         "Tool & Material",   "Tool & Material",
-         m_cncToolPanel.get(), true, WindowRole::Sender},
-        {"cnc_job",         &m_showCncJob,          "Job Progress",      "Job Progress",
-         m_cncJobPanel.get(), true, WindowRole::Sender},
-        {"cnc_safety",      &m_showCncSafety,       "Safety Controls",   "Safety",
-         m_cncSafetyPanel.get(), true, WindowRole::Sender},
-        {"cnc_settings",    &m_showCncSettings,     "Machine Settings",  "Machine Settings",
-         m_cncSettingsPanel.get(), true, WindowRole::Sender},
-        {"cnc_macros",      &m_showCncMacros,       "Macros",            "Macros",
-         m_cncMacroPanel.get(), true, WindowRole::Sender},
-        {"direct_carve",    &m_showDirectCarve,     "CAM",               "CAM",
-         m_camPlaceholderPanel.get(), true, WindowRole::Shared},
+        {"start_page",   &m_showStartPage,   "Home###Start Page", m_startPage.get(),           true,  false},
+        {"viewport",     &m_showViewport,    "Viewport",          m_viewportPanel.get(),       false, false},
+        {"library",      &m_showLibrary,     "Library",           m_libraryPanel.get(),        false, false},
+        {"project",      &m_showProject,     "Project",           m_projectPanel.get(),        false, false},
+        {"gcode",        &m_showGCode,       "G-code",            m_gcodePanel.get(),          false, false},
+        {"direct_carve", &m_showDirectCarve, "CAM",               m_camPlaceholderPanel.get(), true,  false},
+        {"properties",   &m_showProperties,  "Properties",        m_propertiesPanel.get(),     false, false},
+        {"cnc_status",   &m_showCncStatus,   "CNC Status",        m_cncStatusPanel.get(),      true,  false},
+        {"cnc_jog",      &m_showCncJog,      "Jog Control",       m_cncJogPanel.get(),         true,  false},
+        {"cnc_safety",   &m_showCncSafety,   "Safety",            m_cncSafetyPanel.get(),      true,  false},
+        {"cnc_wcs",      &m_showCncWcs,      "WCS",               m_cncWcsPanel.get(),         true,  false},
+        {"cnc_tool",     &m_showCncTool,     "Tool & Material",   m_cncToolPanel.get(),        true,  false},
+        {"cnc_macros",   &m_showCncMacros,   "Macros",            m_cncMacroPanel.get(),       true,  false},
+        {"cnc_settings", &m_showCncSettings, "Machine Settings",  m_cncSettingsPanel.get(),    true,  false},
+        {"cnc_job",      &m_showCncJob,      "Job Progress",      m_cncJobPanel.get(),         true,  false},
+        {"cnc_console",  &m_showCncConsole,  "MDI Console",       m_cncConsolePanel.get(),     true,  false},
+        {"materials",    &m_showMaterials,   "Materials",         m_materialsPanel.get(),      true,  true},
+        {"tool_browser", &m_showToolBrowser, kToolLibraryWindowTitle, m_toolBrowserPanel.get(), true, true},
+        {"log_viewer",   &m_showLogViewer,   "Log Viewer",        m_logViewerPanel.get(),      true,  true},
     };
     // clang-format on
+    for (auto& entry : m_panelRegistry) {
+        if (entry.panel)
+            entry.panel->setPageWindow(!entry.floating);
+    }
+}
+
+const UIManager::PanelEntry* UIManager::findPanel(const std::string& key) const {
+    const auto* catalog = findWindowCatalogEntry(key);
+    const std::string layoutKey = catalog && !catalog->layoutKey.empty() ? catalog->layoutKey : key;
+    for (const auto& entry : m_panelRegistry) {
+        if (entry.key == layoutKey || (catalog && catalog->matchesKey(entry.key)))
+            return &entry;
+    }
+    return nullptr;
+}
+
+UIManager::PanelEntry* UIManager::findPanel(const std::string& key) {
+    return const_cast<PanelEntry*>(std::as_const(*this).findPanel(key));
 }
 
 void UIManager::renderPanels() {
     ASSERT_MAIN_THREAD();
 
-    // Reset auto-context guard each frame
-    m_suppressAutoContext = false;
-
-    // Render all visible panels via registry
+    const auto* viewport = ImGui::GetMainViewport();
     for (auto& entry : m_panelRegistry) {
         if (!*entry.showFlag || !entry.panel)
             continue;
 
+        if (entry.floating) {
+            // Floating windows open centered over the page they were called
+            // from; the user may move them afterwards.
+            ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
+                                    ImVec2(0.5F, 0.5F));
+            ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x * 0.6F,
+                                            viewport->WorkSize.y * 0.7F),
+                                     ImGuiCond_FirstUseEver);
+        }
         const bool focusToolLibrary = m_focusToolLibraryNextFrame &&
                                       std::strcmp(entry.key, "tool_browser") == 0;
         if (focusToolLibrary)
@@ -246,37 +247,11 @@ void UIManager::renderPanels() {
         if (focusToolLibrary)
             m_focusToolLibraryNextFrame = false;
 
-        // Sync X-button close back to visibility flag
+        // A page window has no close button; only floating windows close.
         if (entry.syncClose && !entry.panel->isOpen()) {
-            *entry.showFlag = false;
+            if (entry.floating)
+                *entry.showFlag = false;
             entry.panel->setOpen(true);
-        }
-    }
-
-    // Render group panels and check for close → layout reset
-    bool groupClosed = false;
-    for (auto& gp : m_groupPanels) {
-        gp->render();
-        if (gp->wasClosed())
-            groupClosed = true;
-    }
-    if (groupClosed) {
-        m_groupPanels.clear();
-        ImGuiID dockId = ImGui::GetID("MainDockSpace");
-        setupDefaultDockLayout(dockId);
-    }
-
-    // Auto-context: detect focused panel and trigger preset switch
-    if (!m_suppressAutoContext) {
-        ImGuiWindow* navWin = GImGui->NavWindow;
-        if (navWin) {
-            const char* focusedName = navWin->Name;
-            for (const auto& entry : m_panelRegistry) {
-                if (*entry.showFlag && std::strcmp(focusedName, entry.windowTitle) == 0) {
-                    checkAutoContextTrigger(entry.key);
-                    break;
-                }
-            }
         }
     }
 
@@ -293,68 +268,65 @@ void UIManager::renderPanels() {
     // MachineProfileDialog is a global service window shared by all panels.
     if (m_machineProfileDialog)
         m_machineProfileDialog->render();
+
+    applyPendingSectionTabs();
 }
 
 SettingsImportDialog* UIManager::settingsImportDialog() const {
     return m_settingsImportDialog.get();
 }
 
-void UIManager::addGroupPanel() {
-    m_groupPanels.push_back(std::make_unique<GroupPanel>(m_nextGroupId++));
+workshop::MainTabFacts UIManager::tabFacts() const {
+    workshop::MainTabFacts facts;
+    facts.active = m_activeTab;
+    facts.machineStreaming = m_cncStreaming;
+    facts.gcodeLoaded = m_gcodePanel && m_gcodePanel->hasGCode();
+    facts.toolpathGenerationAvailable = false;
+    return facts;
 }
 
-void UIManager::showCncPanels(bool show) {
-    for (auto& entry : m_panelRegistry) {
-        if (entry.role == WindowRole::Sender)
-            *entry.showFlag = show;
-    }
+bool UIManager::selectTab(workshop::MainTab tab) {
+    if (workshop::mainTabBlock(tab, tabFacts()) != workshop::MainTabBlock::None)
+        return false;
+    if (tab != m_activeTab)
+        m_layoutDirty = true;
+    m_activeTab = tab;
+    applyTabToPanels();
+    return true;
+}
+
+void UIManager::requestTab(workshop::MainTab tab) {
+    if (workshop::mainTabBlock(tab, tabFacts()) != workshop::MainTabBlock::None)
+        return;
+    if (m_onMainTabRequested)
+        m_onMainTabRequested(tab);
+    else
+        (void)selectTab(tab);
 }
 
 void UIManager::setCncStreaming(bool streaming) {
-    if (streaming && !m_cncStreaming && m_workspaceMode != WorkspaceMode::CNC)
-        setWorkspaceMode(WorkspaceMode::CNC);
     m_cncStreaming = streaming;
+    if (streaming && !isMachineWorkspace())
+        (void)selectTab(workshop::MainTab::Device);
 }
 
-void UIManager::setWorkspaceMode(WorkspaceMode mode) {
-    if (m_cncStreaming && mode != WorkspaceMode::CNC)
-        return;
-    if (m_showLibrary && mode != WorkspaceMode::Model)
-        return;
-
-    m_workspaceMode = mode;
-    syncWorkspaceModeToPanels();
-    applyLayoutPreset(mode == WorkspaceMode::CNC ? senderPresetIndex()
-                                                  : workshopPresetIndex());
-}
-
-void UIManager::enforceWorkspaceBoundary() {
-    const WindowRole hiddenRole = m_workspaceMode == WorkspaceMode::CNC ? WindowRole::Workshop
-                                                                        : WindowRole::Sender;
+void UIManager::applyTabToPanels() {
+    const auto& keys = pageWindowKeys(m_activeTab);
     for (auto& entry : m_panelRegistry) {
-        if (entry.role == hiddenRole)
-            *entry.showFlag = false;
+        if (entry.floating)
+            continue;
+        *entry.showFlag = std::any_of(keys.begin(), keys.end(), [&](const char* key) {
+            return std::strcmp(key, entry.key) == 0;
+        });
     }
-
-    m_showViewport = true;
-    if (m_workspaceMode == WorkspaceMode::CNC && !senderSurfaceVisible()) {
-        m_showGCode = true;
-        m_showCncStatus = true;
-        m_showCncJob = true;
-        m_showCncSafety = true;
+    if (m_viewportPanel)
+        m_viewportPanel->setSenderWorkspaceActive(isMachineWorkspace());
+    // Preview inspects G-code and Device streams it, like a slicer's Preview
+    // and Device tabs.
+    if (m_gcodePanel) {
+        m_gcodePanel->setMode(isMachineWorkspace() ? GCodePanelMode::Send
+                                                   : GCodePanelMode::View);
     }
-}
-
-void UIManager::syncWorkspaceModeToPanels() {
-    if (m_viewportPanel) {
-        m_viewportPanel->setSenderWorkspaceActive(m_workspaceMode == WorkspaceMode::CNC);
-    }
-}
-
-bool UIManager::senderSurfaceVisible() const {
-    return m_showGCode || m_showCncStatus || m_showCncJob || m_showCncSafety || m_showCncJog ||
-           m_showCncConsole || m_showCncWcs || m_showCncTool || m_showCncSettings ||
-           m_showCncMacros;
 }
 
 bool UIManager::isWindowVisible(const std::string& key) const {
@@ -366,12 +338,8 @@ bool UIManager::isWindowVisible(const std::string& key) const {
     if (canonical == "lighting_settings")
         return m_lightingDialog && m_lightingDialog->isOpen();
 
-    const std::string layoutKey = catalog && !catalog->layoutKey.empty() ? catalog->layoutKey : key;
-    for (const auto& entry : m_panelRegistry) {
-        if (entry.key == layoutKey || (catalog && catalog->matchesKey(entry.key)))
-            return *entry.showFlag;
-    }
-    return false;
+    const auto* entry = findPanel(key);
+    return entry && *entry->showFlag;
 }
 
 void UIManager::openWindow(const std::string& key) {
@@ -388,31 +356,16 @@ void UIManager::openWindow(const std::string& key) {
         return;
     }
 
-    const std::string layoutKey = catalog && !catalog->layoutKey.empty() ? catalog->layoutKey : key;
-    auto it = std::find_if(m_panelRegistry.begin(), m_panelRegistry.end(), [&](const auto& entry) {
-        return entry.key == layoutKey || (catalog && catalog->matchesKey(entry.key));
-    });
-    if (it == m_panelRegistry.end())
+    auto* entry = findPanel(key);
+    if (!entry || !entry->panel)
         return;
-    if (!it->panel)
-        return;
-    if (m_showLibrary && it->role == WindowRole::Sender)
+    if (!entry->floating && !*entry->showFlag &&
+        !selectTab(defaultTabForWindow(entry->key)))
         return;
 
-    if (it->role == WindowRole::Sender && m_workspaceMode != WorkspaceMode::CNC) {
-        if (m_cncStreaming)
-            return;
-        setWorkspaceMode(WorkspaceMode::CNC);
-    } else if (it->role == WindowRole::Workshop && m_workspaceMode != WorkspaceMode::Model) {
-        if (m_cncStreaming)
-            return;
-        setWorkspaceMode(WorkspaceMode::Model);
-    }
-
-    *it->showFlag = true;
-    if (it->panel)
-        it->panel->setOpen(true);
-    ImGui::SetWindowFocus(it->windowTitle);
+    *entry->showFlag = true;
+    entry->panel->setOpen(true);
+    ImGui::SetWindowFocus(entry->windowTitle);
 }
 
 void UIManager::toggleWindow(const std::string& key) {
@@ -436,18 +389,14 @@ void UIManager::toggleWindow(const std::string& key) {
         return;
     }
 
-    const std::string layoutKey = catalog && !catalog->layoutKey.empty() ? catalog->layoutKey : key;
-    for (auto& entry : m_panelRegistry) {
-        if (entry.key != layoutKey && !(catalog && catalog->matchesKey(entry.key)))
-            continue;
-
-        if (*entry.showFlag) {
-            *entry.showFlag = false;
-        } else {
-            openWindow(key);
-        }
+    auto* entry = findPanel(key);
+    if (!entry)
         return;
-    }
+    // Page windows belong to their tab; only floating windows toggle.
+    if (entry->floating && *entry->showFlag)
+        *entry->showFlag = false;
+    else
+        openWindow(key);
 }
 
 void UIManager::openToolLibrary() {

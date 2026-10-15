@@ -74,18 +74,18 @@ TEST(WindowCatalog, DesignLibraryIsATransientWorkflowSurface) {
     EXPECT_FALSE(LayoutPreset::modelDefault().visibility.at("library"));
 }
 
-TEST(WindowCatalog, DirectCarveIsSharedAcrossWorkshopAndSender) {
+TEST(WindowCatalog, CamWindowSitsInThePrepareSidebar) {
     const auto* entry = findWindowCatalogEntry("direct_carve");
     ASSERT_NE(entry, nullptr);
     EXPECT_EQ(entry->role, WindowRole::Shared);
 
-    std::ifstream manager(std::string(CMAKE_SOURCE_DIR) + "/src/managers/ui_manager.cpp");
-    ASSERT_TRUE(manager.is_open());
+    std::ifstream layout(std::string(CMAKE_SOURCE_DIR) + "/src/managers/ui_manager_layout.cpp");
+    ASSERT_TRUE(layout.is_open());
     std::ostringstream source;
-    source << manager.rdbuf();
-    const auto directCarve = source.str().find("{\"direct_carve\"");
-    ASSERT_NE(directCarve, std::string::npos);
-    EXPECT_NE(source.str().find("WindowRole::Shared", directCarve), std::string::npos);
+    source << layout.rdbuf();
+    // CAM is the slicer's "Process" section, beside the object list.
+    EXPECT_NE(source.str().find("dockPanel(\"direct_carve\", processSection)"),
+              std::string::npos);
 }
 
 TEST(WindowCatalog, DockableLayoutKeysExistInBuiltInPresets) {

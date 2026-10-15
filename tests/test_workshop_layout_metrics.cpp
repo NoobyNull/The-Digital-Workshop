@@ -16,41 +16,51 @@ std::string readSource(const char* relativePath) {
 }
 
 TEST(WorkshopLayoutMetrics, ScaledSidebarsGrowWhilePreservingTheCenter) {
-    const auto scale100 = chooseWorkshopDockLayout(1366.0F, 13.0F);
-    const auto scale150 = chooseWorkshopDockLayout(1366.0F, 19.5F);
-    const auto scale200 = chooseWorkshopDockLayout(1366.0F, 26.0F);
+    const auto scale100 = chooseSideColumn(1366.0F, 13.0F, kSettingsSidebar);
+    const auto scale150 = chooseSideColumn(1366.0F, 19.5F, kSettingsSidebar);
+    const auto scale200 = chooseSideColumn(1366.0F, 26.0F, kSettingsSidebar);
 
-    EXPECT_FLOAT_EQ(scale100.leftWidth, 260.0F);
-    EXPECT_GT(scale150.leftWidth, 340.0F);
-    EXPECT_GT(scale200.leftWidth, 420.0F);
-    EXPECT_GT(scale150.leftWidth, scale100.leftWidth);
-    EXPECT_GT(scale200.leftWidth, scale150.leftWidth);
+    EXPECT_FLOAT_EQ(scale100.sideWidth, 338.0F);
+    EXPECT_GT(scale150.sideWidth, scale100.sideWidth);
+    EXPECT_GT(scale200.sideWidth, scale150.sideWidth);
+    EXPECT_FLOAT_EQ(scale200.sideWidth, 520.0F);
     EXPECT_GE(scale200.centerWidth, 480.0F);
-    EXPECT_NEAR(scale200.leftWidth + scale200.centerWidth + scale200.rightWidth,
-                1366.0F,
-                0.01F);
+    EXPECT_NEAR(scale200.sideWidth + scale200.centerWidth, 1366.0F, 0.01F);
 }
 
-TEST(WorkshopLayoutMetrics, FourKSidebarsStayNearContentWidth) {
-    const auto layout = chooseWorkshopDockLayout(3840.0F, 13.0F);
+TEST(WorkshopLayoutMetrics, FourKColumnsStayNearContentWidth) {
+    const auto sidebar = chooseSideColumn(3840.0F, 13.0F, kSettingsSidebar);
+    const auto machine = chooseSideColumn(3840.0F, 13.0F, kMachineControlColumn);
 
-    EXPECT_FLOAT_EQ(layout.leftWidth, 260.0F);
-    EXPECT_FLOAT_EQ(layout.rightWidth, 220.0F);
-    EXPECT_LT(layout.leftSplitRatio, 0.10F);
-    EXPECT_LT(layout.rightSplitRatio, 0.10F);
-    EXPECT_GT(layout.centerWidth, 3000.0F);
+    EXPECT_FLOAT_EQ(sidebar.sideWidth, 338.0F);
+    EXPECT_FLOAT_EQ(machine.sideWidth, 364.0F);
+    EXPECT_LT(sidebar.splitRatio, 0.10F);
+    EXPECT_LT(machine.splitRatio, 0.10F);
+    EXPECT_GT(sidebar.centerWidth, 3000.0F);
 }
 
 TEST(WorkshopLayoutMetrics, NarrowWorkAreasKeepAUsableCenter) {
-    const auto layout = chooseWorkshopDockLayout(800.0F, 26.0F);
+    for (const auto spec : {kSettingsSidebar, kMachineControlColumn, kLibraryBrowser}) {
+        const auto layout = chooseSideColumn(800.0F, 26.0F, spec);
 
-    EXPECT_NEAR(layout.centerWidth, 480.0F, 0.01F);
-    EXPECT_GE(layout.leftWidth, 0.0F);
-    EXPECT_GE(layout.rightWidth, 0.0F);
-    EXPECT_GE(layout.leftSplitRatio, 0.0F);
-    EXPECT_LE(layout.leftSplitRatio, 1.0F);
-    EXPECT_GE(layout.rightSplitRatio, 0.0F);
-    EXPECT_LE(layout.rightSplitRatio, 1.0F);
+        EXPECT_NEAR(layout.centerWidth, 480.0F, 0.01F);
+        EXPECT_NEAR(layout.sideWidth, 320.0F, 0.01F);
+        EXPECT_GE(layout.splitRatio, 0.0F);
+        EXPECT_LE(layout.splitRatio, 1.0F);
+    }
+
+    const auto tiny = chooseSideColumn(300.0F, 13.0F, kSettingsSidebar);
+    EXPECT_FLOAT_EQ(tiny.sideWidth, 0.0F);
+    EXPECT_FLOAT_EQ(tiny.centerWidth, 300.0F);
+}
+
+TEST(WorkshopLayoutMetrics, LibraryBrowserTakesTheLargerShare) {
+    const auto library = chooseSideColumn(1600.0F, 16.0F, kLibraryBrowser);
+    const auto sidebar = chooseSideColumn(1600.0F, 16.0F, kSettingsSidebar);
+
+    EXPECT_FLOAT_EQ(library.sideWidth, 768.0F);
+    EXPECT_GT(library.sideWidth, sidebar.sideWidth);
+    EXPECT_GE(library.centerWidth, 480.0F);
 }
 
 TEST(WorkshopLayoutMetrics, HomeRetainsCompactWidthAndCentersWideContent) {
@@ -71,9 +81,10 @@ TEST(WorkshopLayoutMetrics, RuntimePathsUseTheSharedPolicy) {
     const auto dock = readSource("src/managers/ui_manager_layout.cpp");
     const auto home = readSource("src/ui/panels/start_page.cpp");
 
-    EXPECT_NE(dock.find("chooseWorkshopDockLayout"), std::string::npos);
-    EXPECT_NE(dock.find("dockLayout.leftSplitRatio"), std::string::npos);
-    EXPECT_NE(dock.find("dockLayout.rightSplitRatio"), std::string::npos);
+    for (const char* token : {"chooseSideColumn", "kSettingsSidebar",
+                              "kMachineControlColumn", "kLibraryBrowser", ".splitRatio"}) {
+        EXPECT_NE(dock.find(token), std::string::npos) << token;
+    }
     EXPECT_NE(home.find("chooseHomeLayout"), std::string::npos);
     EXPECT_NE(home.find("##HomeContent"), std::string::npos);
     EXPECT_NE(home.find("homeLayout.horizontalOffset"), std::string::npos);

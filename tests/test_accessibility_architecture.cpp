@@ -42,8 +42,7 @@ TEST(AccessibilityArchitecture, KeyboardNavigationReachesPrimaryWorkflowActions)
 
 TEST(AccessibilityArchitecture, ProjectAndLibraryStateRemainExplicitWithoutColor) {
     const auto projectPanel = readSource("src/ui/panels/project_panel.cpp");
-    const auto contextBar =
-        readSource("src/modules/workshop/ui/project_context_bar.cpp");
+    const auto topBar = readSource("src/managers/ui_manager_top_bar.cpp");
     const auto libraryPicker =
         readSource("src/modules/design_library/ui/library_picker_view.cpp");
     const auto libraryItems = readSource("src/ui/panels/library_panel_items.cpp");
@@ -54,11 +53,16 @@ TEST(AccessibilityArchitecture, ProjectAndLibraryStateRemainExplicitWithoutColor
                               "Information:"}) {
         expectContains(projectPanel, token);
     }
+    // The top bar names the project, its save state, and the machine in
+    // words; the selected tab is underlined as well as filled; and every
+    // disabled tab or action explains itself.
     for (const auto* token : {"presentation.projectLabel",
                               "presentation.machineLabel",
                               "Unsaved",
-                              "Back to Project"}) {
-        expectContains(contextBar, token);
+                              "AddRectFilled",
+                              "workshop::blockReason(block)",
+                              "ImGuiHoveredFlags_AllowWhenDisabled"}) {
+        expectContains(topBar, token);
     }
     for (const auto* token : {"presentation.selectionText",
                               "presentation.membershipText",
@@ -72,17 +76,17 @@ TEST(AccessibilityArchitecture, ProjectAndLibraryStateRemainExplicitWithoutColor
 TEST(AccessibilityArchitecture, ResponsiveChoicesUseAvailableSpaceAndStyleMetrics) {
     const auto libraryPicker =
         readSource("src/modules/design_library/ui/library_picker_view.cpp");
-    const auto contextBar =
-        readSource("src/modules/workshop/ui/project_context_bar.cpp");
+    const auto topBar = readSource("src/managers/ui_manager_top_bar.cpp");
 
     expectContains(libraryPicker, "chooseLibraryPickerActionLayout");
     expectContains(libraryPicker, "ImGui::GetContentRegionAvail().x");
     expectContains(libraryPicker, "ImVec2(-1.0F, 0.0F)");
-    expectContains(contextBar, "ImGuiTableFlags_SizingStretchProp");
-    expectContains(contextBar, "ImGuiTableColumnFlags_WidthFixed");
-    expectContains(contextBar, "oneRowColumns.project");
-    expectContains(contextBar, "oneRowColumns.action");
-    expectContains(contextBar, "viewport->WorkSize.x");
+    // The top bar measures its text and drops the project name, then the tab
+    // labels, before anything can overlap at high UI scales.
+    expectContains(topBar, "ImGui::GetContentRegionAvail().x");
+    expectContains(topBar, "CalcTextSize");
+    expectContains(topBar, "iconsOnly");
+    expectContains(topBar, "rightStart - afterTabs > titleW");
 }
 
 TEST(AccessibilityArchitecture, NarrowLibraryCopyWrapsInOwnedTextBlocks) {

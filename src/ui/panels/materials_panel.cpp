@@ -70,7 +70,7 @@ void MaterialsPanel::render() {
     const auto* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x * 0.4f, viewport->WorkSize.y * 0.5f), ImGuiCond_FirstUseEver);
     applyMinSize(20, 10);
-    if (ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (ImGui::Begin(m_title.c_str(), closeHandle())) {
         renderToolbar();
         ImGui::Separator();
 

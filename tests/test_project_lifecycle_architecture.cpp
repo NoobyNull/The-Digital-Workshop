@@ -248,9 +248,7 @@ TEST(ProjectLifecycleArchitecture, VisibleRoutesAndMachineActionsUseCanonicalGua
 
     EXPECT_NE(resume.find("NavigateWorkshopIntent"), std::string::npos);
     EXPECT_NE(resume.find("WorkshopRoute::Home"), std::string::npos);
-    EXPECT_NE(resume.find("showLibrary() = false"), std::string::npos);
-    EXPECT_NE(resume.find("showProject() = false"), std::string::npos);
-    EXPECT_NE(resume.find("showViewport() = false"), std::string::npos);
+    EXPECT_NE(resume.find("selectTab(workshop::MainTab::Home)"), std::string::npos);
     EXPECT_NE(library.find("WorkshopRoute::DesignLibrary"), std::string::npos);
     EXPECT_NE(library.find("ReturnFromLibraryIntent"), std::string::npos);
     EXPECT_NE(runtime.find("handleCompletedLibraryImports(items)"), std::string::npos);

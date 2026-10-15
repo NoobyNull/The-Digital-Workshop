@@ -72,6 +72,7 @@ class ProjectResumeCoordinator;
 struct ProjectDisplayFacts;
 struct ProjectItemRef;
 enum class ProjectClosePurpose;
+enum class MainTab;
 } // namespace workshop
 
 namespace design_library {
@@ -145,6 +146,8 @@ class Application {
     [[nodiscard]] bool showDesignLibrary();
     [[nodiscard]] bool showDesignLibrary(design_library::LibraryPickerPurpose purpose);
     [[nodiscard]] bool requestLibraryReturn(std::string& errorMessage);
+    [[nodiscard]] bool leaveDesignLibrary();
+    void navigateToTab(workshop::MainTab tab);
     void handleCompletedLibraryImports(const std::vector<ImportedLibraryItem>& items);
     void refreshProjectShell();
     void initializeFileIOManager();

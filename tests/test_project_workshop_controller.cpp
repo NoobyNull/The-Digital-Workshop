@@ -7,7 +7,7 @@
 
 #include "modules/project_session/project_session.h"
 #include "modules/workshop/project_workshop_controller.h"
-#include "modules/workshop/ui/project_context_bar_model.h"
+#include "modules/workshop/ui/project_shell_presentation.h"
 
 namespace dw::workshop {
 namespace {
@@ -265,75 +265,36 @@ TEST(ProjectWorkshopController, SnapshotPreservesAllCallerAndSessionFacts) {
     EXPECT_EQ(shell.machineStatus().running, machine.running);
 }
 
-TEST(ProjectWorkshopController, ContextBarPresentationExplainsTheWholeWorkshopContext) {
+TEST(ProjectWorkshopController, ShellPresentationNamesTheProjectAndMachineInWords) {
     RecordingTarget target;
     ProjectWorkshopController controller(target);
     ProjectDisplayFacts display;
     MachineStatusSnapshot machine{"Virtual CNC", true, false};
 
-    auto view = projectContextBarPresentation(controller.snapshot(display, machine));
+    auto view = projectShellPresentation(controller.snapshot(display, machine));
     EXPECT_EQ(view.projectLabel, "No project open");
-    EXPECT_EQ(view.stageLabel, "Home");
-    EXPECT_EQ(view.focusLabel, "Start or open a project to keep your work together");
     EXPECT_EQ(view.machineLabel, "Virtual CNC ready");
     EXPECT_FALSE(view.projectDirty);
-    EXPECT_FALSE(view.showBackToProject);
+    EXPECT_FALSE(view.machineRunning);
 
     target.current.activeProject = ProjectId(7);
-    target.current.activeProjectItem = projectItem(7, 31);
-    target.current.route = WorkshopRoute::Project;
     target.current.projectDirty = true;
-    display.projectLabel = "Walnut sign";
-    display.itemLabel = "Front relief";
-    view = projectContextBarPresentation(controller.snapshot(display, machine));
-    EXPECT_EQ(view.projectLabel, "Walnut sign");
-    EXPECT_EQ(view.stageLabel, "Project");
-    EXPECT_EQ(view.focusLabel, "Project item  /  Front relief");
+    view = projectShellPresentation(controller.snapshot(display, machine));
+    EXPECT_EQ(view.projectLabel, "Project #7");
     EXPECT_TRUE(view.projectDirty);
-    EXPECT_TRUE(view.showBackToProject);
 
-    target.current.route = WorkshopRoute::DesignLibrary;
-    target.current.libraryPreview = LibraryItemRef{LibraryItemKind::Model, LibraryItemId(9)};
-    display.previewLabel = "River sign blank";
+    display.projectLabel = "Walnut sign";
     machine.running = true;
-    view = projectContextBarPresentation(controller.snapshot(display, machine));
-    EXPECT_EQ(view.stageLabel, "Design Library");
-    EXPECT_EQ(view.focusLabel, "Library preview  /  River sign blank");
+    view = projectShellPresentation(controller.snapshot(display, machine));
+    EXPECT_EQ(view.projectLabel, "Walnut sign");
     EXPECT_EQ(view.machineLabel, "Virtual CNC running");
-    EXPECT_TRUE(view.runLocked);
-    EXPECT_FALSE(view.enableBackToProject);
-}
+    EXPECT_TRUE(view.machineRunning);
 
-TEST(ProjectWorkshopController, ContextBarBackActionRespectsProjectAndRunState) {
-    RecordingTarget target;
-    ProjectWorkshopController controller(target);
-    const ProjectDisplayFacts display;
-    MachineStatusSnapshot machine{"CNC", true, false};
-
-    EXPECT_FALSE(
-        projectContextBarPresentation(controller.snapshot(display, machine)).enableBackToProject);
-
-    target.current.activeProject = ProjectId(7);
-    target.current.route = WorkshopRoute::Home;
-    EXPECT_TRUE(
-        projectContextBarPresentation(controller.snapshot(display, machine)).enableBackToProject);
-
-    target.current.route = WorkshopRoute::Project;
-    EXPECT_FALSE(
-        projectContextBarPresentation(controller.snapshot(display, machine)).enableBackToProject);
-
-    target.current.libraryPreview = LibraryItemRef{LibraryItemKind::Model, LibraryItemId(3)};
-    EXPECT_TRUE(
-        projectContextBarPresentation(controller.snapshot(display, machine)).enableBackToProject);
-
-    machine.running = true;
-    EXPECT_FALSE(
-        projectContextBarPresentation(controller.snapshot(display, machine)).enableBackToProject);
-
-    machine.running = false;
+    machine = MachineStatusSnapshot{"", false, false};
     target.current.activeRun = RunLockRef{RunId(11), std::nullopt};
-    EXPECT_FALSE(
-        projectContextBarPresentation(controller.snapshot(display, machine)).enableBackToProject);
+    view = projectShellPresentation(controller.snapshot(display, machine));
+    EXPECT_EQ(view.machineLabel, "Machine offline");
+    EXPECT_TRUE(view.machineRunning);
 }
 
 TEST(ProjectWorkshopController, BackIntentCarriesTheSnapshotGenerationGuard) {

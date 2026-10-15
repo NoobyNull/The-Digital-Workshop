@@ -30,7 +30,7 @@ void ProjectPanel::render() {
     if (!m_open) return;
 
     applyMinSize(14, 8);
-    if (ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (ImGui::Begin(m_title.c_str(), closeHandle())) {
         const auto snapshot = m_snapshotProvider ? m_snapshotProvider() : std::nullopt;
         if (snapshot) {
             renderProjectHeader(*snapshot);

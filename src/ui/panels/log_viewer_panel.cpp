@@ -147,7 +147,7 @@ void LogViewerPanel::render() {
         return;
 
     applyMinSize(80.0f, 24.0f);
-    if (!ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (!ImGui::Begin(m_title.c_str(), closeHandle())) {
         ImGui::End();
         return;
     }

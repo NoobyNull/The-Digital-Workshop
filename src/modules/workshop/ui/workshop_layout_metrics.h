@@ -4,13 +4,24 @@
 
 namespace dw::workshop::ui {
 
-struct WorkshopDockLayout {
-    float leftWidth = 0.0F;
-    float rightWidth = 0.0F;
+struct SideColumnLayout {
+    float sideWidth = 0.0F;
     float centerWidth = 0.0F;
-    float leftSplitRatio = 0.0F;
-    float rightSplitRatio = 0.0F;
+    float splitRatio = 0.0F;
 };
+
+struct SideColumnSpec {
+    float widthInEms = 0.0F;
+    float minimumWidth = 0.0F;
+    float maximumWidth = 0.0F;
+};
+
+// Prepare and Preview keep a slicer-style settings column on the left.
+inline constexpr SideColumnSpec kSettingsSidebar{26.0F, 320.0F, 520.0F};
+// Device keeps the machine controls (position, jog, safety) on the right.
+inline constexpr SideColumnSpec kMachineControlColumn{28.0F, 340.0F, 560.0F};
+// Library gives the design browser most of the width and previews beside it.
+inline constexpr SideColumnSpec kLibraryBrowser{48.0F, 520.0F, 1100.0F};
 
 struct HomeLayout {
     float contentWidth = 0.0F;
@@ -19,44 +30,23 @@ struct HomeLayout {
     float rightColumnWidth = 0.0F;
 };
 
-// Sidebars carry long labels. Size them from the rendered
-// font instead of a viewport percentage, then preserve enough center workspace.
-inline WorkshopDockLayout chooseWorkshopDockLayout(float workAreaWidth,
-                                                float fontSize) noexcept {
-    constexpr float kMinimumLeftWidth = 260.0F;
-    constexpr float kMaximumLeftWidth = 430.0F;
-    constexpr float kLeftWidthInEms = 17.5F;
-    constexpr float kMinimumRightWidth = 220.0F;
-    constexpr float kMaximumRightWidth = 320.0F;
-    constexpr float kRightWidthInEms = 12.0F;
+// Side columns carry long labels. Size them from the rendered font instead of
+// a viewport percentage, then preserve enough center workspace for the canvas.
+inline SideColumnLayout chooseSideColumn(float workAreaWidth,
+                                         float fontSize,
+                                         SideColumnSpec spec) noexcept {
     constexpr float kMinimumCenterWidth = 480.0F;
 
     const float width = std::max(0.0F, workAreaWidth);
     const float em = std::max(1.0F, fontSize);
-    float left = std::clamp(em * kLeftWidthInEms,
-                            kMinimumLeftWidth,
-                            kMaximumLeftWidth);
-    float right = std::clamp(em * kRightWidthInEms,
-                             kMinimumRightWidth,
-                             kMaximumRightWidth);
+    const float requested =
+        std::clamp(em * spec.widthInEms, spec.minimumWidth, spec.maximumWidth);
+    const float side = std::min(requested, std::max(0.0F, width - kMinimumCenterWidth));
 
-    const float sideBudget = std::max(0.0F, width - kMinimumCenterWidth);
-    const float requestedSides = left + right;
-    if (requestedSides > sideBudget && requestedSides > 0.0F) {
-        const float scale = sideBudget / requestedSides;
-        left *= scale;
-        right *= scale;
-    }
-
-    const float remainingAfterLeft = std::max(0.0F, width - left);
-    WorkshopDockLayout layout;
-    layout.leftWidth = left;
-    layout.rightWidth = std::min(right, remainingAfterLeft);
-    layout.centerWidth = std::max(0.0F, width - left - layout.rightWidth);
-    layout.leftSplitRatio = width > 0.0F ? left / width : 0.0F;
-    layout.rightSplitRatio = remainingAfterLeft > 0.0F
-        ? layout.rightWidth / remainingAfterLeft
-        : 0.0F;
+    SideColumnLayout layout;
+    layout.sideWidth = side;
+    layout.centerWidth = width - side;
+    layout.splitRatio = width > 0.0F ? side / width : 0.0F;
     return layout;
 }
 

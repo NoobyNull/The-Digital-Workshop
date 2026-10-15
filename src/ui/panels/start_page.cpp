@@ -36,7 +36,7 @@ void StartPage::render() {
     }
 
     applyMinSize(30, 16);
-    if (ImGui::Begin(m_title.c_str(), &m_open, flags)) {
+    if (ImGui::Begin(m_title.c_str(), closeHandle(), flags)) {
         const auto homeLayout = workshop::ui::chooseHomeLayout(
             ImGui::GetContentRegionAvail().x, ImGui::GetStyle().ItemSpacing.x);
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + homeLayout.horizontalOffset);

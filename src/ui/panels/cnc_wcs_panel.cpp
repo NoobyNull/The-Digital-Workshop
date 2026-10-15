@@ -18,7 +18,7 @@ void CncWcsPanel::render() {
         return;
 
     applyMinSize(16, 8);
-    if (!ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (!ImGui::Begin(m_title.c_str(), closeHandle())) {
         ImGui::End();
         return;
     }

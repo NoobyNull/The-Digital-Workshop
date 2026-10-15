@@ -80,7 +80,8 @@ void Application::initializeFileIOManager() {
     m_fileIOManager->setThumbnailCallback(
         [this](int64_t modelId, Mesh& mesh) { return generateMaterialThumbnail(modelId, mesh); });
     m_fileIOManager->setGCodeCallback([this](const std::string& path) {
-        m_uiManager->setWorkspaceMode(WorkspaceMode::CNC);
+        // Opened G-code is inspected in Preview; Send to Machine moves it on.
+        (void)m_uiManager->selectTab(workshop::MainTab::Preview);
         if (auto* panel = m_uiManager->gcodePanel()) {
             panel->setOpen(true);
             panel->loadFile(path);

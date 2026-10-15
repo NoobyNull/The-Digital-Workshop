@@ -16,9 +16,7 @@ void Application::wireMenuActions() {
     auto finishProjectAction = [this](bool activated) {
         if (!activated)
             return;
-        m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-        m_uiManager->showStartPage() = false;
-        m_uiManager->openWindow("project");
+        (void)m_uiManager->selectTab(workshop::MainTab::Prepare);
     };
     m_uiManager->setOnNewProject([this]() { showHome(true); });
     m_uiManager->setOnOpenProject([this, finishProjectAction]() {
@@ -54,11 +52,6 @@ void Application::wireMenuActions() {
                 return;
         }
         m_fileIOManager->importProjectArchive(finishProjectAction);
-    });
-    m_uiManager->setOnOpenDesignLibrary([this]() { (void)showDesignLibrary(); });
-    m_uiManager->setOnCloseDesignLibrary([this]() {
-        std::string error;
-        (void)requestLibraryReturn(error);
     });
     m_uiManager->setOnQuit([this]() { quit(); });
     m_uiManager->setOnSpawnSettings([this]() { m_configManager->spawnSettingsApp(); });

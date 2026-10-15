@@ -45,7 +45,7 @@ void CncSettingsPanel::render() {
         return;
 
     applyMinSize(22, 10);
-    if (!ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (!ImGui::Begin(m_title.c_str(), closeHandle())) {
         ImGui::End();
         return;
     }

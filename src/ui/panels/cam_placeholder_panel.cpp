@@ -28,7 +28,7 @@ void CamPlaceholderPanel::render() {
     if (!m_open)
         return;
 
-    if (!ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (!ImGui::Begin(m_title.c_str(), closeHandle())) {
         ImGui::End();
         return;
     }

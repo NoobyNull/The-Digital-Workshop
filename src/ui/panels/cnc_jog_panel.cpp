@@ -56,7 +56,7 @@ void CncJogPanel::render() {
         return;
 
     applyMinSize(14, 10);
-    if (!ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (!ImGui::Begin(m_title.c_str(), closeHandle())) {
         ImGui::End();
         return;
     }
