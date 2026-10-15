@@ -1,24 +1,27 @@
 #pragma once
 
 // Digital Workshop - UI Manager
-// Owns all UI panels, dialogs, visibility state, menu bar,
-// keyboard shortcuts, import progress overlay, about/restart popups,
-// and dock layout. Extracted from Application (god class decomposition).
+// Owns all UI panels, dialogs, the slicer-style shell (top bar and one fixed
+// page layout per main tab), keyboard shortcuts, import progress overlay, and
+// about/restart popups. Extracted from Application (god class decomposition).
 //
 // Implementation split across:
-//   ui_manager.cpp         — init, shutdown, panel rendering, background UI
-//   ui_manager_menus.cpp   — menu bar, keyboard shortcuts, about/restart dialogs
-//   ui_manager_layout.cpp  — dock layout, presets, config save/restore
+//   ui_manager.cpp          — init, shutdown, panel registry, tab selection
+//   ui_manager_top_bar.cpp  — top bar: menu button, tabs, project, actions
+//   ui_manager_menus.cpp    — menus, keyboard shortcuts, about/restart dialogs
+//   ui_manager_layout.cpp   — page host, per-tab dock layouts, config
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "../core/config/layout_preset.h"
-#include "../core/config/workspace_stream_policy.h"
 #include "../core/config/window_catalog.h"
 #include "../core/types.h"
+#include "../modules/workshop/main_tabs.h"
+#include "../modules/workshop/project_workshop_controller.h"
 
 using ImGuiID = unsigned int;
 
@@ -44,13 +47,10 @@ class PropertiesPanel;
 class ProjectPanel;
 class GCodePanel;
 class LogViewerPanel;
-class CostingPanel;
-class CutOptimizerPanel;
 class MaterialsPanel;
 class StartPage;
 class ToolBrowserPanel;
 class CamPlaceholderPanel;
-class GroupPanel;
 
 // Forward declarations - dialogs
 class FileDialog;
@@ -75,32 +75,19 @@ class ProjectManager;
 class MaterialManager;
 class ModelRepository;
 class GCodeRepository;
-class CutPlanRepository;
-class CostRepository;
-class RateCategoryRepository;
 class ImportQueue;
 class Workspace;
 
 // Forward declarations - widgets
 class StatusBar;
 class ContextMenuManager;
-class ProjectContextBar;
-
-namespace workshop {
-class ProjectShellSnapshot;
-}
 
 // Callback types for actions that remain in Application
-// Workspace mode — controls which panels are visible by default
-enum class WorkspaceMode { Model, CNC };
-
 using ActionCallback = std::function<void()>;
 using ModelIdCallback = std::function<void(int64_t)>;
 using PathCallback = std::function<void(const Path&)>;
 using PathsCallback = std::function<void(const std::vector<std::string>&)>;
 using ResetToDefaultsCallback = std::function<std::string()>;
-using ExperienceModeGetter = std::function<bool()>;
-using ExperienceModeSetter = std::function<void(bool)>;
 
 class UIManager {
   public:
@@ -119,34 +106,38 @@ class UIManager {
     void init(LibraryManager* libraryManager,
               ProjectManager* projectManager,
               MaterialManager* materialManager,
-              CostRepository* costRepo = nullptr,
-              RateCategoryRepository* rateCatRepo = nullptr,
               ModelRepository* modelRepo = nullptr,
-              GCodeRepository* gcodeRepo = nullptr,
-              CutPlanRepository* cutPlanRepo = nullptr);
+              GCodeRepository* gcodeRepo = nullptr);
 
     // Shutdown and destroy all UI resources
     void shutdown();
 
     // --- Per-frame rendering ---
-    void renderMenuBar();
-    void renderProjectContextBar();
+    // Order: shortcuts, top bar, page host, panels, background UI.
+    void renderTopBar();
+    void renderPageHost();
     void renderPanels();
     void renderAboutDialog();
     void renderResetToDefaultsDialog();
     void renderRestartPopup(const ActionCallback& onRelaunch);
-    void setupDefaultDockLayout(ImGuiID dockspaceId);
     void handleKeyboardShortcuts();
-    [[nodiscard]] float projectContextBarHeight() const;
     void setProjectShellSnapshot(workshop::ProjectShellSnapshot snapshot);
-    void setOnBackToProject(ActionCallback callback);
 
     // --- Background UI (StatusBar, ToastManager, ImportSummaryDialog) ---
     void renderBackgroundUI(float deltaTime, const LoadingState* loadingState);
 
-    // --- Dock layout first-frame logic ---
-    [[nodiscard]] bool isFirstFrame() const { return m_firstFrame; }
-    void clearFirstFrame() { m_firstFrame = false; }
+    // --- Main tabs (Home, Library, Prepare, Preview, Device, Project) ---
+    // Each tab shows a fixed page, like a 3D-printing slicer. selectTab shows
+    // the page directly and returns false when the tab policy blocks it;
+    // requestTab is a user's tab click, which Application routes through the
+    // project and Library flows before it selects the tab.
+    [[nodiscard]] workshop::MainTab activeTab() const { return m_activeTab; }
+    bool selectTab(workshop::MainTab tab);
+    void requestTab(workshop::MainTab tab);
+    void setOnMainTabRequested(std::function<void(workshop::MainTab)> cb) {
+        m_onMainTabRequested = std::move(cb);
+    }
+    [[nodiscard]] bool isMachineWorkspace() const { return workshop::isMachineTab(m_activeTab); }
 
     // --- Panel accessors (Application needs these for wiring callbacks) ---
     ViewportPanel* viewportPanel() { return m_viewportPanel.get(); }
@@ -155,9 +146,7 @@ class UIManager {
     ProjectPanel* projectPanel() { return m_projectPanel.get(); }
     GCodePanel* gcodePanel() { return m_gcodePanel.get(); }
     LogViewerPanel* logViewerPanel() { return m_logViewerPanel.get(); }
-    CutOptimizerPanel* cutOptimizerPanel() { return m_cutOptimizerPanel.get(); }
     MaterialsPanel* materialsPanel() { return m_materialsPanel.get(); }
-    CostingPanel* costPanel() { return m_costPanel.get(); }
     StartPage* startPage() { return m_startPage.get(); }
     ToolBrowserPanel* toolBrowserPanel() { return m_toolBrowserPanel.get(); }
     CncStatusPanel* cncStatusPanel() { return m_cncStatusPanel.get(); }
@@ -183,33 +172,10 @@ class UIManager {
     }
     ContextMenuManager* contextMenuManager() { return m_contextMenuManager.get(); }
 
-    // --- Visibility state ---
-    bool& showViewport() { return m_showViewport; }
-    bool& showLibrary() { return m_showLibrary; }
-    bool& showProperties() { return m_showProperties; }
-    bool& showProject() { return m_showProject; }
-    bool& showGCode() { return m_showGCode; }
-    bool& showLogViewer() { return m_showLogViewer; }
-    bool& showCutOptimizer() { return m_showCutOptimizer; }
-    bool& showProjectCosting() { return m_showProjectCosting; }
-    bool& showMaterials() { return m_showMaterials; }
-    bool& showToolBrowser() { return m_showToolBrowser; }
-    bool& showCncStatus() { return m_showCncStatus; }
-    bool& showCncJog() { return m_showCncJog; }
-    bool& showCncConsole() { return m_showCncConsole; }
-    bool& showCncWcs() { return m_showCncWcs; }
-    bool& showCncTool() { return m_showCncTool; }
-    bool& showCncJob() { return m_showCncJob; }
-    bool& showCncSafety() { return m_showCncSafety; }
-    bool& showCncSettings() { return m_showCncSettings; }
-    bool& showCncMacros() { return m_showCncMacros; }
-    bool& showDirectCarve() { return m_showDirectCarve; }
-    bool& showStartPage() { return m_showStartPage; }
-
-    // Workspace mode
-    WorkspaceMode workspaceMode() const { return m_workspaceMode; }
-    void setWorkspaceMode(WorkspaceMode mode);
-    void showCncPanels(bool show);
+    // --- Windows ---
+    // Page windows follow the active tab. openWindow on a page window selects
+    // a tab that shows it; on a floating window (Materials, Tool Library, Log
+    // Viewer, dialogs) it opens and focuses that window.
     void openWindow(const std::string& key);
     void toggleWindow(const std::string& key);
     [[nodiscard]] bool isWindowVisible(const std::string& key) const;
@@ -217,21 +183,6 @@ class UIManager {
     void openMachineProfiles();
     void addMachineProfileChangedCallback(ActionCallback cb);
     bool& showRestartPopup() { return m_showRestartPopup; }
-
-    // Layout presets
-    void applyLayoutPreset(int presetIndex);
-    LayoutPreset captureCurrentLayout(const std::string& name) const;
-    void saveCurrentAsPreset(const std::string& name);
-    void deletePreset(int index);
-    int activePresetIndex() const { return m_activePresetIndex; }
-    void setExperienceModeAccessors(ExperienceModeGetter getter,
-                                    ExperienceModeSetter setter) {
-        m_guidedExperienceGetter = std::move(getter);
-        m_guidedExperienceSetter = std::move(setter);
-    }
-
-    // Group panels
-    void addGroupPanel();
 
     // --- Action callbacks (set by Application) ---
     void setOnNewProject(ActionCallback cb) { m_onNewProject = std::move(cb); }
@@ -241,8 +192,6 @@ class UIManager {
     void setOnImportFolder(ActionCallback cb) { m_onImportFolder = std::move(cb); }
     void setOnExportModel(ActionCallback cb) { m_onExportModel = std::move(cb); }
     void setOnImportProjectArchive(ActionCallback cb) { m_onImportProjectArchive = std::move(cb); }
-    void setOnOpenDesignLibrary(ActionCallback cb) { m_onOpenDesignLibrary = std::move(cb); }
-    void setOnCloseDesignLibrary(ActionCallback cb) { m_onCloseDesignLibrary = std::move(cb); }
     void setOnQuit(ActionCallback cb) { m_onQuit = std::move(cb); }
     void setOnSpawnSettings(ActionCallback cb) { m_onSpawnSettings = std::move(cb); }
     void setOnShowAbout(ActionCallback cb) { m_onShowAbout = std::move(cb); }
@@ -268,9 +217,8 @@ class UIManager {
     void setOnDisconnect(ActionCallback cb) { m_onDisconnect = std::move(cb); }
     void setOnPanicStop(ActionCallback cb) { m_onPanicStop = std::move(cb); }
 
-    // CNC streaming state (for panic smash detection)
-    void setCncStreaming(bool streaming,
-                         CncStreamOrigin origin = CncStreamOrigin::ExternalGCode);
+    // CNC streaming state. A stream holds the Device tab until it ends.
+    void setCncStreaming(bool streaming);
 
     // CNC state for menu bar display
     void setCncConnected(bool v) { m_cncConnected = v; }
@@ -301,9 +249,7 @@ class UIManager {
     std::unique_ptr<ProjectPanel> m_projectPanel;
     std::unique_ptr<GCodePanel> m_gcodePanel;
     std::unique_ptr<LogViewerPanel> m_logViewerPanel;
-    std::unique_ptr<CutOptimizerPanel> m_cutOptimizerPanel;
     std::unique_ptr<MaterialsPanel> m_materialsPanel;
-    std::unique_ptr<CostingPanel> m_costPanel;
     std::unique_ptr<StartPage> m_startPage;
     std::unique_ptr<ToolBrowserPanel> m_toolBrowserPanel;
     std::unique_ptr<CncStatusPanel> m_cncStatusPanel;
@@ -324,8 +270,6 @@ class UIManager {
     bool m_showProject = true;
     bool m_showGCode = false;
     bool m_showLogViewer = false;
-    bool m_showCutOptimizer = false;
-    bool m_showProjectCosting = false;
     bool m_showMaterials = false;
     bool m_showToolBrowser = false;
     bool m_showCncStatus = false;
@@ -340,49 +284,42 @@ class UIManager {
     bool m_showDirectCarve = false;
     bool m_showStartPage = true;
 
-    // Group panels (blank dockable containers)
-    std::vector<std::unique_ptr<GroupPanel>> m_groupPanels;
-    int m_nextGroupId = 1;
-
-    // Panel registry — maps panel keys to visibility, rendering, and config
+    // Panel registry — maps panel keys to visibility and rendering. Page
+    // windows are shown by the active tab; floating windows by the user.
     struct PanelEntry {
-        const char* key;         // Layout preset key (e.g. "cnc_status")
+        const char* key;         // Window key (e.g. "cnc_status")
         bool* showFlag;          // &m_showCncStatus
-        const char* menuLabel;   // View menu display name
-        const char* windowTitle; // ImGui window title for focus detection
+        const char* windowTitle; // ImGui window title, used to dock the window
         Panel* panel;            // Base pointer for render() dispatch
         bool syncClose;          // Handle X-button close → visibility sync
-        WindowRole role;         // Workspace ownership
+        bool floating;           // Opened by the user rather than by a tab
     };
     std::vector<PanelEntry> m_panelRegistry;
     void buildPanelRegistry();
-    void enforceWorkspaceBoundary();
-    void syncWorkspaceModeToPanels();
+    [[nodiscard]] const PanelEntry* findPanel(const std::string& key) const;
+    [[nodiscard]] PanelEntry* findPanel(const std::string& key);
+    void applyTabToPanels();
+    [[nodiscard]] workshop::MainTabFacts tabFacts() const;
     std::vector<std::string> currentStatusTips() const;
-    bool senderSurfaceVisible() const;
-    bool isBuiltInWorkshopPreset(int presetIndex) const;
-    bool isBuiltInSenderPreset(int presetIndex) const;
-    int workshopPresetIndex() const;
-    int senderPresetIndex() const;
-    bool guidedExperienceSelected() const;
-    void selectGuidedExperience(bool guided);
 
     // Dialog list for batch rendering
     std::vector<Dialog*> m_dialogList;
 
-    // Layout preset state
-    int m_activePresetIndex = 0;
-    bool m_suppressAutoContext = false;
-    bool m_showSavePresetPopup = false;
-    char m_presetNameBuf[64] = {};
-    ExperienceModeGetter m_guidedExperienceGetter;
-    ExperienceModeSetter m_guidedExperienceSetter;
-    void checkAutoContextTrigger(const std::string& focusedPanelKey);
-    void renderPresetSelector();
-    void renderSavePresetPopup();
-
-    // Workspace mode
-    WorkspaceMode m_workspaceMode = WorkspaceMode::Model;
+    // Main tab state
+    workshop::MainTab m_activeTab = workshop::MainTab::Home;
+    bool m_layoutDirty = true;
+    std::function<void(workshop::MainTab)> m_onMainTabRequested;
+    std::optional<workshop::ProjectShellSnapshot> m_shellSnapshot;
+    void buildPageLayout(ImGuiID dockspaceId);
+    void dockPanel(const char* key, ImGuiID node) const;
+    void openSectionOn(ImGuiID node, const char* windowTitle);
+    void applyPendingSectionTabs();
+    std::vector<std::pair<ImGuiID, ImGuiID>> m_pendingSectionTabs; // node, tab
+    const char* m_focusAfterLayout = nullptr; // window key focused once a page appears
+    // Which windows each tab's page shows, and the tab that shows a window
+    // when something asks for it by key.
+    static const std::vector<const char*>& pageWindowKeys(workshop::MainTab tab);
+    static workshop::MainTab defaultTabForWindow(const std::string& key);
 
     // Dialogs
     std::unique_ptr<FileDialog> m_fileDialog;
@@ -399,7 +336,6 @@ class UIManager {
 
     // Widgets
     std::unique_ptr<StatusBar> m_statusBar;
-    std::unique_ptr<ProjectContextBar> m_projectContextBar;
 
     // Context menu manager
     std::unique_ptr<ContextMenuManager> m_contextMenuManager;
@@ -407,22 +343,25 @@ class UIManager {
     // Restart popup state
     bool m_showRestartPopup = false;
     bool m_showResetToDefaultsPopup = false;
+    bool m_openAboutRequested = false;
     std::string m_resetToDefaultsError;
 
-    // First frame flag for dock layout
-    bool m_firstFrame = true;
     bool m_focusToolLibraryNextFrame = false;
 
-    // Toolbar and menu rendering helpers (in ui_manager_menus.cpp)
-    void renderToolbar();
+    // Top bar helpers (ui_manager_top_bar.cpp)
+    void renderAppMenuButton();
+    void renderTabButtons(bool iconsOnly);
+    void renderMachineStatus();
+    void renderPrimaryActions();
+    void sendToMachine();
+
+    // Menu helpers (ui_manager_menus.cpp)
     void renderFileMenu();
     void renderViewMenu();
-    void renderDesignLibraryMenuItem();
-    void renderSenderSubmenu();
+    void renderLiveOverlayMenu();
     void renderEditMenu();
     void renderToolsMenu();
     void renderHelpMenu();
-    void renderCncMenuBarStatus();
     bool checkPanicStop();
 
     // Action callbacks (delegated to Application)
@@ -433,8 +372,6 @@ class UIManager {
     ActionCallback m_onImportFolder;
     ActionCallback m_onExportModel;
     ActionCallback m_onImportProjectArchive;
-    ActionCallback m_onOpenDesignLibrary;
-    ActionCallback m_onCloseDesignLibrary;
     ActionCallback m_onQuit;
     ActionCallback m_onSpawnSettings;
     ActionCallback m_onShowAbout;
@@ -457,7 +394,6 @@ class UIManager {
     bool m_cncConnected = false;
     bool m_cncSimulating = false;
     bool m_cncStreaming = false;
-    CncStreamShell m_cncStreamShell = CncStreamShell::Sender;
     std::vector<std::string> m_availablePorts;
 
     // Keyboard smash panic detector

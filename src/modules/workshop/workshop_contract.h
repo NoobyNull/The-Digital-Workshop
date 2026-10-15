@@ -107,8 +107,8 @@ struct RunLockRef {
     }
 };
 
-// Prepare Carve remains inside Project. Advanced is an experience rendering the
-// same context, not a second route or a second source of project truth.
+// CAM setup work happens inside Project; the Design Library and Run CNC are
+// routes the user leaves Project for and returns from.
 enum class WorkshopRoute {
     Home,
     Project,
@@ -122,11 +122,6 @@ enum class SelectionOrigin {
     LibraryPreview,
     StandaloneFile,
     ExternalRun,
-};
-
-enum class ExperienceMode {
-    Guided,
-    Advanced,
 };
 
 struct WorkshopContextSnapshot {
@@ -220,7 +215,6 @@ enum class TransitionStatus {
 
 enum class TransitionReason {
     None,
-    ExperienceDisabled,
     InvalidReference,
     NoActiveProject,
     ProjectMismatch,
@@ -260,6 +254,16 @@ struct WorkshopTransition {
         return status == TransitionStatus::Applied ||
                status == TransitionStatus::Unchanged;
     }
+};
+
+// The authority that applies workshop commands. ProjectSession implements it;
+// tests substitute a recording target.
+class WorkshopCommandTarget {
+  public:
+    virtual ~WorkshopCommandTarget() = default;
+
+    [[nodiscard]] virtual WorkshopContextSnapshot snapshot() const = 0;
+    virtual WorkshopTransition dispatch(const WorkshopCommand& command) = 0;
 };
 
 } // namespace dw::workshop

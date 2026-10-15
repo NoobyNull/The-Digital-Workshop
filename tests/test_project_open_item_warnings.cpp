@@ -24,7 +24,7 @@ TEST(ProjectOpenItemWarnings, BuildsWarningsForStaleAndMissingItems) {
     std::vector<dw::ProjectOpenItem> items = {
         makeItem(1, dw::ProjectOpenItemType::Model, "Relief", dw::ProjectOpenItemStatus::Ready),
         makeItem(2, dw::ProjectOpenItemType::Gcode, "relief.nc", dw::ProjectOpenItemStatus::Stale),
-        makeItem(3, dw::ProjectOpenItemType::Stock, "Walnut blank",
+        makeItem(3, dw::ProjectOpenItemType::Operation, "Top face",
                  dw::ProjectOpenItemStatus::Missing),
     };
 
@@ -32,7 +32,7 @@ TEST(ProjectOpenItemWarnings, BuildsWarningsForStaleAndMissingItems) {
 
     ASSERT_EQ(warnings.size(), 2u);
     EXPECT_EQ(warnings[0], "G-code 'relief.nc' is stale");
-    EXPECT_EQ(warnings[1], "Stock 'Walnut blank' is missing");
+    EXPECT_EQ(warnings[1], "CAM setup 'Top face' is missing");
 }
 
 TEST(ProjectOpenItemWarnings, ReturnsEmptyWhenProjectIsCurrent) {

@@ -144,7 +144,7 @@ void GCodePanel::render() {
         return;
 
     applyMinSize(24, 12);
-    if (ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (ImGui::Begin(m_title.c_str(), closeHandle())) {
         // Job completion flash bar
         if (m_jobFlashTimer > 0.0f) {
             m_jobFlashTimer -= ImGui::GetIO().DeltaTime;
@@ -188,7 +188,6 @@ void GCodePanel::render() {
             }
         }
 
-        renderModeTabs();
         renderToolbar();
         renderSearchBar();
 
@@ -261,20 +260,6 @@ void GCodePanel::render() {
         }
     }
     ImGui::End();
-}
-
-void GCodePanel::renderModeTabs() {
-    if (ImGui::BeginTabBar("##GCodeModeTabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
-        if (ImGui::BeginTabItem("View")) {
-            m_mode = GCodePanelMode::View;
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem("Send")) {
-            m_mode = GCodePanelMode::Send;
-            ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
-    }
 }
 
 void GCodePanel::renderToolbar() {

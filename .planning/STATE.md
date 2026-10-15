@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: PureCutCNC CAM Integration
 status: phase-2-complete
-stopped_at: Phase 2 (Sidecar) complete; Phase 3 (bridge session API) next
-last_updated: "2026-08-23T00:00:00-07:00"
-last_activity: 2026-08-23
+stopped_at: Phase 2 (Sidecar) complete; scope reset 2026-10-14; Phase 3 (setup document and persistence) next
+last_updated: "2026-10-14T00:00:00-07:00"
+last_activity: 2026-10-14
 progress:
   total_phases: 7
   completed_phases: 2
@@ -20,10 +20,22 @@ v0.7.0 (Project-Centered Workshop) is frozen as an engineering candidate at
 protocol) was retired without being run: the guided carve flow it was meant
 to validate was removed as part of the v0.8.0 CAM rebuild described below.
 
+## Scope reset (2026-10-14)
+
+Digital Workshop is now library management, CAM, and the sender — see
+`.planning/WORKSHOP-SCOPE.md`. Removed: project costing, the Cut Optimizer and
+stock sizes, the GraphQLite graph layer, the six-stage Project Plan, the
+unused guided carve step flow, and the Guided Workshop experience. The
+Project panel now shows a slicer-style contents tree (design → CAM setup →
+G-code → run). The CAM plan below is revised accordingly: PureCutCNC is used
+for its toolpath math through the stateless JobSpec endpoint, with no
+web-UI parity requirement.
+
 ## Current Focus
 
 - **Milestone:** v0.8.0 PureCutCNC CAM Integration
-- **Design:** `.planning/CAM-INTEGRATION-DESIGN.md`
+- **Scope:** `.planning/WORKSHOP-SCOPE.md`
+- **Design:** `.planning/CAM-INTEGRATION-DESIGN.md` (Phases 1–2; later phases superseded by the scope doc)
 - **Phase 1 plan:** `.planning/plans/2026-08-23-cam-phase1-yank.md`
 - **Requirements:** `.planning/REQUIREMENTS.md`
 - **Roadmap:** `.planning/ROADMAP.md`
@@ -115,19 +127,20 @@ payload.
 
 ## Next Action
 
-Start Phase 3 (bridge session API): the full CAMJ surface exposed as bridge
-session endpoints, a parity checklist derived against the existing web UI,
-a schema-export endpoint to drive generated parameter forms, and contract
-tests against the sidecar.
+Start Phase 3 as revised in `.planning/WORKSHOP-SCOPE.md`: a JobSpec-shaped
+setup document stored as a project item in the project directory and carried
+by `.dwproj`, with tool and machine records mapped from the `.vtdb` tool
+database and machine profiles.
 
-Carried into Phase 3 from the Phase 2 final review: expose
-`paths::getExeDir()` in `app_paths.h` instead of the copied `/proc/self/exe`
-idiom in `application_wiring_cnc.cpp`; move the generic HTTP helpers out of
-the `dw::lmstudio` namespace once the session client widens their use;
-hoist the hardcoded 10 s reachability wait into `CamEngineConfig` if any
-synchronous path survives; revisit `curlPost`'s 120 s timeout before real
-jobs stream through the client.
+Carried forward from the Phase 2 final review: expose `paths::getExeDir()` in
+`app_paths.h` instead of the copied `/proc/self/exe` idiom in
+`application_wiring_cnc.cpp`; move the generic HTTP helpers out of the
+`dw::lmstudio` namespace once the CAM client widens their use; hoist the
+hardcoded 10 s reachability wait into `CamEngineConfig` if any synchronous
+path survives; revisit `curlPost`'s 120 s timeout before real jobs stream
+through the client.
 
 ---
 *v0.8.0 Phase 1 (Yank) completed: 2026-08-23*
 *v0.8.0 Phase 2 (Sidecar) completed: 2026-08-23*
+*Scope reset (library, CAM, sender): 2026-10-14*

@@ -30,19 +30,16 @@ struct ProjectModelLink {
     std::string addedAt;
 };
 
+// What a slicer-style project holds: designs, their CAM setups (Operation),
+// the G-code those setups produced, the runs of that G-code, and the
+// materials and tools they require.
 enum class ProjectOpenItemType {
     Model,
     Material,
-    Stock,
     Tool,
     Operation,
     Gcode,
-    CutPlan,
-    Cost,
     Job,
-    Labor,
-    Consumable,
-    Zeroing,
 };
 
 enum class ProjectOpenItemStatus {

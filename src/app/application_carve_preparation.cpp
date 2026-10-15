@@ -1,4 +1,5 @@
-// Application adapter for beginning one exact, project-pinned carve preparation.
+// Application adapter for opening one exact, project-pinned CAM setup. A design
+// with no setup gets one; the setup then opens in the CAM workspace.
 
 #include "app/application.h"
 
@@ -27,7 +28,9 @@ ProjectOpenItem newDirectCarveOperation(const ProjectOpenItem& model,
     operation.sourceKey = "direct_carve:model_item:" + std::to_string(model.id);
     operation.parentItemId = model.id;
     operation.status = ProjectOpenItemStatus::Planned;
-    operation.displayName = "Direct Carve: " + source.name;
+    // The source key keeps its historical "direct_carve" spelling so setups
+    // saved by earlier releases still resolve.
+    operation.displayName = "CAM Setup: " + source.name;
     operation.intentJson = nlohmann::json{
         {"operation_kind", "direct_carve"},
         {"description", "Prepared from this exact project design."},
@@ -55,7 +58,7 @@ const char* preparationFailure(PrepareCarveAdapterStatus status) {
     case PrepareCarveAdapterStatus::TargetUnavailable:
         return "The selected project item changed or needs repair.";
     case PrepareCarveAdapterStatus::PolicyRejected:
-        return "The project or preparation identity changed. Refresh the Project Plan.";
+        return "The project or setup changed. Open the setup again from the Project panel.";
     default:
         return "The carve setup could not be opened safely.";
     }
@@ -92,7 +95,7 @@ bool Application::beginPrepareCarve(workshop::ProjectItemRef target) {
             m_projectManager->upsertOpenItem(newDirectCarveOperation(*model, *source));
         if (!operationId) {
             ToastManager::instance().show(
-                ToastType::Error, "Prepare Carve", "The planned carve setup could not be saved.");
+                ToastType::Error, "Open in CAM", "The CAM setup could not be saved.");
             return false;
         }
         items = m_projectManager->currentOpenItems();
@@ -102,7 +105,7 @@ bool Application::beginPrepareCarve(workshop::ProjectItemRef target) {
 
     if (result.status != PrepareCarveAdapterStatus::Ready || !result.pin) {
         ToastManager::instance().show(
-            ToastType::Warning, "Prepare Carve Unavailable", preparationFailure(result.status));
+            ToastType::Warning, "CAM Setup Unavailable", preparationFailure(result.status));
         return false;
     }
 

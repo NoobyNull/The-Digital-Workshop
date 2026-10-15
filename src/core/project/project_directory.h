@@ -13,11 +13,6 @@ struct ProjectModelEntry {
     std::string hash;
 };
 
-struct ProjectHeightmapEntry {
-    std::string filename;
-    f32 resolutionMmPerPx = 0.0f;
-};
-
 struct ProjectGCodeEntry {
     std::string filename;
     std::string toolDescription;
@@ -28,7 +23,6 @@ struct ProjectGCodeEntry {
 //   <root>/
 //     project.json
 //     models/
-//     heightmaps/
 //     gcode/
 //     images/
 class ProjectDirectory {
@@ -58,7 +52,6 @@ class ProjectDirectory {
     bool addModelFile(const Path& sourcePath);
     bool addModelFile(const Path& sourcePath, const std::string& fileHash);
     bool addGCodeFile(const Path& sourcePath, const std::string& toolDescription = "");
-    void addHeightmap(const std::string& filename, f32 resolutionMmPerPx);
     void addGCode(const std::string& filename, const std::string& toolDescription);
 
     // Sanitize a raw model name into a directory-safe form
@@ -67,17 +60,14 @@ class ProjectDirectory {
     // Accessors
     const Path& root() const { return m_root; }
     Path modelsDir() const { return m_root / "models"; }
-    Path heightmapsDir() const { return m_root / "heightmaps"; }
     Path gcodeDir() const { return m_root / "gcode"; }
     Path imagesDir() const { return m_root / "images"; }
-    Path costingDir() const { return m_root / "costing"; }
 
     const std::string& name() const { return m_name; }
     const std::string& description() const { return m_description; }
     i64 projectId() const { return m_projectId; }
 
     const std::vector<ProjectModelEntry>& models() const { return m_models; }
-    const std::vector<ProjectHeightmapEntry>& heightmaps() const { return m_heightmaps; }
     const std::vector<ProjectGCodeEntry>& gcodeFiles() const { return m_gcodeFiles; }
 
   private:
@@ -90,7 +80,6 @@ class ProjectDirectory {
     std::string m_description;
 
     std::vector<ProjectModelEntry> m_models;
-    std::vector<ProjectHeightmapEntry> m_heightmaps;
     std::vector<ProjectGCodeEntry> m_gcodeFiles;
 };
 

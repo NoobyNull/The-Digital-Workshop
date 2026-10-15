@@ -1,5 +1,5 @@
-// UIManager bridge for the persistent project shell. The widget receives one
-// immutable presentation snapshot and emits only the Back to Project intent.
+// UIManager background UI: status bar, progress, toasts, and the import and
+// tagging progress bridges.
 
 #include "managers/ui_manager.h"
 
@@ -8,7 +8,6 @@
 #include <imgui.h>
 
 #include "core/config/config.h"
-#include "modules/workshop/ui/project_context_bar.h"
 #include "ui/dialogs/import_summary_dialog.h"
 #include "ui/dialogs/message_dialog.h"
 #include "ui/dialogs/progress_dialog.h"
@@ -20,37 +19,6 @@
 #include "ui/widgets/toast.h"
 
 namespace dw {
-
-void UIManager::renderDesignLibraryMenuItem() {
-    const bool visible = isWindowVisible("library");
-    if (!ImGui::MenuItem("Design Library", nullptr, visible))
-        return;
-    if (visible) {
-        if (m_onCloseDesignLibrary)
-            m_onCloseDesignLibrary();
-    } else if (m_onOpenDesignLibrary) {
-        m_onOpenDesignLibrary();
-    }
-}
-
-void UIManager::renderProjectContextBar() {
-    if (m_projectContextBar)
-        m_projectContextBar->render();
-}
-
-float UIManager::projectContextBarHeight() const {
-    return m_projectContextBar ? m_projectContextBar->height() : 0.0F;
-}
-
-void UIManager::setProjectShellSnapshot(workshop::ProjectShellSnapshot snapshot) {
-    if (m_projectContextBar)
-        m_projectContextBar->setSnapshot(std::move(snapshot));
-}
-
-void UIManager::setOnBackToProject(ActionCallback callback) {
-    if (m_projectContextBar)
-        m_projectContextBar->setBackToProjectCallback(std::move(callback));
-}
 
 void UIManager::renderBackgroundUI(float deltaTime, const LoadingState* loadingState) {
     if (m_statusBar) {
@@ -80,7 +48,7 @@ std::vector<std::string> UIManager::currentStatusTips() const {
     state.spindleOverridePlus = config.getBinding(BindAction::SpindleOverridePlus);
     state.spindleOverrideMinus = config.getBinding(BindAction::SpindleOverrideMinus);
 
-    if (m_workspaceMode == WorkspaceMode::CNC)
+    if (isMachineWorkspace())
         return buildStatusTips(StatusTipContext::Sender, state);
     if (m_showViewport)
         return buildStatusTips(StatusTipContext::WorkshopViewport, state);

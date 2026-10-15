@@ -96,17 +96,6 @@ TEST(RunCoordinationBoundary, CoordinatorCommandsAndEffectsAreClosedTypedContrac
     SUCCEED();
 }
 
-TEST(RunCoordinationBoundary, PrepareCarveFlowCannotExpressRunOrMachineEffects) {
-    const fs::path header = fs::path(CMAKE_SOURCE_DIR) / "src" / "modules" /
-                            "carve_preparation" / "prepare_carve_flow.h";
-    const auto contents = readFile(header);
-
-    for (const auto& token : {"StartStream", "FeedHold", "CycleStart", "AbortStream",
-                              "AcquireRunLock", "ReleaseRunLock"}) {
-        EXPECT_EQ(contents.find(token), std::string::npos);
-    }
-}
-
 TEST(RunCoordinationBoundary, ProductionFilesStayWithinFiveHundredLineTarget) {
     const auto sources = runCoordinationSources();
     ASSERT_FALSE(sources.empty());

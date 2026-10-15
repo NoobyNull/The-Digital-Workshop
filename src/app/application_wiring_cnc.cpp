@@ -36,52 +36,16 @@
 #include "ui/panels/cnc_status_panel.h"
 #include "ui/panels/cnc_tool_panel.h"
 #include "ui/panels/cnc_wcs_panel.h"
-#include "ui/panels/cut_optimizer_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/tool_browser_panel.h"
 #include "ui/panels/viewport_panel.h"
-#include "ui/panels/cost_panel.h"
 #include "ui/widgets/toast.h"
-#include "core/database/cut_plan_repository.h"
-#include "core/optimizer/cut_list_file.h"
-#include "core/project/costing_engine.h"
 #include "core/project/project.h"
 #include "core/project/project_directory.h"
 
 namespace dw {
 
 void Application::wireCncPanels() {
-    // Wire CutOptimizerPanel
-    if (auto* cop = m_uiManager->cutOptimizerPanel()) {
-        cop->setCutListFile(m_cutListFile.get());
-        cop->setProjectManager(m_projectManager.get());
-        cop->setModelRepository(m_modelRepo.get());
-        cop->setMaterialManager(m_materialManager.get());
-        cop->setOnAddToCost([this](const std::vector<CutOptimizerPanel::CloGroupCostData>& groups) {
-            auto* costPanel = m_uiManager->costPanel();
-            if (!costPanel) return;
-
-            for (const auto& group : groups) {
-                if (group.costPerSheet <= 0.0) {
-                    ToastManager::instance().show(ToastType::Warning, "Skipped",
-                        group.materialName + " -- no pricing available");
-                    continue;
-                }
-
-                auto entry = CostingEngine::createMaterialEntry(
-                    group.materialName,
-                    group.stockSizeDbId,
-                    group.dimensions,
-                    group.costPerSheet,
-                    static_cast<f64>(group.sheetsUsed),
-                    "sheet");
-                entry.notes = "[auto:clo]";
-                costPanel->addCloEntry(entry);
-            }
-            costPanel->save();
-        });
-    }
-
     // Wire GCode panel and CNC subsystem
     if (auto* gcp = m_uiManager->gcodePanel()) {
         gcp->setGCodeRepository(m_gcodeRepo.get());
@@ -198,8 +162,7 @@ void Application::wireCncPanels() {
             [this, gcp, jobp, safetyp](const StreamProgress& progress) {
             gcp->onGrblProgress(progress);
             const bool streaming = progress.streaming;
-            // DirectCarve-origin streams return with the CAM rebuild.
-            m_uiManager->setCncStreaming(streaming, CncStreamOrigin::ExternalGCode);
+            m_uiManager->setCncStreaming(streaming);
             if (jobp) {
                 jobp->onProgressUpdate(progress);
                 jobp->setStreaming(streaming);

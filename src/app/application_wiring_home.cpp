@@ -21,9 +21,7 @@ void Application::wireStartPage() {
     auto finishProjectAction = [this](bool activated) {
         if (!activated)
             return;
-        m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-        m_uiManager->showStartPage() = false;
-        m_uiManager->openWindow("project");
+        (void)m_uiManager->selectTab(workshop::MainTab::Prepare);
     };
     home->setOnNewProject(
         [this, finishProjectAction](std::string name,

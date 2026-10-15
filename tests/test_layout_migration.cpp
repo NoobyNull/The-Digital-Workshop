@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/config/layout_migration.h"
@@ -56,18 +57,45 @@ std::vector<std::string> serialized(const std::vector<LayoutPreset>& presets) {
     return values;
 }
 
-TEST(LayoutMigration, LegacyBuiltInsUpgradeOnceAndStayOnAdvanced) {
-    const auto result = migrateGuidedLayouts({0, 0, {legacyWorkshop(), legacySender()}});
+TEST(LayoutMigration, LegacyBuiltInsUpgradeOnceToWorkshopAndSender) {
+    const auto result = migrateLayoutPresets({0, 0, {legacyWorkshop(), legacySender()}});
 
     ASSERT_TRUE(result.changed);
     EXPECT_EQ(result.version, CURRENT_LAYOUT_MIGRATION_VERSION);
-    ASSERT_EQ(result.presets.size(), 3U);
-    EXPECT_TRUE(isGuidedLayout(result.presets[0]));
-    EXPECT_TRUE(isAdvancedLayout(result.presets[1]));
-    EXPECT_TRUE(isCncLayout(result.presets[2]));
-    EXPECT_EQ(result.activePresetIndex, 1);
-    EXPECT_TRUE(result.presets[0].visibility.at("start_page"));
-    EXPECT_FALSE(result.presets[0].visibility.at("properties"));
+    ASSERT_EQ(result.presets.size(), 2U);
+    EXPECT_TRUE(isWorkshopLayout(result.presets[0]));
+    EXPECT_TRUE(isCncLayout(result.presets[1]));
+    EXPECT_EQ(result.activePresetIndex, 0);
+    EXPECT_TRUE(result.presets[0].visibility.at("properties"));
+}
+
+LayoutPreset versionOneBuiltIn(const char* id, const char* name) {
+    LayoutPreset preset;
+    preset.id = id;
+    preset.name = name;
+    preset.builtIn = true;
+    preset.visibility = {{"viewport", true}};
+    return preset;
+}
+
+TEST(LayoutMigration, RetiredGuidedBuiltInFoldsIntoWorkshop) {
+    const std::vector<LayoutPreset> versionOne = {
+        versionOneBuiltIn("guided_workshop", "Guided Workshop"),
+        versionOneBuiltIn("advanced_workbench", "Advanced Workbench"),
+        versionOneBuiltIn("cnc_sender", "CNC Sender"),
+        customPreset("My shop", true),
+    };
+
+    for (const auto& [active, expected] :
+         std::vector<std::pair<int, int>>{{0, 0}, {1, 0}, {2, 1}, {3, 2}}) {
+        const auto result = migrateLayoutPresets({1, active, versionOne});
+        ASSERT_TRUE(result.changed);
+        ASSERT_EQ(result.presets.size(), 3U);
+        EXPECT_TRUE(isWorkshopLayout(result.presets[0]));
+        EXPECT_TRUE(isCncLayout(result.presets[1]));
+        EXPECT_EQ(result.presets[2].name, "My shop");
+        EXPECT_EQ(result.activePresetIndex, expected) << "active " << active;
+    }
 }
 
 TEST(LayoutMigration, CustomPresetsSurviveByteEquivalentAndKeepSelection) {
@@ -77,14 +105,14 @@ TEST(LayoutMigration, CustomPresetsSurviveByteEquivalentAndKeepSelection) {
     const std::string activeBefore = active.toJsonString();
 
     const auto result =
-        migrateGuidedLayouts({0, 3, {legacyWorkshop(), first, legacySender(), active}});
+        migrateLayoutPresets({0, 3, {legacyWorkshop(), first, legacySender(), active}});
 
-    ASSERT_EQ(result.presets.size(), 5U);
-    EXPECT_EQ(result.activePresetIndex, 4);
-    EXPECT_EQ(result.presets[3].toJsonString(), firstBefore);
-    EXPECT_EQ(result.presets[4].toJsonString(), activeBefore);
-    EXPECT_FALSE(result.presets[3].builtIn);
-    EXPECT_TRUE(result.presets[4].visibility.at("private_plugin_panel"));
+    ASSERT_EQ(result.presets.size(), 4U);
+    EXPECT_EQ(result.activePresetIndex, 3);
+    EXPECT_EQ(result.presets[2].toJsonString(), firstBefore);
+    EXPECT_EQ(result.presets[3].toJsonString(), activeBefore);
+    EXPECT_FALSE(result.presets[2].builtIn);
+    EXPECT_TRUE(result.presets[3].visibility.at("private_plugin_panel"));
 }
 
 TEST(LayoutMigration, CustomPresetNamedLikeLegacyBuiltInIsStillCustom) {
@@ -92,20 +120,20 @@ TEST(LayoutMigration, CustomPresetNamedLikeLegacyBuiltInIsStillCustom) {
     ASSERT_FALSE(custom.builtIn);
     const auto before = custom.toJsonString();
 
-    const auto result = migrateGuidedLayouts({0, 0, {custom}});
+    const auto result = migrateLayoutPresets({0, 0, {custom}});
 
-    ASSERT_EQ(result.presets.size(), 4U);
-    EXPECT_EQ(result.activePresetIndex, 3);
-    EXPECT_EQ(result.presets[3].toJsonString(), before);
+    ASSERT_EQ(result.presets.size(), 3U);
+    EXPECT_EQ(result.activePresetIndex, 2);
+    EXPECT_EQ(result.presets[2].toJsonString(), before);
 }
 
 TEST(LayoutMigration, RerunningCurrentVersionIsAnExactNoOp) {
-    const auto migrated = migrateGuidedLayouts(
+    const auto migrated = migrateLayoutPresets(
         {0, 2, {legacyWorkshop(), legacySender(), customPreset("Custom", true)}});
     const auto before = serialized(migrated.presets);
 
     const auto rerun =
-        migrateGuidedLayouts({migrated.version, migrated.activePresetIndex, migrated.presets});
+        migrateLayoutPresets({migrated.version, migrated.activePresetIndex, migrated.presets});
 
     EXPECT_FALSE(rerun.changed);
     EXPECT_EQ(rerun.version, migrated.version);
@@ -115,7 +143,7 @@ TEST(LayoutMigration, RerunningCurrentVersionIsAnExactNoOp) {
 
 TEST(LayoutMigration, FutureVersionIsNeverDowngradedOrRewritten) {
     const auto custom = customPreset("Future custom", true);
-    const auto result = migrateGuidedLayouts({CURRENT_LAYOUT_MIGRATION_VERSION + 4, 0, {custom}});
+    const auto result = migrateLayoutPresets({CURRENT_LAYOUT_MIGRATION_VERSION + 4, 0, {custom}});
 
     EXPECT_FALSE(result.changed);
     EXPECT_EQ(result.version, CURRENT_LAYOUT_MIGRATION_VERSION + 4);
@@ -124,9 +152,9 @@ TEST(LayoutMigration, FutureVersionIsNeverDowngradedOrRewritten) {
 }
 
 TEST(LayoutMigration, BuiltInIdsRoundTripWhileCustomJsonShapeStaysStable) {
-    const auto guided = LayoutPreset::guidedDefault();
-    const auto parsedGuided = LayoutPreset::fromJsonString(guided.toJsonString());
-    EXPECT_EQ(parsedGuided.id, GUIDED_LAYOUT_ID);
+    const auto workshop = LayoutPreset::workshopDefault();
+    const auto parsedWorkshop = LayoutPreset::fromJsonString(workshop.toJsonString());
+    EXPECT_EQ(parsedWorkshop.id, WORKSHOP_LAYOUT_ID);
 
     const auto custom = customPreset("No built-in id", true);
     const auto json = custom.toJsonString();
@@ -140,7 +168,7 @@ TEST(LayoutMigrationArchitecture, ConfigDispatcherNoLongerOwnsLayoutPolicy) {
     std::ostringstream content;
     content << source.rdbuf();
 
-    EXPECT_EQ(content.str().find("migrateGuidedLayouts"), std::string::npos);
+    EXPECT_EQ(content.str().find("migrateLayoutPresets"), std::string::npos);
     EXPECT_EQ(content.str().find("Config::resolveLoadedLayoutPresets"), std::string::npos);
 
     std::size_t lines = 0;
@@ -149,20 +177,6 @@ TEST(LayoutMigrationArchitecture, ConfigDispatcherNoLongerOwnsLayoutPolicy) {
     while (std::getline(count, line))
         ++lines;
     EXPECT_LE(lines, 750U);
-}
-
-TEST(LayoutMigrationArchitecture, ExperienceSelectionUsesControllerState) {
-    std::ifstream wiring(std::string(CMAKE_SOURCE_DIR) +
-                         "/src/app/application_project_session.cpp");
-    ASSERT_TRUE(wiring.is_open());
-    std::ostringstream content;
-    content << wiring.rdbuf();
-
-    EXPECT_NE(content.str().find("setExperienceModeAccessors"), std::string::npos);
-    EXPECT_NE(content.str().find("m_projectWorkshopController->guidedEnabled()"),
-              std::string::npos);
-    EXPECT_NE(content.str().find("m_projectWorkshopController->setGuidedEnabled(guided)"),
-              std::string::npos);
 }
 
 } // namespace

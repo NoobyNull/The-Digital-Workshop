@@ -233,36 +233,6 @@ DwprojExportResult ProjectExportManager::exportProject(const Project& project,
         gcodeEntries.push_back(std::move(entry));
     }
 
-    // Phase D: Export cost estimates as JSON
-    CostRepository costRepo(m_db);
-    auto estimates = costRepo.findByProject(project.id());
-    bool hasCosts = !estimates.empty();
-    if (hasCosts) {
-        std::string costsJson = buildCostsJson(estimates);
-        if (!mz_zip_writer_add_mem(&zip,
-                                   "costs.json",
-                                   costsJson.data(),
-                                   costsJson.size(),
-                                   MZ_DEFAULT_COMPRESSION)) {
-            log::warningf(kLogModule, "Failed to add costs.json");
-        }
-    }
-
-    // Phase E: Export cut plans as JSON
-    CutPlanRepository cutPlanRepo(m_db);
-    auto cutPlans = cutPlanRepo.findByProject(project.id());
-    bool hasCutPlans = !cutPlans.empty();
-    if (hasCutPlans) {
-        std::string plansJson = buildCutPlansJson(cutPlans);
-        if (!mz_zip_writer_add_mem(&zip,
-                                   "cut_plans.json",
-                                   plansJson.data(),
-                                   plansJson.size(),
-                                   MZ_DEFAULT_COMPRESSION)) {
-            log::warningf(kLogModule, "Failed to add cut_plans.json");
-        }
-    }
-
     // Get project notes
     std::string projectNotes = project.record().notes;
 
@@ -272,9 +242,7 @@ DwprojExportResult ProjectExportManager::exportProject(const Project& project,
                                                  modelIdToMaterialId,
                                                  hashToThumbnailPath,
                                                  gcodeEntries,
-                                                 projectNotes,
-                                                 hasCosts,
-                                                 hasCutPlans);
+                                                 projectNotes);
 
     if (!mz_zip_writer_add_mem(&zip,
                                "manifest.json",
@@ -297,13 +265,10 @@ DwprojExportResult ProjectExportManager::exportProject(const Project& project,
 
     int modelCount = static_cast<int>(models.size());
     log::infof(kLogModule,
-               "Exported project '%s' with %d models, %d gcode, %d costs, %d cut plans "
-               "(%llu bytes) to '%s'",
+               "Exported project '%s' with %d models, %d gcode (%llu bytes) to '%s'",
                project.name().c_str(),
                modelCount,
                static_cast<int>(gcodeEntries.size()),
-               static_cast<int>(estimates.size()),
-               static_cast<int>(cutPlans.size()),
                static_cast<unsigned long long>(totalBytes),
                outputPath.string().c_str());
 
@@ -318,9 +283,7 @@ std::string ProjectExportManager::buildManifestJson(
     const std::unordered_map<i64, i64>& modelIdToMaterialId,
     const std::unordered_map<std::string, std::string>& hashToThumbnailPath,
     const std::vector<ManifestGCode>& gcodeEntries,
-    const std::string& projectNotes,
-    bool hasCosts,
-    bool hasCutPlans) {
+    const std::string& projectNotes) {
     nlohmann::json j;
     j["format_version"] = FormatVersion;
     j["app_version"] = kAppVersion;
@@ -382,85 +345,7 @@ std::string ProjectExportManager::buildManifestJson(
     }
     j["gcode"] = gcodeArr;
 
-    // Flags for separate data files
-    j["has_costs"] = hasCosts;
-    j["has_cut_plans"] = hasCutPlans;
-
     return j.dump(2);
-}
-
-std::string ProjectExportManager::buildCostsJson(
-    const std::vector<CostingRecord>& records) {
-    nlohmann::json arr = nlohmann::json::array();
-    for (const auto& est : records) {
-        nlohmann::json ej;
-        ej["id"] = est.id;
-        ej["name"] = est.name;
-        ej["project_id"] = est.projectId;
-        ej["subtotal"] = est.subtotal;
-        ej["tax_rate"] = est.taxRate;
-        ej["tax_amount"] = est.taxAmount;
-        ej["discount_rate"] = est.discountRate;
-        ej["discount_amount"] = est.discountAmount;
-        ej["total"] = est.total;
-        ej["notes"] = est.notes;
-        ej["created_at"] = est.createdAt;
-        ej["modified_at"] = est.modifiedAt;
-
-        nlohmann::json itemsArr = nlohmann::json::array();
-        for (const auto& item : est.items) {
-            nlohmann::json ij;
-            ij["id"] = item.id;
-            ij["name"] = item.name;
-            ij["category"] = static_cast<int>(item.category);
-            ij["quantity"] = item.quantity;
-            ij["rate"] = item.rate;
-            ij["total"] = item.total;
-            ij["notes"] = item.notes;
-            itemsArr.push_back(ij);
-        }
-        ej["items"] = itemsArr;
-
-        arr.push_back(ej);
-    }
-    return arr.dump(2);
-}
-
-std::string ProjectExportManager::buildCutPlansJson(
-    const std::vector<CutPlanRecord>& plans) {
-    nlohmann::json arr = nlohmann::json::array();
-    for (const auto& plan : plans) {
-        nlohmann::json pj;
-        pj["id"] = plan.id;
-        if (plan.projectId) {
-            pj["project_id"] = *plan.projectId;
-        } else {
-            pj["project_id"] = nullptr;
-        }
-        pj["name"] = plan.name;
-        pj["algorithm"] = plan.algorithm;
-        pj["allow_rotation"] = plan.allowRotation;
-        pj["kerf"] = plan.kerf;
-        pj["margin"] = plan.margin;
-        pj["sheets_used"] = plan.sheetsUsed;
-        pj["efficiency"] = plan.efficiency;
-        pj["created_at"] = plan.createdAt;
-        pj["modified_at"] = plan.modifiedAt;
-
-        // Embed pre-serialized JSON fields directly
-        if (!plan.sheetConfigJson.empty()) {
-            pj["sheet_config"] = nlohmann::json::parse(plan.sheetConfigJson, nullptr, false);
-        }
-        if (!plan.partsJson.empty()) {
-            pj["parts"] = nlohmann::json::parse(plan.partsJson, nullptr, false);
-        }
-        if (!plan.resultJson.empty()) {
-            pj["result"] = nlohmann::json::parse(plan.resultJson, nullptr, false);
-        }
-
-        arr.push_back(pj);
-    }
-    return arr.dump(2);
 }
 
 bool ProjectExportManager::parseManifest(const std::string& json,

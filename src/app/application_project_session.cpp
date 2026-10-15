@@ -8,10 +8,8 @@
 #include "app/project_session_integration.h"
 #include "app/workspace.h"
 #include "core/cnc/cnc_controller.h"
-#include "core/database/cut_plan_repository.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/model_repository.h"
-#include "core/optimizer/cut_list_file.h"
 #include "core/paths/path_resolver.h"
 #include "core/project/project.h"
 #include "core/project/project_directory.h"
@@ -21,8 +19,6 @@
 #include "modules/workshop/project_resume.h"
 #include "modules/workshop/project_workshop_controller.h"
 #include "ui/dialogs/message_dialog.h"
-#include "ui/panels/cost_panel.h"
-#include "ui/panels/cut_optimizer_panel.h"
 #include "ui/panels/gcode_panel.h"
 #include "ui/panels/materials_panel.h"
 #include "ui/panels/project_panel.h"
@@ -35,15 +31,7 @@ namespace dw {
 void Application::initializeProjectSession() {
     m_projectSession = std::make_unique<workshop::ProjectSession>();
     m_projectWorkshopController =
-        std::make_unique<workshop::ProjectWorkshopController>(*m_projectSession, false);
-    m_uiManager->setExperienceModeAccessors(
-        [this]() {
-            return m_projectWorkshopController && m_projectWorkshopController->guidedEnabled();
-        },
-        [this](bool guided) {
-            if (m_projectWorkshopController)
-                m_projectWorkshopController->setGuidedEnabled(guided);
-        });
+        std::make_unique<workshop::ProjectWorkshopController>(*m_projectSession);
     m_projectDisplayFacts = std::make_unique<workshop::ProjectDisplayFacts>();
     initializeProjectResume();
     m_projectSessionIntegration = std::make_unique<ProjectSessionIntegration>(
@@ -92,7 +80,8 @@ void Application::initializeFileIOManager() {
     m_fileIOManager->setThumbnailCallback(
         [this](int64_t modelId, Mesh& mesh) { return generateMaterialThumbnail(modelId, mesh); });
     m_fileIOManager->setGCodeCallback([this](const std::string& path) {
-        m_uiManager->setWorkspaceMode(WorkspaceMode::CNC);
+        // Opened G-code is inspected in Preview; Send to Machine moves it on.
+        (void)m_uiManager->selectTab(workshop::MainTab::Preview);
         if (auto* panel = m_uiManager->gcodePanel()) {
             panel->setOpen(true);
             panel->loadFile(path);
@@ -371,8 +360,6 @@ void Application::invalidateProjectFocus() {
         if (auto* panel = m_uiManager->projectPanel())
             panel->clearSelection();
         if (auto* panel = m_uiManager->gcodePanel())
-            panel->clear();
-        if (auto* panel = m_uiManager->cutOptimizerPanel())
             panel->clear();
     }
     m_activeMaterialTexture.reset();

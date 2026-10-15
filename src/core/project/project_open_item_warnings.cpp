@@ -8,16 +8,10 @@ const char* labelForOpenItemType(ProjectOpenItemType type) {
     switch (type) {
     case ProjectOpenItemType::Model: return "Model";
     case ProjectOpenItemType::Material: return "Material";
-    case ProjectOpenItemType::Stock: return "Stock";
     case ProjectOpenItemType::Tool: return "Tool";
-    case ProjectOpenItemType::Operation: return "Operation";
+    case ProjectOpenItemType::Operation: return "CAM setup";
     case ProjectOpenItemType::Gcode: return "G-code";
-    case ProjectOpenItemType::CutPlan: return "Cut plan";
-    case ProjectOpenItemType::Cost: return "Cost";
     case ProjectOpenItemType::Job: return "Job";
-    case ProjectOpenItemType::Labor: return "Labor";
-    case ProjectOpenItemType::Consumable: return "Consumable";
-    case ProjectOpenItemType::Zeroing: return "Zeroing";
     }
     return "Item";
 }

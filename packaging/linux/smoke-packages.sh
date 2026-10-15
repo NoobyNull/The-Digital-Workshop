@@ -88,10 +88,8 @@ tar -xzf "$tgz" -C "$tar_root"
 tar_package_root="$tar_root/DigitalWorkshop-$version-Linux"
 tar_binary="$tar_package_root/bin/digital_workshop"
 tar_settings="$tar_package_root/bin/dw_settings"
-tar_graphqlite="$tar_package_root/bin/graphqlite.so"
 test -x "$tar_binary"
 test -x "$tar_settings"
-test -s "$tar_graphqlite"
 assert_resources_match \
     "$tar_package_root/share/digitalworkshop/resources" "TGZ"
 
@@ -111,7 +109,6 @@ run_uninstaller="$run_home/.local/share/digitalworkshop/uninstall.sh"
 run_desktop="$run_home/.local/share/applications/digitalworkshop.desktop"
 test -x "$run_binary"
 test -x "$run_settings"
-test -s "$run_home/.local/bin/graphqlite.so"
 if [[ ! -x "$run_uninstaller" ]]; then
     echo ".run install did not provide a persistent uninstaller: $run_uninstaller" >&2
     exit 1
@@ -150,7 +147,6 @@ HOME="$run_home" "$run_uninstaller" >"$evidence_dir/run-uninstall.log" 2>&1
 for removed in \
     "$run_binary" \
     "$run_settings" \
-    "$run_home/.local/bin/graphqlite.so" \
     "$run_home/.local/share/digitalworkshop" \
     "$run_desktop" \
     "$run_home/.local/share/icons/hicolor/512x512/apps/digitalworkshop.png" \
@@ -172,7 +168,6 @@ done
     echo "RUN_SETTINGS_STARTUP=PASS"
     echo "CAM_ENGINE_SMOKE=PASS"
     echo "RUN_UNINSTALL=PASS"
-    echo "GRAPHQLITE=PASS"
     echo "FRESH_SCHEMA=PASS"
     echo "DESKTOP_ENTRY=PASS"
     echo "BUNDLED_MATERIALS=PASS"

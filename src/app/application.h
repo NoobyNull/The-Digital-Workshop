@@ -41,16 +41,11 @@ class ImportQueue;
 class MainThreadQueue;
 class StorageManager;
 class MaterialManager;
-class CostRepository;
-class RateCategoryRepository;
-class GraphManager;
 class ModelRepository;
 class GCodeRepository;
-class CutPlanRepository;
 class LMStudioMaterialService;
 class LMStudioDescriptorService;
 class ProjectExportManager;
-class CutListFile;
 class CncController;
 class JobRepository;
 class ToolDatabase;
@@ -69,7 +64,6 @@ class UIManager;
 class FileIOManager;
 class ConfigManager;
 class DirectCarveRunEffectAdapter;
-class ProjectPlanRunTruthAdapter;
 
 namespace workshop {
 class ProjectSession;
@@ -77,8 +71,8 @@ class ProjectWorkshopController;
 class ProjectResumeCoordinator;
 struct ProjectDisplayFacts;
 struct ProjectItemRef;
-enum class ExperienceMode;
 enum class ProjectClosePurpose;
+enum class MainTab;
 } // namespace workshop
 
 namespace design_library {
@@ -151,8 +145,9 @@ class Application {
     void showHome(bool beginNamedProject = false);
     [[nodiscard]] bool showDesignLibrary();
     [[nodiscard]] bool showDesignLibrary(design_library::LibraryPickerPurpose purpose);
-    [[nodiscard]] workshop::ExperienceMode libraryExperienceMode() const;
     [[nodiscard]] bool requestLibraryReturn(std::string& errorMessage);
+    [[nodiscard]] bool leaveDesignLibrary();
+    void navigateToTab(workshop::MainTab tab);
     void handleCompletedLibraryImports(const std::vector<ImportedLibraryItem>& items);
     void refreshProjectShell();
     void initializeFileIOManager();
@@ -254,19 +249,6 @@ class Application {
     // Repositories for project asset navigator
     std::unique_ptr<ModelRepository> m_modelRepo;
     std::unique_ptr<GCodeRepository> m_gcodeRepo;
-    std::unique_ptr<CutPlanRepository> m_cutPlanRepo;
-
-    // File-based cut list persistence
-    std::unique_ptr<CutListFile> m_cutListFile;
-
-    // Cost estimation repository
-    std::unique_ptr<CostRepository> m_costRepo;
-
-    // Rate category repository (consumable/tool cost rates)
-    std::unique_ptr<RateCategoryRepository> m_rateCatRepo;
-
-    // Graph query engine (Cypher via GraphQLite extension)
-    std::unique_ptr<GraphManager> m_graphManager;
 
     // LM Studio AI material generation service
     std::unique_ptr<LMStudioMaterialService> m_lmStudioService;
@@ -304,7 +286,6 @@ class Application {
     std::optional<cam::CamEngineStatus> m_camEngineStatus;
 
     std::unique_ptr<DirectCarveRunEffectAdapter> m_directCarveRunEffectAdapter;
-    std::unique_ptr<ProjectPlanRunTruthAdapter> m_projectPlanRunTruthAdapter;
     uint64_t m_nextPreparationToken = 1;
 
     // Currently focused model ID (for material assignment)

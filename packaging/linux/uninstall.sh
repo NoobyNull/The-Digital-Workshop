@@ -4,7 +4,8 @@ set -euo pipefail
 APP_NAME="Digital Workshop"
 BIN_NAME="digital_workshop"
 SETTINGS_BIN="dw_settings"
-GRAPHQLITE_LIB="graphqlite.so"
+# Shipped by releases before 0.8.0.
+LEGACY_GRAPHQLITE_LIB="graphqlite.so"
 DESKTOP_ID="digitalworkshop"
 
 # Default to user install, --system for /usr/local
@@ -37,7 +38,7 @@ echo "Uninstalling $APP_NAME from $PREFIX..."
 # Remove binaries
 rm -f "$BIN_DIR/$BIN_NAME"
 rm -f "$BIN_DIR/$SETTINGS_BIN"
-rm -f "$BIN_DIR/$GRAPHQLITE_LIB"
+rm -f "$BIN_DIR/$LEGACY_GRAPHQLITE_LIB"
 rm -rf "$RESOURCE_DIR"
 
 # Remove desktop entry

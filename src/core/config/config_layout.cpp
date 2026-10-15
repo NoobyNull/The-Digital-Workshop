@@ -103,10 +103,6 @@ void Config::loadWorkspace(const std::string& key, const std::string& value) {
         m_wsShowMaterials = enabled;
     else if (key == "show_gcode")
         m_wsShowGCode = enabled;
-    else if (key == "show_cut_optimizer")
-        m_wsShowCutOptimizer = enabled;
-    else if (key == "show_project_costing" || key == "show_cost_estimator")
-        m_wsShowProjectCosting = enabled;
     else if (key == "show_tool_browser")
         m_wsShowToolBrowser = enabled;
     else if (key == "show_cnc_status")
@@ -157,7 +153,7 @@ void Config::loadLayoutPresets(const std::string& key,
 }
 
 void Config::resolveLoadedLayoutPresets(std::optional<std::vector<LayoutPreset>>& loaded) {
-    const auto result = migrateGuidedLayouts({
+    const auto result = migrateLayoutPresets({
         m_layoutMigrationVersion,
         m_activeLayoutPresetIndex,
         loaded && !loaded->empty() ? *loaded : m_layoutPresets,
@@ -168,7 +164,7 @@ void Config::resolveLoadedLayoutPresets(std::optional<std::vector<LayoutPreset>>
 
     if (m_activeLayoutPresetIndex < 0 ||
         m_activeLayoutPresetIndex >= static_cast<int>(m_layoutPresets.size())) {
-        m_activeLayoutPresetIndex = 1;
+        m_activeLayoutPresetIndex = 0;
     }
 }
 
@@ -200,8 +196,6 @@ void Config::saveWorkspace(std::ostringstream& ss) const {
     ss << "show_project=" << (m_wsShowProject ? "true" : "false") << "\n";
     ss << "show_materials=" << (m_wsShowMaterials ? "true" : "false") << "\n";
     ss << "show_gcode=" << (m_wsShowGCode ? "true" : "false") << "\n";
-    ss << "show_cut_optimizer=" << (m_wsShowCutOptimizer ? "true" : "false") << "\n";
-    ss << "show_project_costing=" << (m_wsShowProjectCosting ? "true" : "false") << "\n";
     ss << "show_tool_browser=" << (m_wsShowToolBrowser ? "true" : "false") << "\n";
     ss << "show_cnc_status=" << (m_wsShowCncStatus ? "true" : "false") << "\n";
     ss << "show_cnc_jog=" << (m_wsShowCncJog ? "true" : "false") << "\n";

@@ -166,7 +166,7 @@ void Application::update() {
     // one presentation frame so its local ImGui name prompt can close cleanly.
     if (m_deferredLibraryCloseFrames > 0 && --m_deferredLibraryCloseFrames == 0 &&
         m_uiManager) {
-        m_uiManager->showLibrary() = false;
+        (void)m_uiManager->selectTab(workshop::MainTab::Prepare);
     }
 }
 
@@ -175,41 +175,10 @@ void Application::render() {
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
-    // Manual dockspace that reserves space for the status bar at the bottom
-    auto* viewport = ImGui::GetMainViewport();
-    const float statusBarH = ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2;
-    const float projectBarH = m_uiManager->projectContextBarHeight();
-
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + projectBarH));
-    ImGui::SetNextWindowSize(
-        ImVec2(viewport->WorkSize.x, viewport->WorkSize.y - statusBarH - projectBarH));
-    ImGui::SetNextWindowViewport(viewport->ID);
-
-    ImGuiWindowFlags dockHostFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
-                                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-                                     ImGuiWindowFlags_NoMove |
-                                     ImGuiWindowFlags_NoBringToFrontOnFocus |
-                                     ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin("DockSpaceHost", nullptr, dockHostFlags);
-    ImGui::PopStyleVar(3);
-
-    ImGuiID dockspaceId = ImGui::GetID("MainDockSpace");
-    ImGui::DockSpace(dockspaceId);
-    ImGui::End();
-    if (m_uiManager->isFirstFrame()) {
-        m_uiManager->clearFirstFrame();
-        if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr ||
-            ImGui::DockBuilderGetNode(dockspaceId)->IsLeafNode())
-            m_uiManager->setupDefaultDockLayout(dockspaceId);
-    }
-
+    // Slicer-style shell: top bar, then the active tab's fixed page.
     m_uiManager->handleKeyboardShortcuts();
-    m_uiManager->renderMenuBar();
-    m_uiManager->renderProjectContextBar();
+    m_uiManager->renderTopBar();
+    m_uiManager->renderPageHost();
     m_uiManager->renderPanels();
     m_uiManager->renderBackgroundUI(ImGui::GetIO().DeltaTime, &m_loadingState);
     m_uiManager->renderRestartPopup([this]() { m_configManager->relaunchApp(); });

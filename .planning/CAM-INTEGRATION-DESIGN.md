@@ -5,6 +5,13 @@
 - **Approach:** Big-bang replacement (approved): yank Direct Carve CAM first, rebuild on the PureCutCNC engine
 - **Engine pin:** PureCutCNC v0.3.0 (`9011ee0`), git submodule at `cambridge/vendor/purecutcnc`
 
+> **Partly superseded (2026-10-14) by `.planning/WORKSHOP-SCOPE.md`.**
+> Phases 1–2 below stand as written. The full-parity goal, the CAMJ session
+> API, the Project Plan evidence binding, and the Guided rebuild (Phases 3–6)
+> are replaced: PureCutCNC is used for its toolpath math through the existing
+> stateless JobSpec endpoint, the native CAM workspace starts with a curated
+> operation set, and projects work like slicer projects.
+
 ## Goal
 
 Remove Digital Workshop's internal CAM (Direct Carve toolpath generation) and

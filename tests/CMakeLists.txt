@@ -10,7 +10,6 @@ set(DW_TEST_SOURCES
     test_hash.cpp
     test_gcode_parser.cpp
     test_gcode_document.cpp
-    test_optimizer.cpp
     # Tier 0 — added in first pass
     test_string_utils.cpp
     test_file_utils.cpp
@@ -24,12 +23,7 @@ set(DW_TEST_SOURCES
     test_project_open_item_warnings.cpp
     test_project_open_item_repository.cpp
     test_project_open_item_repository_sync.cpp
-    test_project_plan.cpp
-    test_project_plan_boundary.cpp
-    test_project_plan_presentation.cpp
-    test_project_plan_input_adapter.cpp
-    test_project_plan_run_truth_adapter.cpp
-    test_project_plan_ui_architecture.cpp
+    test_project_contents_adapter.cpp
     test_loader_factory.cpp
     test_project.cpp
     test_project_asset_membership.cpp
@@ -55,7 +49,7 @@ set(DW_TEST_SOURCES
     test_view_cube_orientation.cpp
     test_viewport_presentation.cpp
     test_viewport_ui_architecture.cpp
-    test_guided_accessibility_architecture.cpp
+    test_accessibility_architecture.cpp
     test_archive.cpp
     test_library_manager.cpp
     test_library_source_deletion.cpp
@@ -68,11 +62,6 @@ set(DW_TEST_SOURCES
     test_app_paths.cpp
     test_path_resolver.cpp
     test_network_location.cpp
-    test_cost_repository.cpp
-    test_stock_size_repository.cpp
-    test_rate_category_repository.cpp
-    test_project_costing_io.cpp
-    test_cut_plan_repository.cpp
     test_gcode_repository.cpp
     test_material_archive.cpp
     test_material_manager.cpp
@@ -120,8 +109,6 @@ set(DW_TEST_SOURCES
     # Carve (Direct Carve pipeline)
     test_model_fitter.cpp
     test_preparation_identity.cpp
-    test_prepare_carve_flow.cpp
-    test_preparation_step_guidance.cpp
     test_carve_preparation_boundary.cpp
     test_run_package.cpp
     test_run_coordinator.cpp
@@ -130,16 +117,12 @@ set(DW_TEST_SOURCES
     test_direct_carve_run_effect_adapter.cpp
     test_carve_preparation_adapter.cpp
     test_unit_conversion.cpp
-    test_costing_engine.cpp
-    test_board_foot.cpp
-    test_waste_breakdown.cpp
-    test_multi_stock_optimizer.cpp
-    test_clo_result_file.cpp
     # Tier 2 — lint/format compliance (no GL/SDL required)
     test_lint_compliance.cpp
     # Tier 3 — workspace tests (no GL/SDL required)
     test_workspace.cpp
     test_home_flow.cpp
+    test_main_tabs.cpp
     test_library_picker_flow.cpp
     test_library_picker_presentation.cpp
     test_project_resume.cpp
@@ -169,7 +152,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/utils/string_utils.cpp
     ${CMAKE_SOURCE_DIR}/src/core/utils/file_utils.cpp
     ${CMAKE_SOURCE_DIR}/src/core/utils/unit_conversion.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/utils/board_foot.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/core/mesh/mesh_repair.cpp
@@ -215,12 +197,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/cnc/unified_settings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/machine_units.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cnc/macro_manager.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/cut_optimizer.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/bin_packer.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/guillotine.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/waste_breakdown.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/multi_stock_optimizer.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/optimizer/clo_result_file.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/connection_pool.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/schema.cpp
@@ -233,12 +209,8 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/database/project_repository_open_item_sync.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/project_repository_open_item_validation.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/project_repository_open_items.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/cost_repository.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/stock_size_repository.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/rate_category_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/gcode_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/job_repository.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/cut_plan_repository.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/tool_database.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/tool_database_machine_material.cpp
     ${CMAKE_SOURCE_DIR}/src/core/database/tool_database_schema.cpp
@@ -254,8 +226,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/project/gcode_project_context.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_open_item_warnings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/project/project_directory.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/project/project_costing_io.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/project/costing_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/export/model_exporter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/archive/archive.cpp
     ${CMAKE_SOURCE_DIR}/src/core/materials/material_archive.cpp
@@ -265,7 +235,6 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/library/image_thumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/core/library/library_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/library/library_source_deletion.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/graph/graph_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_queue.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_log.cpp
     ${CMAKE_SOURCE_DIR}/src/core/import/import_path_collector.cpp
@@ -295,8 +264,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/app/workspace.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_session_integration.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_resume_file_store.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/project_plan_input_adapter.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/project_plan_run_truth_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/project_contents_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/carve_preparation_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/library_workflow_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/library_workflow_coordinator.cpp
@@ -315,7 +283,6 @@ target_link_libraries(dw_tests PRIVATE
     dw_viewport_presentation
     dw_run_coordination
     dw_design_library
-    dw_project_plan
     dw_project_session
     dw_workshop_core
     GTest::gtest
@@ -352,8 +319,9 @@ gtest_discover_tests(dw_tests)
 # Prove the workshop contracts compile and run without the legacy test target's
 # ImGui, GLM, database, or application dependency closure.
 add_executable(dw_workshop_core_tests
-    test_guided_layout_metrics.cpp
+    test_workshop_layout_metrics.cpp
     test_home_flow.cpp
+    test_main_tabs.cpp
     test_project_resume.cpp
     test_project_item_load_guard.cpp
     test_workshop_core.cpp
@@ -406,32 +374,10 @@ target_compile_definitions(dw_project_session_tests PRIVATE
 )
 gtest_discover_tests(dw_project_session_tests TEST_PREFIX "isolated.session.")
 
-# Keep the Project Plan projection independently buildable without persistence,
-# UI, rendering, application, or machine-control dependencies.
-add_executable(dw_project_plan_tests
-    test_project_plan.cpp
-    test_project_plan_boundary.cpp
-    test_project_plan_presentation.cpp
-)
-target_compile_features(dw_project_plan_tests PRIVATE cxx_std_17)
-dw_set_warning_flags(dw_project_plan_tests)
-dw_set_debug_flags(dw_project_plan_tests)
-dw_set_release_flags(dw_project_plan_tests)
-target_link_libraries(dw_project_plan_tests PRIVATE
-    dw_project_plan
-    GTest::gtest_main
-)
-target_compile_definitions(dw_project_plan_tests PRIVATE
-    CMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-)
-gtest_discover_tests(dw_project_plan_tests TEST_PREFIX "isolated.plan.")
-
 # Keep preparation identity independently buildable without application, UI,
 # persistence, rendering, or machine-control dependency graphs.
 add_executable(dw_carve_preparation_tests
     test_preparation_identity.cpp
-    test_prepare_carve_flow.cpp
-    test_preparation_step_guidance.cpp
     test_carve_preparation_boundary.cpp
 )
 target_compile_features(dw_carve_preparation_tests PRIVATE cxx_std_17)

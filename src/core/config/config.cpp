@@ -30,8 +30,7 @@ Config::Config() : m_parallelismTier(ParallelismTier::Auto) {
     initDefaultBindings();
     m_machineProfiles = gcode::MachineProfile::allBuiltInPresets();
     m_layoutPresets = {
-        LayoutPreset::guidedDefault(),
-        LayoutPreset::advancedDefault(),
+        LayoutPreset::workshopDefault(),
         LayoutPreset::cncDefault(),
     };
 }

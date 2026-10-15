@@ -97,12 +97,11 @@ TEST(WorkshopModuleBoundary, BuildTargetDeclaresNoUiOrPlatformLibraries) {
     }
 }
 
-TEST(WorkshopModuleBoundary, ContextBarConsumesOnlyTheImmutableShellSnapshot) {
+TEST(WorkshopModuleBoundary, ShellPresentationConsumesOnlyTheImmutableShellSnapshot) {
     const fs::path uiRoot = fs::path(CMAKE_SOURCE_DIR) / "src" / "modules" / "workshop" / "ui";
     const std::vector<fs::path> sources = {
-        uiRoot / "project_context_bar.h",
-        uiRoot / "project_context_bar.cpp",
-        uiRoot / "project_context_bar_model.h",
+        uiRoot / "project_shell_presentation.h",
+        uiRoot / "workshop_layout_metrics.h",
     };
     const std::vector<std::string> forbidden = {
         "ProjectManager",

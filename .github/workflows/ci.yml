@@ -62,7 +62,11 @@ jobs:
 
       - name: Package
         if: matrix.compiler == 'gcc'
-        run: ./packaging/linux/make-installer.sh build ${{ github.ref_name == 'main' && 'dev' || github.ref_name }}
+        run: |
+          version="${{ github.ref_name == 'main' && 'dev' || github.ref_name }}"
+          # Pull request refs look like "12/merge"; a slash in the version
+          # would point the installer at a directory that does not exist.
+          ./packaging/linux/make-installer.sh build "${version//\//-}"
 
       - name: Upload artifact
         if: matrix.compiler == 'gcc'

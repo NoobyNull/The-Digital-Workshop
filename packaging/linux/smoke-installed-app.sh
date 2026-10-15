@@ -60,7 +60,6 @@ if [[ "$initialized" != true ]]; then
     exit 1
 fi
 
-grep -Fq "GraphQLite extension loaded successfully" "$log_file"
 grep -Fq "Database schema initialized successfully" "$log_file"
 # Console logs include an ANSI color reset between the component and message.
 grep -Eq "ToolDatabase].*Opened:" "$log_file"

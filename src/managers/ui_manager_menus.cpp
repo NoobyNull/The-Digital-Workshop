@@ -1,10 +1,12 @@
 // Digital Workshop - UI Manager (menus & keyboard shortcuts)
-// Menu bar rendering, about/restart dialogs, keyboard shortcut dispatch.
+// Menus shown from the top bar's menu button, about/restart dialogs, and
+// keyboard shortcut dispatch.
 
 #include "managers/ui_manager.h"
 
 #include <algorithm>
 #include <array>
+#include <string>
 
 #include <imgui.h>
 
@@ -19,135 +21,6 @@
 #include "version.h"
 
 namespace dw {
-
-void UIManager::renderMenuBar() {
-    if (ImGui::BeginMainMenuBar()) {
-        renderFileMenu();
-        renderViewMenu();
-        renderEditMenu();
-        renderToolsMenu();
-        renderHelpMenu();
-
-        renderToolbar();
-
-        renderPresetSelector();
-        renderCncMenuBarStatus();
-        ImGui::EndMainMenuBar();
-    }
-    renderSavePresetPopup();
-    renderResetToDefaultsDialog();
-}
-
-void UIManager::renderToolbar() {
-    // Separator between menus and toolbar icons
-    ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x * 3.0f);
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextUnformatted("|");
-    ImGui::PopStyleColor();
-    ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x * 2.0f);
-
-    float btnH = ImGui::GetFrameHeight();
-
-    // New Project
-    if (ImGui::Button(Icons::New, ImVec2(btnH, btnH)) && m_onNewProject)
-        m_onNewProject();
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("New Project (Ctrl+N)");
-
-    ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x * 0.5f);
-
-    // Save Project
-    if (ImGui::Button(Icons::Save, ImVec2(btnH, btnH)) && m_onSaveProject)
-        m_onSaveProject();
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Save Project (Ctrl+S)");
-
-    ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x * 2.0f);
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextUnformatted("|");
-    ImGui::PopStyleColor();
-    ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x * 2.0f);
-
-    const bool workshopActive = m_workspaceMode == WorkspaceMode::Model;
-    const bool senderActive = m_workspaceMode == WorkspaceMode::CNC;
-    const bool lockWorkshop = workshopActive || m_cncStreaming;
-
-    if (lockWorkshop)
-        ImGui::BeginDisabled();
-    if (ImGui::SmallButton("Workshop"))
-        setWorkspaceMode(WorkspaceMode::Model);
-    if (lockWorkshop)
-        ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip(m_cncStreaming
-            ? "The workspace stays fixed while a G-code stream is active."
-            : "Workshop / Projects (Ctrl+1)");
-    }
-
-    ImGui::SameLine(0, 0);
-    const bool lockSender = senderActive || m_showLibrary || m_cncStreaming;
-    if (lockSender)
-        ImGui::BeginDisabled();
-    if (ImGui::SmallButton("Sender"))
-        setWorkspaceMode(WorkspaceMode::CNC);
-    if (lockSender)
-        ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip(m_cncStreaming
-                              ? "The workspace stays fixed while a G-code stream is active."
-                              : (m_showLibrary
-                                     ? "Return from the Design Library before opening CNC Sender."
-                                     : "CNC Sender (Ctrl+2)"));
-    }
-}
-
-void UIManager::renderCncMenuBarStatus() {
-    float barWidth = ImGui::GetWindowWidth();
-    float cursorX = barWidth;
-
-    if (m_cncConnected && !m_cncSimulating) {
-        const char* label = "Disconnect";
-        const auto& style = ImGui::GetStyle();
-        float btnWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 4.0f;
-        cursorX -= btnWidth + style.FramePadding.x;
-        ImGui::SetCursorPosX(cursorX);
-        if (ImGui::SmallButton(label) && m_onDisconnect)
-            m_onDisconnect();
-        return;
-    }
-
-    if (!m_cncSimulating)
-        return;
-
-    if (!m_availablePorts.empty()) {
-        const char* connLabel = "Connect";
-        const auto& style = ImGui::GetStyle();
-        float connWidth = ImGui::CalcTextSize(connLabel).x + style.FramePadding.x * 4.0f;
-        cursorX -= connWidth + style.FramePadding.x;
-        ImGui::SetCursorPosX(cursorX);
-        if (ImGui::SmallButton(connLabel)) {
-            if (m_availablePorts.size() == 1 && m_onConnect)
-                m_onConnect(m_availablePorts.front());
-            else
-                ImGui::OpenPopup("##PortSelect");
-        }
-        if (ImGui::BeginPopup("##PortSelect")) {
-            for (const auto& port : m_availablePorts) {
-                if (ImGui::MenuItem(port.c_str()) && m_onConnect)
-                    m_onConnect(port);
-            }
-            ImGui::EndPopup();
-        }
-    }
-
-    const char* label = "Virtual CNC";
-    float textWidth = ImGui::CalcTextSize(label).x;
-    cursorX -= textWidth + ImGui::GetStyle().ItemSpacing.x * 2;
-    ImGui::SetCursorPosX(cursorX);
-    ImGui::PushStyleColor(ImGuiCol_Text, colors::kDimmed);
-    ImGui::TextUnformatted(label);
-    ImGui::PopStyleColor();
-}
 
 void UIManager::renderFileMenu() {
     if (!ImGui::BeginMenu("File"))
@@ -188,74 +61,31 @@ void UIManager::renderViewMenu() {
     if (!ImGui::BeginMenu("View"))
         return;
 
-    if (ImGui::BeginMenu("Experience")) {
-        const bool guided = guidedExperienceSelected();
-        if (m_cncStreaming)
+    const auto facts = tabFacts();
+    int shortcut = 1;
+    for (const auto tab : workshop::kMainTabs) {
+        const auto block = workshop::mainTabBlock(tab, facts);
+        const std::string keys = "Ctrl+" + std::to_string(shortcut++);
+        if (block != workshop::MainTabBlock::None)
             ImGui::BeginDisabled();
-        if (ImGui::MenuItem("Guided Workshop", nullptr, guided))
-            selectGuidedExperience(true);
-        if (ImGui::MenuItem("Advanced Workbench", nullptr, !guided))
-            selectGuidedExperience(false);
-        if (m_cncStreaming)
+        if (ImGui::MenuItem(workshop::mainTabLabel(tab), keys.c_str(), tab == m_activeTab))
+            requestTab(tab);
+        if (block != workshop::MainTabBlock::None) {
             ImGui::EndDisabled();
-        ImGui::EndMenu();
-    }
-    ImGui::Separator();
-
-    bool isModel = (m_workspaceMode == WorkspaceMode::Model);
-    bool isCnc = (m_workspaceMode == WorkspaceMode::CNC);
-    if (m_cncStreaming)
-        ImGui::BeginDisabled();
-    if (ImGui::MenuItem("Workshop", "Ctrl+1", isModel))
-        setWorkspaceMode(WorkspaceMode::Model);
-    if (m_cncStreaming) {
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("The workspace stays fixed while a G-code stream is active.");
-    }
-    const bool lockSenderWorkspace = m_showLibrary || m_cncStreaming;
-    if (lockSenderWorkspace)
-        ImGui::BeginDisabled();
-    if (ImGui::MenuItem("CNC Sender", "Ctrl+2", isCnc))
-        setWorkspaceMode(WorkspaceMode::CNC);
-    if (lockSenderWorkspace) {
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-            ImGui::SetTooltip(m_cncStreaming
-                                  ? "The workspace stays fixed while a G-code stream is active."
-                                  : "Return from the Design Library before opening CNC Sender.");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("%s", workshop::blockReason(block));
         }
     }
     ImGui::Separator();
 
-    if (ImGui::MenuItem("Viewport", nullptr, isWindowVisible("viewport")))
-        toggleWindow("viewport");
-    if (ImGui::MenuItem("Project", nullptr, isWindowVisible("project")))
-        toggleWindow("project");
+    if (ImGui::MenuItem("Materials", nullptr, isWindowVisible("materials")))
+        toggleWindow("materials");
     if (ImGui::MenuItem(kToolLibraryMenuLabel, nullptr, isWindowVisible("tool_library")))
         toggleWindow("tool_library");
+    if (ImGui::MenuItem("Machine Profiles", nullptr, isWindowVisible("machine_profiles")))
+        toggleWindow("machine_profiles");
     ImGui::Separator();
-
-    if (m_workspaceMode == WorkspaceMode::Model) {
-        if (ImGui::MenuItem("Home", nullptr, isWindowVisible("start_page")))
-            toggleWindow("start_page");
-        renderDesignLibraryMenuItem();
-        if (ImGui::MenuItem("Properties", nullptr, isWindowVisible("properties")))
-            toggleWindow("properties");
-        ImGui::Separator();
-        if (ImGui::MenuItem("Cut Optimizer", nullptr, isWindowVisible("cut_optimizer")))
-            toggleWindow("cut_optimizer");
-        if (ImGui::MenuItem("Project Costing", nullptr, isWindowVisible("project_costing")))
-            toggleWindow("project_costing");
-        if (ImGui::MenuItem("Materials", nullptr, isWindowVisible("materials")))
-            toggleWindow("materials");
-    } else if (ImGui::BeginMenu("Sender Panels")) {
-        renderSenderSubmenu();
-        ImGui::EndMenu();
-    }
-    ImGui::Separator();
-    if (ImGui::MenuItem("Add Group Panel"))
-        addGroupPanel();
+    renderLiveOverlayMenu();
     ImGui::Separator();
     if (ImGui::MenuItem("Log Viewer", "Ctrl+Alt+Shift+L", isWindowVisible("log_viewer")))
         toggleWindow("log_viewer");
@@ -264,59 +94,20 @@ void UIManager::renderViewMenu() {
     ImGui::EndMenu();
 }
 
-void UIManager::renderSenderSubmenu() {
-    if (ImGui::MenuItem("G-code Viewer", nullptr, isWindowVisible("gcode_viewer")))
-        toggleWindow("gcode_viewer");
-    ImGui::Separator();
-    if (ImGui::MenuItem("Status", nullptr, isWindowVisible("cnc_status")))
-        toggleWindow("cnc_status");
-    if (ImGui::MenuItem("Jog Control", nullptr, isWindowVisible("cnc_jog")))
-        toggleWindow("cnc_jog");
-    if (ImGui::MenuItem("MDI Console", nullptr, isWindowVisible("cnc_console")))
-        toggleWindow("cnc_console");
-    if (ImGui::MenuItem("Work Zero / WCS", nullptr, isWindowVisible("cnc_wcs")))
-        toggleWindow("cnc_wcs");
-    ImGui::Separator();
-    if (ImGui::MenuItem("Tool & Material", nullptr, isWindowVisible("runtime_tool_setup")))
-        toggleWindow("runtime_tool_setup");
-    if (ImGui::MenuItem("Job Progress", nullptr, isWindowVisible("cnc_job")))
-        toggleWindow("cnc_job");
-    if (ImGui::MenuItem("Safety Controls", nullptr, isWindowVisible("cnc_safety")))
-        toggleWindow("cnc_safety");
-    ImGui::Separator();
-    if (ImGui::MenuItem("Machine Settings", nullptr, isWindowVisible("machine_settings")))
-        toggleWindow("machine_settings");
-    if (ImGui::MenuItem("Macros", nullptr, isWindowVisible("cnc_macros")))
-        toggleWindow("cnc_macros");
-    ImGui::Separator();
-    if (ImGui::MenuItem("CAM", nullptr, isWindowVisible("direct_carve")))
-        toggleWindow("direct_carve");
-    ImGui::Separator();
-    if (ImGui::BeginMenu("Live Overlay")) {
-        auto& cfg = Config::instance();
-        bool dot = cfg.getCncShowToolDot();
-        if (ImGui::MenuItem("Tool Position", nullptr, &dot)) cfg.setCncShowToolDot(dot);
-        bool env = cfg.getCncShowWorkEnvelope();
-        if (ImGui::MenuItem("Work Envelope", nullptr, &env)) cfg.setCncShowWorkEnvelope(env);
-        bool dro = cfg.getCncShowDroOverlay();
-        if (ImGui::MenuItem("Position Readout", nullptr, &dro)) cfg.setCncShowDroOverlay(dro);
-        ImGui::EndMenu();
-    }
-    ImGui::Separator();
-    if (ImGui::MenuItem("Show All"))
-        showCncPanels(true);
-    if (m_cncStreaming)
-        ImGui::BeginDisabled();
-    if (ImGui::MenuItem("Hide All"))
-        showCncPanels(false);
-    if (m_cncStreaming) {
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("Sender panels stay visible while a G-code stream is active.");
-    }
-
-    if (m_workspaceMode == WorkspaceMode::CNC)
-        enforceWorkspaceBoundary();
+void UIManager::renderLiveOverlayMenu() {
+    if (!ImGui::BeginMenu("Device Overlay"))
+        return;
+    auto& cfg = Config::instance();
+    bool dot = cfg.getCncShowToolDot();
+    if (ImGui::MenuItem("Tool Position", nullptr, &dot))
+        cfg.setCncShowToolDot(dot);
+    bool env = cfg.getCncShowWorkEnvelope();
+    if (ImGui::MenuItem("Work Envelope", nullptr, &env))
+        cfg.setCncShowWorkEnvelope(env);
+    bool dro = cfg.getCncShowDroOverlay();
+    if (ImGui::MenuItem("Position Readout", nullptr, &dro))
+        cfg.setCncShowDroOverlay(dro);
+    ImGui::EndMenu();
 }
 
 void UIManager::renderEditMenu() {
@@ -361,7 +152,7 @@ void UIManager::renderHelpMenu() {
         return;
 
     if (ImGui::MenuItem("About Digital Workshop"))
-        ImGui::OpenPopup("About Digital Workshop");
+        m_openAboutRequested = true;
     ImGui::EndMenu();
 }
 
@@ -416,6 +207,11 @@ void UIManager::renderResetToDefaultsDialog() {
 }
 
 void UIManager::renderAboutDialog() {
+    // Opened here rather than inside the menu so the popup shares this ID scope.
+    if (m_openAboutRequested) {
+        ImGui::OpenPopup("About Digital Workshop");
+        m_openAboutRequested = false;
+    }
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal(
@@ -504,7 +300,7 @@ void UIManager::handleKeyboardShortcuts() {
     if (io.WantTextInput)
         return;
 
-    if (m_showCncJog && m_cncJogPanel)
+    if (isMachineWorkspace() && m_cncJogPanel)
         m_cncJogPanel->handleKeyboardJog();
 
     if (!io.KeyCtrl)
@@ -538,10 +334,15 @@ void UIManager::handleKeyboardShortcuts() {
     if (!io.KeyAlt && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_L))
         openWindow("lighting_settings");
 
-    if (ImGui::IsKeyPressed(ImGuiKey_1) && !m_cncStreaming)
-        setWorkspaceMode(WorkspaceMode::Model);
-    if (ImGui::IsKeyPressed(ImGuiKey_2) && !m_cncStreaming)
-        setWorkspaceMode(WorkspaceMode::CNC);
+    // Ctrl+1..6 select the main tabs in order, like a slicer's tab bar.
+    constexpr std::array<ImGuiKey, workshop::kMainTabs.size()> kTabKeys = {
+        ImGuiKey_1, ImGuiKey_2, ImGuiKey_3, ImGuiKey_4, ImGuiKey_5, ImGuiKey_6};
+    for (std::size_t index = 0; index < kTabKeys.size(); ++index) {
+        if (ImGui::IsKeyPressed(kTabKeys[index], false)) {
+            requestTab(workshop::kMainTabs[index]);
+            return;
+        }
+    }
 }
 
 } // namespace dw

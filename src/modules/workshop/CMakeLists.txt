@@ -1,8 +1,8 @@
 add_library(dw_workshop_core STATIC
-    experience_router.cpp
-    experience_router.h
     home_flow.cpp
     home_flow.h
+    main_tabs.cpp
+    main_tabs.h
     project_item_load_guard.cpp
     project_item_load_guard.h
     project_workshop_controller.cpp

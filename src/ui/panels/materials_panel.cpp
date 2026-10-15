@@ -44,14 +44,6 @@ void MaterialsPanel::refresh() {
     m_allMaterials = m_materialManager->getAllMaterials();
 }
 
-void MaterialsPanel::refreshStockSizes() {
-    if (!m_materialManager || m_detailMaterialId < 0) {
-        m_stockSizes.clear();
-        return;
-    }
-    m_stockSizes = m_materialManager->getStockSizes(m_detailMaterialId);
-}
-
 void MaterialsPanel::selectMaterial(i64 materialId) {
     // Refresh to ensure we have latest data
     refresh();
@@ -78,38 +70,15 @@ void MaterialsPanel::render() {
     const auto* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x * 0.4f, viewport->WorkSize.y * 0.5f), ImGuiCond_FirstUseEver);
     applyMinSize(20, 10);
-    if (ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (ImGui::Begin(m_title.c_str(), closeHandle())) {
         renderToolbar();
         ImGui::Separator();
 
-        if (m_showDetailView) {
-            // Split: grid on top, detail view on bottom
-            float availH = ImGui::GetContentRegionAvail().y;
-            // Calculate detail region: header + separator + table rows, minimum reasonable
-            float lineH = ImGui::GetTextLineHeightWithSpacing();
-            float detailMinH = lineH * 3.0f; // header + separator + at least one row
-            float stockRowCount = static_cast<float>(m_stockSizes.size());
-            float detailContentH = lineH * (4.0f + stockRowCount); // header, separator, add btn, rows
-            float detailH = std::clamp(detailContentH, detailMinH, availH * 0.5f);
-            float gridH = availH - detailH;
-
-            ImGui::BeginChild("GridRegion", ImVec2(0, gridH), false);
-            renderCategoryTabs();
-            ImGui::EndChild();
-
-            ImGui::Separator();
-            ImGui::BeginChild("DetailRegion", ImVec2(0, 0), false);
-            renderDetailView();
-            ImGui::EndChild();
-        } else {
-            renderCategoryTabs();
-        }
+        renderCategoryTabs();
 
         renderAddDialog();
         renderEditForm();
         renderDeleteConfirm();
-        renderStockAddEditPopup();
-        renderStockDeleteConfirm();
     }
     ImGui::End();
 }
@@ -435,11 +404,7 @@ void MaterialsPanel::renderMaterialGrid(const std::vector<MaterialRecord>& mater
                     m_onMaterialAssigned(mat.id);
                 }
             } else {
-                // Single click: select and open detail view
                 m_selectedMaterialId = mat.id;
-                m_showDetailView = true;
-                m_detailMaterialId = mat.id;
-                refreshStockSizes();
                 if (m_onMaterialSelected) {
                     m_onMaterialSelected(mat.id);
                 }

@@ -27,7 +27,6 @@
 #include "core/project/project.h"
 #include "core/project/project_asset_membership.h"
 #include "core/utils/file_utils.h"
-#include "modules/carve_preparation/prepare_carve_flow.h"
 #include "modules/design_library/library_picker_flow.h"
 #include "modules/project_session/project_session.h"
 #include "modules/run_coordination/run_coordinator.h"
@@ -90,7 +89,7 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
         m_integration = std::make_unique<dw::ProjectSessionIntegration>(
             m_session, *m_projects);
         m_workshop = std::make_unique<workshop::ProjectWorkshopController>(
-            m_session, true);
+            m_session);
     }
 
     void TearDown() override {
@@ -140,9 +139,7 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
 
         const auto context = m_session.snapshot();
         const auto navigation = m_workshop->dispatch(
-            workshop::NavigateWorkshopIntent{
-                workshop::ExperienceMode::Guided,
-                context.generation,
+            workshop::NavigateWorkshopIntent{context.generation,
                 workshop::WorkshopRoute::DesignLibrary});
         EXPECT_TRUE(navigation.accepted());
         return opened;
@@ -160,9 +157,7 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
         ASSERT_NE(restore, nullptr);
 
         const auto returned = m_workshop->dispatch(
-            workshop::ReturnFromLibraryIntent{
-                workshop::ExperienceMode::Guided,
-                restore->expectedGeneration});
+            workshop::ReturnFromLibraryIntent{restore->expectedGeneration});
         ASSERT_TRUE(returned.accepted());
         const auto completed = picker.dispatch(
             library::CompleteLibraryRestore{restore->token, true},
@@ -207,43 +202,6 @@ class ProjectCenteredWorkshopEndToEndTest : public ::testing::Test {
         return m_projects->updateOpenItem(std::move(*operation));
     }
 
-    static carve::PreparationReadinessSnapshot designReady(
-        const carve::PrepareCarvePin& pin,
-        std::uint64_t revision) {
-        carve::PreparationReadinessSnapshot facts(
-            pin, carve::PreparationEditRevision{revision});
-        facts.modelLoaded = carve::PreparationEvidence::Satisfied;
-        facts.modelFitsMachine = carve::PreparationEvidence::Satisfied;
-        facts.materialSelected = carve::PreparationEvidence::Unsatisfied;
-        facts.blankSpecified = carve::PreparationEvidence::Unsatisfied;
-        facts.modelFitsBlank = carve::PreparationEvidence::Unsatisfied;
-        facts.finishingToolSelected = carve::PreparationEvidence::Unsatisfied;
-        facts.toolSetupConfirmed = carve::PreparationEvidence::Unsatisfied;
-        facts.toolpathGenerated = carve::PreparationEvidence::Unsatisfied;
-        facts.toolpathFresh = carve::PreparationEvidence::Unsatisfied;
-        facts.hasUnsavedChanges = true;
-        return facts;
-    }
-
-    static carve::PreparationReadinessSnapshot materialReady(
-        const carve::PrepareCarvePin& pin,
-        std::uint64_t revision) {
-        auto facts = designReady(pin, revision);
-        facts.materialSelected = carve::PreparationEvidence::Satisfied;
-        facts.blankSpecified = carve::PreparationEvidence::Satisfied;
-        facts.modelFitsBlank = carve::PreparationEvidence::Satisfied;
-        return facts;
-    }
-
-    static carve::PreparationReadinessSnapshot toolReady(
-        const carve::PrepareCarvePin& pin,
-        std::uint64_t revision) {
-        auto facts = materialReady(pin, revision);
-        facts.finishingToolSelected = carve::PreparationEvidence::Satisfied;
-        facts.toolSetupConfirmed = carve::PreparationEvidence::Satisfied;
-        return facts;
-    }
-
     dw::Path m_root;
     dw::Path m_previousProjectsDirectory;
     dw::Database m_database;
@@ -279,9 +237,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
                   m_session.snapshot()).status,
               library::LibraryPickerTransitionStatus::Applied);
     ASSERT_TRUE(m_workshop->dispatch(
-                    workshop::NavigateWorkshopIntent{
-                        workshop::ExperienceMode::Guided,
-                        m_session.snapshot().generation,
+                    workshop::NavigateWorkshopIntent{m_session.snapshot().generation,
                         workshop::WorkshopRoute::DesignLibrary}).accepted());
     ASSERT_EQ(picker.dispatch(
                   library::ReplaceLibrarySelection{{primary}}, m_session.snapshot()).status,
@@ -361,9 +317,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     EXPECT_TRUE(dw::library_workflow_adapter::previewStillCurrent(
         m_libraryWorkflow.get(), &m_session, previewRequest->token, preview));
     const auto presented = m_workshop->dispatch(
-        workshop::PreviewLibraryItemIntent{
-            workshop::ExperienceMode::Guided,
-            m_session.snapshot().generation,
+        workshop::PreviewLibraryItemIntent{m_session.snapshot().generation,
             preview});
     ASSERT_TRUE(presented.accepted());
     const auto previewCompleted = picker.dispatch(
@@ -382,9 +336,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     const workshop::ProjectItemRef modelRef{
         riverProject, workshop::ProjectItemId(modelItem->id)};
     const auto modelSelected = m_workshop->dispatch(
-        workshop::SelectProjectItemIntent{
-            workshop::ExperienceMode::Guided,
-            m_session.snapshot().generation,
+        workshop::SelectProjectItemIntent{m_session.snapshot().generation,
             modelRef});
     ASSERT_TRUE(modelSelected.accepted());
     ASSERT_EQ(modelSelected.context.activeProjectItem, modelRef);
@@ -436,9 +388,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     const workshop::ProjectItemRef operationRef{
         riverProject, workshop::ProjectItemId(*operationId)};
     const auto operationSelected = m_workshop->dispatch(
-        workshop::SelectProjectItemIntent{
-            workshop::ExperienceMode::Guided,
-            m_session.snapshot().generation,
+        workshop::SelectProjectItemIntent{m_session.snapshot().generation,
             operationRef});
     ASSERT_TRUE(operationSelected.accepted());
     ASSERT_EQ(operationSelected.context.activeProjectItem, operationRef);
@@ -457,62 +407,12 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     EXPECT_TRUE(sameLibraryItem(pin.modelSource(), primary));
     EXPECT_EQ(pin.operationItem(), operationRef);
 
-    carve::PrepareCarveFlow preparation;
-    auto transition = preparation.dispatch(
-        carve::BeginPreparation{designReady(pin, 1)});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::DesignAndSize);
-    transition = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::MaterialAndBlank);
-    ASSERT_EQ(preparation.dispatch(
-                  carve::RefreshPreparation{materialReady(pin, 2)})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    transition = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::ChooseTool);
-    ASSERT_EQ(preparation.dispatch(
-                  carve::RefreshPreparation{toolReady(pin, 3)})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    transition = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_EQ(transition.snapshot.activeStage,
-              carve::PreparationStageId::CarvePreview);
-    const auto previewGeneration = preparation.dispatch(
-        carve::GeneratePreparationPreview{});
-    ASSERT_EQ(previewGeneration.status,
-              carve::PrepareCarveTransitionStatus::EffectIssued);
-    const auto* generationRequest = std::get_if<carve::PreparationPreviewRequest>(
-        &*previewGeneration.effect);
-    ASSERT_NE(generationRequest, nullptr);
-    EXPECT_EQ(generationRequest->readiness.pin(), pin);
-    ASSERT_EQ(preparation.dispatch(
-                  carve::CompletePreparationPreview{
-                      pin, carve::PreparationEditRevision{3}, true})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    const auto ready = preparation.dispatch(carve::ContinuePreparation{});
-    ASSERT_TRUE(ready.effect.has_value());
-    const auto* readyEffect = std::get_if<carve::PreparationReady>(&*ready.effect);
-    ASSERT_NE(readyEffect, nullptr);
-    EXPECT_EQ(readyEffect->readiness.pin(), pin);
-
+    // CAM produces the setup; the preparation lock keeps the project pinned
+    // while the setup is saved.
     ASSERT_TRUE(m_session.dispatch(
                     {{workshop::SetPreparationLock{true}}, std::nullopt})
                     .accepted());
-    const auto save = preparation.dispatch(carve::SavePreparation{});
-    ASSERT_EQ(save.status, carve::PrepareCarveTransitionStatus::EffectIssued);
-    const auto* saveRequest =
-        std::get_if<carve::PreparationSaveRequest>(&*save.effect);
-    ASSERT_NE(saveRequest, nullptr);
-    ASSERT_TRUE(persistPreparedOperation(saveRequest->readiness.pin()));
-    ASSERT_EQ(preparation.dispatch(
-                  carve::CompletePreparationSave{
-                      pin, saveRequest->readiness.editRevision(), true})
-                  .status,
-              carve::PrepareCarveTransitionStatus::Applied);
-    EXPECT_FALSE(preparation.snapshot().readiness->hasUnsavedChanges);
+    ASSERT_TRUE(persistPreparedOperation(pin));
     ASSERT_TRUE(m_session.dispatch(
                     {{workshop::SetPreparationLock{false}}, std::nullopt})
                     .accepted());
@@ -594,7 +494,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     dw::ProjectSessionIntegration restartedIntegration(
         restartedSession, *m_projects);
     workshop::ProjectWorkshopController restartedWorkshop(
-        restartedSession, true);
+        restartedSession);
     workshop::ProjectResumeCallbacks callbacks;
     callbacks.inspectProject = [this](const workshop::ProjectResumeBookmark& bookmark) {
         return m_projects->validateProjectStorage(bookmark.project.value) ==
@@ -618,9 +518,7 @@ TEST_F(ProjectCenteredWorkshopEndToEndTest,
     callbacks.activateItem = [&restartedSession, &restartedWorkshop](
                                  workshop::ProjectItemRef item) {
         const auto selected = restartedWorkshop.dispatch(
-            workshop::SelectProjectItemIntent{
-                workshop::ExperienceMode::Guided,
-                restartedSession.snapshot().generation,
+            workshop::SelectProjectItemIntent{restartedSession.snapshot().generation,
                 item});
         return selected.accepted() ? workshop::ResumeActivationStatus::Applied
                                    : workshop::ResumeActivationStatus::Rejected;

@@ -4,7 +4,6 @@
 
 #include "app/application.h"
 #include "app/direct_carve_run_effect_adapter.h"
-#include "app/project_plan_run_truth_adapter.h"
 
 #include <cmath>
 #include <cstdio>
@@ -30,18 +29,14 @@
 #include "core/cnc/serial_port.h"
 #include "core/config/config.h"
 #include "core/database/connection_pool.h"
-#include "core/database/cost_repository.h"
-#include "core/database/cut_plan_repository.h"
 #include "core/database/database.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/job_repository.h"
 #include "core/database/model_repository.h"
-#include "core/database/rate_category_repository.h"
 #include "core/database/schema.h"
 #include "core/database/tool_database.h"
 #include "core/database/toolbox_repository.h"
 #include "core/export/project_export_manager.h"
-#include "core/graph/graph_manager.h"
 #include "core/import/background_tagger.h"
 #include "core/import/import_log.h"
 #include "core/import/import_queue.h"
@@ -50,7 +45,6 @@
 #include "core/materials/lmstudio_descriptor_service.h"
 #include "core/materials/lmstudio_material_service.h"
 #include "core/materials/material_manager.h"
-#include "core/optimizer/cut_list_file.h"
 #include "core/paths/app_paths.h"
 #include "core/project/project.h"
 #include "core/storage/storage_manager.h"
@@ -279,49 +273,21 @@ bool Application::init(bool diagnosticMode) {
     }
 
     {
-        TIME_STARTUP(timer, "GraphManager Extension");
-        // Initialize GraphQLite extension for Cypher graph queries (ORG-03/04/05)
-        m_graphManager = std::make_unique<GraphManager>(*m_database);
-        {
-            // Resolve extension directory relative to the running executable
-            std::error_code ec;
-            Path exeDir;
-#ifdef __linux__
-            Path exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
-            if (!ec)
-                exeDir = exePath.parent_path();
-#endif
-            if (exeDir.empty())
-                exeDir = std::filesystem::current_path();
-
-            if (!m_graphManager->initialize(exeDir)) {
-                log::warning("Application",
-                             "GraphQLite extension not available -- graph queries disabled");
-            }
-        }
-    }
-
-    {
         TIME_STARTUP(timer, "Managers and Repositories");
         initializeLibraryWorkflow();
         m_materialManager = std::make_unique<MaterialManager>(*m_database);
         m_materialManager->seedDefaults();
         m_jobRepo = std::make_unique<JobRepository>(*m_database);
-        m_projectPlanRunTruthAdapter =
-            std::make_unique<ProjectPlanRunTruthAdapter>();
-        m_cutPlanRepo = std::make_unique<CutPlanRepository>(*m_database);
         // Mark any 'running' jobs as interrupted (app crashed during previous session)
         {
             auto running = m_jobRepo->findByStatus("running");
             for (auto& job : running) {
-                if (m_jobRepo->finishJob(job.id,
-                                         "interrupted",
-                                         job.lastAckedLine,
-                                         job.elapsedSeconds,
-                                         job.errorCount,
-                                         job.modalState)) {
-                    m_projectPlanRunTruthAdapter->rememberInterruptedJob(job.id);
-                }
+                (void)m_jobRepo->finishJob(job.id,
+                                           "interrupted",
+                                           job.lastAckedLine,
+                                           job.elapsedSeconds,
+                                           job.errorCount,
+                                           job.modalState);
             }
             if (!running.empty())
                 log::infof("App",
@@ -332,10 +298,6 @@ bool Application::init(bool diagnosticMode) {
 
     {
         TIME_STARTUP(timer, "Storage and Tool Systems");
-        m_cutListFile = std::make_unique<CutListFile>();
-        m_cutListFile->setDirectory(paths::getDataDir() / "cutlists");
-        m_costRepo = std::make_unique<CostRepository>(*m_database);
-        m_rateCatRepo = std::make_unique<RateCategoryRepository>(*m_database);
         m_lmStudioService = std::make_unique<LMStudioMaterialService>();
         m_descriptorService = std::make_unique<LMStudioDescriptorService>();
         m_ollamaRuntime = std::make_unique<OllamaRuntime>();
@@ -408,11 +370,8 @@ bool Application::init(bool diagnosticMode) {
         m_uiManager->init(m_libraryManager.get(),
                           m_projectManager.get(),
                           m_materialManager.get(),
-                          m_costRepo.get(),
-                          m_rateCatRepo.get(),
                           m_modelRepo.get(),
-                          m_gcodeRepo.get(),
-                          m_cutPlanRepo.get());
+                          m_gcodeRepo.get());
 
         initializeProjectSession();
         initializeFileIOManager();
@@ -502,11 +461,6 @@ void Application::shutdown() {
     m_descriptorService.reset();
     m_ollamaRuntime.reset();
     m_lmStudioService.reset();
-    m_costRepo.reset();
-    m_rateCatRepo.reset();
-    m_cutPlanRepo.reset();
-    m_cutListFile.reset();
-    m_projectPlanRunTruthAdapter.reset();
     m_jobRepo.reset();
     m_libraryWorkflow.reset();
     m_gcodeRepo.reset();
@@ -521,7 +475,6 @@ void Application::shutdown() {
     m_projectManager.reset();
     m_libraryManager.reset();
     m_projectExportManager.reset();
-    m_graphManager.reset(); // Must be destroyed before m_database
     m_database.reset();
 
     // Destroy any multi-viewport platform windows before backend shutdown

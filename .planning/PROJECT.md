@@ -2,11 +2,13 @@
 
 ## What This Is
 
-A C++17 desktop application for 3D model management, G-code analysis, 2D cut optimization, CNC control, and project costing — built for woodworkers who run CNC machines. Uses SDL2, Dear ImGui, OpenGL 3.3, and SQLite.
+A C++17 desktop application for woodworkers who run CNC machines, with three jobs: design library management, CAM, and sending G-code to the machine. Projects tie them together the way a slicer project does. Uses SDL2, Dear ImGui, OpenGL 3.3, and SQLite.
+
+Scope is defined in `.planning/WORKSHOP-SCOPE.md` (2026-10-14). Costing, cut optimization, the Project Plan, and the Guided experience were removed in that reset.
 
 ## Core Value
 
-A woodworker can go from selecting a piece of wood and a cutting tool to safely running a CNC job with optimized feeds and speeds — all without leaving the application.
+A woodworker can go from a design in their library to a safely running CNC job — setup, toolpaths, and machine control — without leaving the application.
 
 ## Requirements
 

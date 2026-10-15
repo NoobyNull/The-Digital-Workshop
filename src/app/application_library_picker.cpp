@@ -15,7 +15,6 @@
 #include "core/cnc/cnc_controller.h"
 #include "core/database/gcode_repository.h"
 #include "core/database/model_repository.h"
-#include "core/graph/graph_manager.h"
 #include "core/library/library_manager.h"
 #include "core/project/project.h"
 #include "managers/file_io_manager.h"
@@ -39,7 +38,6 @@ using library_workflow_adapter::pickerFailureMessage;
 
 void Application::initializeLibraryWorkflow() {
     m_libraryManager = std::make_unique<LibraryManager>(*m_database);
-    m_libraryManager->setGraphManager(m_graphManager.get());
     m_projectManager = std::make_unique<ProjectManager>(*m_database);
     m_modelRepo = std::make_unique<ModelRepository>(*m_database);
     m_gcodeRepo = std::make_unique<GCodeRepository>(*m_database);
@@ -49,12 +47,6 @@ void Application::initializeLibraryWorkflow() {
 
 bool Application::showDesignLibrary() {
     return showDesignLibrary(LibraryPickerPurpose::ManageLibrary);
-}
-
-workshop::ExperienceMode Application::libraryExperienceMode() const {
-    return m_projectWorkshopController && m_projectWorkshopController->guidedEnabled()
-               ? workshop::ExperienceMode::Guided
-               : workshop::ExperienceMode::Advanced;
 }
 
 bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
@@ -73,8 +65,6 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
         return false;
     }
 
-    const auto experience = libraryExperienceMode();
-    const bool guided = experience == workshop::ExperienceMode::Guided;
     auto& picker = m_libraryWorkflow->picker();
     const auto existing = picker.snapshot();
     if (existing.active) {
@@ -86,12 +76,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
                                           "Finish or cancel the current Library task first.");
             return false;
         }
-        m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-        m_uiManager->showStartPage() = false;
-        m_uiManager->showProject() = false;
-        m_uiManager->showViewport() = true;
-        m_uiManager->showProperties() = !guided;
-        m_uiManager->openWindow("library");
+        (void)m_uiManager->selectTab(workshop::MainTab::Library);
         if (auto* panel = m_uiManager->libraryPanel()) {
             panel->refresh();
             panel->setPickerState(existing);
@@ -102,7 +87,7 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
     auto context = m_projectSession->snapshot();
     const auto navigation = m_projectWorkshopController->dispatch(
         workshop::NavigateWorkshopIntent{
-            experience, context.generation, workshop::WorkshopRoute::DesignLibrary});
+            context.generation, workshop::WorkshopRoute::DesignLibrary});
     if (!navigation.accepted()) {
         ToastManager::instance().show(ToastType::Warning,
                                       "Design Library Blocked",
@@ -125,19 +110,14 @@ bool Application::showDesignLibrary(LibraryPickerPurpose purpose) {
     if (!flowAccepted(begun)) {
         const auto current = m_projectSession->snapshot();
         (void)m_projectWorkshopController->dispatch(workshop::ReturnFromLibraryIntent{
-            experience, current.generation});
+            current.generation});
         ToastManager::instance().show(ToastType::Warning,
                                       "Design Library Blocked",
                                       pickerFailureMessage(begun.reason));
         return false;
     }
 
-    m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-    m_uiManager->showStartPage() = false;
-    m_uiManager->showProject() = false;
-    m_uiManager->showViewport() = true;
-    m_uiManager->showProperties() = !guided;
-    m_uiManager->openWindow("library");
+    (void)m_uiManager->selectTab(workshop::MainTab::Library);
     if (auto* panel = m_uiManager->libraryPanel()) {
         panel->refresh();
         panel->setPickerState(begun.snapshot);
@@ -174,8 +154,7 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
             }
             returnItem = request->projectItem;
             const auto restored = m_projectWorkshopController->dispatch(
-                workshop::ReturnFromLibraryIntent{
-                    libraryExperienceMode(), request->expectedGeneration});
+                workshop::ReturnFromLibraryIntent{request->expectedGeneration});
             const bool applied = restored.status == workshop::TransitionStatus::Applied;
             const auto completed = picker.dispatch(
                 design_library::CompleteLibraryRestore{request->token, applied},
@@ -194,8 +173,7 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
     auto context = m_projectSession->snapshot();
     if (context.route == workshop::WorkshopRoute::DesignLibrary) {
         const auto recovered = m_projectWorkshopController->dispatch(
-            workshop::ReturnFromLibraryIntent{
-                libraryExperienceMode(), context.generation});
+            workshop::ReturnFromLibraryIntent{context.generation});
         if (!recovered.accepted()) {
             errorMessage = "The previous workspace could not be restored.";
             return false;
@@ -205,17 +183,11 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
     if (!returnItem && context.activeProjectItem)
         returnItem = context.activeProjectItem;
 
-    m_uiManager->setWorkspaceMode(WorkspaceMode::Model);
-    m_uiManager->showLibrary() = false;
     if (auto* panel = m_uiManager->libraryPanel())
         panel->clearPickerState();
 
     if (context.route == workshop::WorkshopRoute::Project && context.activeProject) {
-        m_uiManager->showStartPage() = false;
-        m_uiManager->showProject() = true;
-        m_uiManager->showViewport() = true;
-        m_uiManager->showProperties() = true;
-        m_uiManager->openWindow("project");
+        (void)m_uiManager->selectTab(workshop::MainTab::Prepare);
         if (returnItem && returnItem->project == *context.activeProject && m_projectManager) {
             const auto item = m_projectManager->findOpenItem(returnItem->item.value);
             if (item && item->projectId == returnItem->project.value)
@@ -225,10 +197,7 @@ bool Application::requestLibraryReturn(std::string& errorMessage) {
         }
     } else {
         invalidateProjectFocus();
-        m_uiManager->showProject() = false;
-        m_uiManager->showViewport() = false;
-        m_uiManager->showProperties() = false;
-        m_uiManager->openWindow("start_page");
+        (void)m_uiManager->selectTab(workshop::MainTab::Home);
     }
     return true;
 }

@@ -58,7 +58,7 @@ void LibraryPanel::render() {
     }
 
     applyMinSize(18, 12);
-    if (ImGui::Begin(m_title.c_str(), &m_open)) {
+    if (ImGui::Begin(m_title.c_str(), closeHandle())) {
         const bool suppressPickerInput = m_pickerInputSuppressionFrames > 0;
         if (suppressPickerInput)
             ImGui::BeginDisabled();

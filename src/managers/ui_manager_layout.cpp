@@ -1,5 +1,7 @@
-// Digital Workshop - UI Manager (layout & presets)
-// Dock layout, config save/restore, layout preset management.
+// Digital Workshop - UI Manager (page host & layouts)
+// One fixed page per main tab, laid out like a 3D-printing slicer: a settings
+// column beside a large canvas. Pages are ImGui dock layouts rebuilt when the
+// tab changes and locked so windows cannot be undocked or rearranged.
 
 #include "managers/ui_manager.h"
 
@@ -9,158 +11,240 @@
 #include <imgui_internal.h>
 
 #include "core/config/config.h"
-#include "core/config/layout_migration.h"
-#include "modules/workshop/ui/guided_layout_metrics.h"
-#include "ui/tool_library_access.h"
+#include "modules/workshop/ui/workshop_layout_metrics.h"
 #include "ui/panels/viewport_panel.h"
 
 namespace dw {
 namespace {
 
-template <typename Predicate>
-int findPresetIndex(const std::vector<LayoutPreset>& presets, Predicate predicate) {
-    for (int index = 0; index < static_cast<int>(presets.size()); ++index) {
-        if (predicate(presets[static_cast<std::size_t>(index)]))
-            return index;
-    }
-    return -1;
+using workshop::MainTab;
+namespace metrics = workshop::ui;
+
+// Shared by every node of the page dockspace: no undocking, no docking
+// floating windows into the page, and no per-node window menus or close
+// buttons. Splitters stay draggable.
+constexpr ImGuiDockNodeFlags kPageDockFlags =
+    ImGuiDockNodeFlags_NoUndocking | ImGuiDockNodeFlags_NoDocking |
+    ImGuiDockNodeFlags_NoWindowMenuButton | ImGuiDockNodeFlags_NoCloseButton;
+
+// Split `remaining` and return the part on `dir`; `remaining` keeps the rest.
+ImGuiID splitOff(ImGuiID& remaining, ImGuiDir dir, float ratio) {
+    ImGuiID part = 0;
+    ImGui::DockBuilderSplitNode(remaining, dir, ratio, &part, &remaining);
+    return part;
+}
+
+// Canvases and full pages need no tab strip; sections keep theirs as a header.
+void hideTabBar(ImGuiID nodeId) {
+    if (auto* node = ImGui::DockBuilderGetNode(nodeId))
+        node->SetLocalFlags(node->LocalFlags | ImGuiDockNodeFlags_NoTabBar);
 }
 
 } // namespace
 
-void UIManager::setupDefaultDockLayout(ImGuiID dockspaceId) {
-    const auto* viewport = ImGui::GetMainViewport();
-    const auto dockLayout = workshop::ui::chooseGuidedDockLayout(
-        viewport->WorkSize.x, ImGui::GetFontSize());
+// A tabbed section opens on `windowTitle` rather than on whichever window
+// ImGui added last. ImGui adds tabs over the first frames after a layout is
+// built, so the choice is applied once they all exist (applyPendingSectionTabs).
+void UIManager::openSectionOn(ImGuiID nodeId, const char* windowTitle) {
+    // Mirrors ImGuiWindow::TabId, which is GetID("#TAB") inside the window.
+    m_pendingSectionTabs.emplace_back(nodeId, ImHashStr("#TAB", 0, ImHashStr(windowTitle)));
+}
 
+void UIManager::applyPendingSectionTabs() {
+    // ImGui focuses every window the first time it appears, and a dock node
+    // selects the focused window's tab. Hand focus to the page's main window
+    // once the new page has appeared so section defaults hold.
+    if (m_focusAfterLayout) {
+        if (const auto* entry = findPanel(m_focusAfterLayout))
+            ImGui::SetWindowFocus(entry->windowTitle);
+        m_focusAfterLayout = nullptr;
+    }
+    auto pending = m_pendingSectionTabs.begin();
+    while (pending != m_pendingSectionTabs.end()) {
+        // A node gains one tab per frame-update, and ImGui selects each newly
+        // added tab; wait until every docked window has its tab.
+        auto* node = ImGui::DockBuilderGetNode(pending->first);
+        if (node && node->TabBar && node->TabBar->Tabs.Size >= node->Windows.Size &&
+            ImGui::TabBarFindTabByID(node->TabBar, pending->second)) {
+            node->TabBar->NextSelectedTabId = pending->second;
+            pending = m_pendingSectionTabs.erase(pending);
+        } else {
+            ++pending;
+        }
+    }
+}
+
+const std::vector<const char*>& UIManager::pageWindowKeys(MainTab tab) {
+    static const std::vector<const char*> home = {"start_page"};
+    static const std::vector<const char*> library = {"library", "viewport", "properties"};
+    static const std::vector<const char*> prepare = {
+        "cnc_tool", "project", "direct_carve", "properties", "viewport"};
+    static const std::vector<const char*> preview = {"gcode", "viewport"};
+    static const std::vector<const char*> device = {
+        "viewport", "gcode", "cnc_job", "cnc_console", "cnc_status", "cnc_jog",
+        "cnc_safety", "cnc_wcs", "cnc_tool", "cnc_macros", "cnc_settings"};
+    static const std::vector<const char*> project = {"project"};
+    switch (tab) {
+    case MainTab::Home:
+        return home;
+    case MainTab::Library:
+        return library;
+    case MainTab::Prepare:
+        return prepare;
+    case MainTab::Preview:
+        return preview;
+    case MainTab::Device:
+        return device;
+    case MainTab::Project:
+        return project;
+    }
+    return home;
+}
+
+MainTab UIManager::defaultTabForWindow(const std::string& key) {
+    if (key == "start_page")
+        return MainTab::Home;
+    if (key == "library")
+        return MainTab::Library;
+    if (key == "gcode")
+        return MainTab::Preview;
+    if (key.rfind("cnc_", 0) == 0 && key != "cnc_tool")
+        return MainTab::Device;
+    return MainTab::Prepare;
+}
+
+void UIManager::renderPageHost() {
+    // The page fills the work area left between the top bar and status bar.
+    const auto* viewport = ImGui::GetMainViewport();
+    const float statusBarH = ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2;
+
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, viewport->WorkSize.y - statusBarH));
+    ImGui::SetNextWindowViewport(viewport->ID);
+
+    const ImGuiWindowFlags hostFlags =
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+        ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("DockSpaceHost", nullptr, hostFlags);
+    ImGui::PopStyleVar(3);
+
+    const ImGuiID dockspaceId = ImGui::GetID("MainDockSpace");
+    ImGui::DockSpace(dockspaceId, ImVec2(0.0F, 0.0F), kPageDockFlags);
+    ImGui::End();
+
+    if (m_layoutDirty) {
+        buildPageLayout(dockspaceId);
+        m_layoutDirty = false;
+    }
+}
+
+void UIManager::dockPanel(const char* key, ImGuiID node) const {
+    if (const auto* entry = findPanel(key))
+        ImGui::DockBuilderDockWindow(entry->windowTitle, node);
+}
+
+void UIManager::buildPageLayout(ImGuiID dockspaceId) {
+    const auto* viewport = ImGui::GetMainViewport();
+    const float width = viewport->WorkSize.x;
+    const float em = ImGui::GetFontSize();
+
+    m_pendingSectionTabs.clear();
+    m_focusAfterLayout = "viewport";
+    if (m_activeTab == MainTab::Home)
+        m_focusAfterLayout = "start_page";
+    else if (m_activeTab == MainTab::Project)
+        m_focusAfterLayout = "project";
     ImGui::DockBuilderRemoveNode(dockspaceId);
     ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
-    ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->Size);
+    ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
 
-    // Split from physical widths so scaled Guided labels remain readable while
-    // 4K sidebars stay close to their useful content instead of growing to 20%.
-    ImGuiID dockLeft = 0;
-    ImGuiID dockCenterRight = 0;
-    ImGui::DockBuilderSplitNode(
-        dockspaceId,
-        ImGuiDir_Left,
-        dockLayout.leftSplitRatio,
-        &dockLeft,
-        &dockCenterRight);
-
-    // Split left sidebar: library (top 60%) | project (bottom 40%)
-    ImGuiID dockLeftTop = 0;
-    ImGuiID dockLeftBottom = 0;
-    ImGui::DockBuilderSplitNode(
-        dockLeft, ImGuiDir_Down, 0.40f, &dockLeftBottom, &dockLeftTop);
-
-    // Split center+right using the right sidebar's physical target width.
-    ImGuiID dockCenter = 0;
-    ImGuiID dockRight = 0;
-    ImGui::DockBuilderSplitNode(
-        dockCenterRight,
-        ImGuiDir_Right,
-        dockLayout.rightSplitRatio,
-        &dockRight,
-        &dockCenter);
-
-    // Core visible panels
-    ImGui::DockBuilderDockWindow("Library", dockLeftTop);
-    ImGui::DockBuilderDockWindow("Project", dockLeftBottom);
-    ImGui::DockBuilderDockWindow("Viewport", dockCenter);
-    ImGui::DockBuilderDockWindow("Properties", dockRight);
-
-    // Hidden panels — docked as tabs in existing areas
-    ImGui::DockBuilderDockWindow("Home###Start Page", dockCenter);
-    ImGui::DockBuilderDockWindow("G-code", dockCenter);
-    ImGui::DockBuilderDockWindow("Cut Optimizer", dockCenter);
-    ImGui::DockBuilderDockWindow("Project Costing", dockLeftBottom);
-    ImGui::DockBuilderDockWindow("Materials", dockLeftBottom);
-    ImGui::DockBuilderDockWindow("Tool & Material", dockRight);
-    ImGui::DockBuilderDockWindow(kToolLibraryWindowTitle, dockRight);
-
-    // CNC panels — docked as center tabs
-    ImGui::DockBuilderDockWindow("CNC Status", dockCenter);
-    ImGui::DockBuilderDockWindow("Jog Control", dockCenter);
-    ImGui::DockBuilderDockWindow("MDI Console", dockCenter);
-    ImGui::DockBuilderDockWindow("WCS", dockCenter);
-    ImGui::DockBuilderDockWindow("Safety", dockCenter);
-    ImGui::DockBuilderDockWindow("Machine Settings", dockCenter);
-    ImGui::DockBuilderDockWindow("Macros", dockCenter);
-    ImGui::DockBuilderDockWindow("Job Progress", dockCenter);
-    ImGui::DockBuilderDockWindow("CAM", dockCenter);
+    ImGuiID canvas = dockspaceId;
+    switch (m_activeTab) {
+    case MainTab::Home:
+    case MainTab::Project:
+        dockPanel(m_activeTab == MainTab::Home ? "start_page" : "project", canvas);
+        hideTabBar(canvas);
+        break;
+    case MainTab::Library: {
+        const auto column = metrics::chooseSideColumn(width, em, metrics::kLibraryBrowser);
+        const ImGuiID browser = splitOff(canvas, ImGuiDir_Left, column.splitRatio);
+        const ImGuiID details = splitOff(canvas, ImGuiDir_Down, 0.40F);
+        dockPanel("library", browser);
+        dockPanel("viewport", canvas);
+        dockPanel("properties", details);
+        hideTabBar(browser);
+        hideTabBar(canvas);
+        break;
+    }
+    case MainTab::Prepare: {
+        // Slicer sidebar: printer/filament → tool & material, object list →
+        // project contents, process (Global | Objects) → CAM | Properties.
+        const auto column = metrics::chooseSideColumn(width, em, metrics::kSettingsSidebar);
+        ImGuiID sidebar = splitOff(canvas, ImGuiDir_Left, column.splitRatio);
+        const ImGuiID toolSection = splitOff(sidebar, ImGuiDir_Up, 0.24F);
+        const ImGuiID processSection = splitOff(sidebar, ImGuiDir_Down, 0.42F);
+        dockPanel("cnc_tool", toolSection);
+        dockPanel("project", sidebar);
+        dockPanel("direct_carve", processSection);
+        dockPanel("properties", processSection);
+        openSectionOn(processSection, "CAM");
+        dockPanel("viewport", canvas);
+        hideTabBar(canvas);
+        break;
+    }
+    case MainTab::Preview: {
+        const auto column = metrics::chooseSideColumn(width, em, metrics::kSettingsSidebar);
+        const ImGuiID sidebar = splitOff(canvas, ImGuiDir_Left, column.splitRatio);
+        dockPanel("gcode", sidebar);
+        dockPanel("viewport", canvas);
+        hideTabBar(canvas);
+        break;
+    }
+    case MainTab::Device: {
+        // Bambu's Device tab: the live view with the job underneath, and the
+        // machine controls in a column on the right.
+        const auto column =
+            metrics::chooseSideColumn(width, em, metrics::kMachineControlColumn);
+        ImGuiID controls = splitOff(canvas, ImGuiDir_Right, column.splitRatio);
+        const ImGuiID jobArea = splitOff(canvas, ImGuiDir_Down, 0.38F);
+        const ImGuiID status = splitOff(controls, ImGuiDir_Up, 0.34F);
+        const ImGuiID jog = splitOff(controls, ImGuiDir_Up, 0.45F);
+        dockPanel("viewport", canvas);
+        hideTabBar(canvas);
+        for (const char* key : {"gcode", "cnc_job", "cnc_console"})
+            dockPanel(key, jobArea);
+        openSectionOn(jobArea, "G-code");
+        dockPanel("cnc_status", status);
+        dockPanel("cnc_jog", jog);
+        for (const char* key : {"cnc_safety", "cnc_wcs", "cnc_tool", "cnc_macros",
+                                "cnc_settings"})
+            dockPanel(key, controls);
+        openSectionOn(controls, "Safety");
+        break;
+    }
+    }
 
     ImGui::DockBuilderFinish(dockspaceId);
 }
 
 void UIManager::restoreVisibilityFromConfig() {
+    // Page windows follow the tab; only floating windows remember themselves.
     auto& cfg = Config::instance();
-
-    m_showViewport = cfg.getShowViewport();
-    // Design Library visibility belongs to its task flow, never a saved layout.
-    m_showLibrary = false;
-    m_showProperties = cfg.getShowProperties();
-    m_showProject = cfg.getShowProject();
     m_showMaterials = cfg.getShowMaterials();
-    m_showGCode = cfg.getShowGCode();
-    m_showCutOptimizer = cfg.getShowCutOptimizer();
-    m_showProjectCosting = cfg.getShowProjectCosting();
     m_showToolBrowser = cfg.getShowToolBrowser();
-    m_showStartPage = cfg.getShowStartPage();
-
-    m_showCncStatus = cfg.getShowCncStatus();
-    m_showCncJog = cfg.getShowCncJog();
-    m_showCncConsole = cfg.getShowCncConsole();
-    m_showCncWcs = cfg.getShowCncWcs();
-    m_showCncTool = cfg.getShowCncTool();
-    m_showCncJob = cfg.getShowCncJob();
-    m_showCncSafety = cfg.getShowCncSafety();
-    m_showCncSettings = cfg.getShowCncSettings();
-    m_showCncMacros = cfg.getShowCncMacros();
-    m_showDirectCarve = cfg.getShowDirectCarve();
-
-    m_activePresetIndex = cfg.getActiveLayoutPresetIndex();
-    if (m_activePresetIndex >= 0 &&
-        m_activePresetIndex < static_cast<int>(cfg.getLayoutPresets().size())) {
-        const auto& active = cfg.getLayoutPresets()[static_cast<std::size_t>(m_activePresetIndex)];
-        if (isGuidedLayout(active) && m_guidedExperienceSetter)
-            m_guidedExperienceSetter(true);
-        else if (isAdvancedLayout(active) && m_guidedExperienceSetter)
-            m_guidedExperienceSetter(false);
-    }
-    m_workspaceMode = isBuiltInSenderPreset(m_activePresetIndex)
-        ? WorkspaceMode::CNC
-        : WorkspaceMode::Model;
-    syncWorkspaceModeToPanels();
-    enforceWorkspaceBoundary();
+    applyTabToPanels();
 }
 
 void UIManager::saveVisibilityToConfig() {
     auto& cfg = Config::instance();
-    cfg.setShowViewport(m_showViewport);
-    // Migrate any legacy persisted Library visibility back to the safe default.
-    cfg.setShowLibrary(false);
-    cfg.setShowProperties(m_showProperties);
-    cfg.setShowProject(m_showProject);
     cfg.setShowMaterials(m_showMaterials);
-    cfg.setShowGCode(m_showGCode);
-    cfg.setShowCutOptimizer(m_showCutOptimizer);
-    cfg.setShowProjectCosting(m_showProjectCosting);
     cfg.setShowToolBrowser(m_showToolBrowser);
-    cfg.setShowStartPage(m_showStartPage);
-
-    cfg.setShowCncStatus(m_showCncStatus);
-    cfg.setShowCncJog(m_showCncJog);
-    cfg.setShowCncConsole(m_showCncConsole);
-    cfg.setShowCncWcs(m_showCncWcs);
-    cfg.setShowCncTool(m_showCncTool);
-    cfg.setShowCncJob(m_showCncJob);
-    cfg.setShowCncSafety(m_showCncSafety);
-    cfg.setShowCncSettings(m_showCncSettings);
-    cfg.setShowCncMacros(m_showCncMacros);
-    cfg.setShowDirectCarve(m_showDirectCarve);
-
-    cfg.setActiveLayoutPresetIndex(m_activePresetIndex);
 }
 
 void UIManager::applyRenderSettingsFromConfig() {
@@ -176,234 +260,6 @@ void UIManager::applyRenderSettingsFromConfig() {
     rs.shininess = cfg.getRenderShininess();
     rs.showGrid = cfg.getShowGrid();
     rs.showAxis = cfg.getShowAxis();
-}
-
-void UIManager::applyLayoutPreset(int presetIndex) {
-    auto& cfg = Config::instance();
-    const auto& presets = cfg.getLayoutPresets();
-    if (presetIndex < 0 || presetIndex >= static_cast<int>(presets.size()))
-        return;
-    if (m_cncStreaming && presetIndex != m_activePresetIndex)
-        return;
-    if (m_showLibrary && isBuiltInSenderPreset(presetIndex))
-        return;
-
-    const auto& preset = presets[static_cast<size_t>(presetIndex)];
-    for (const auto& entry : m_panelRegistry) {
-        const auto* catalog = findWindowCatalogEntry(entry.key);
-        if (catalog && !catalog->layoutPersistent)
-            continue;
-        if (const auto visible = layoutPresetVisibility(preset, entry.key))
-            *entry.showFlag = *visible;
-    }
-    m_activePresetIndex = presetIndex;
-    cfg.setActiveLayoutPresetIndex(presetIndex);
-    m_suppressAutoContext = true;
-
-    // Keep workspace mode in sync with built-in presets
-    if (isBuiltInWorkshopPreset(presetIndex) && !m_cncStreaming)
-        m_workspaceMode = WorkspaceMode::Model;
-    else if (isBuiltInSenderPreset(presetIndex))
-        m_workspaceMode = WorkspaceMode::CNC;
-
-    if (isGuidedLayout(preset) && m_guidedExperienceSetter)
-        m_guidedExperienceSetter(true);
-    else if (isAdvancedLayout(preset) && m_guidedExperienceSetter)
-        m_guidedExperienceSetter(false);
-
-    syncWorkspaceModeToPanels();
-    enforceWorkspaceBoundary();
-}
-
-bool UIManager::isBuiltInWorkshopPreset(int presetIndex) const {
-    const auto& presets = Config::instance().getLayoutPresets();
-    if (presetIndex < 0 || presetIndex >= static_cast<int>(presets.size()))
-        return false;
-    const auto& preset = presets[static_cast<std::size_t>(presetIndex)];
-    return isGuidedLayout(preset) || isAdvancedLayout(preset);
-}
-
-bool UIManager::isBuiltInSenderPreset(int presetIndex) const {
-    const auto& presets = Config::instance().getLayoutPresets();
-    return presetIndex >= 0 && presetIndex < static_cast<int>(presets.size()) &&
-           isCncLayout(presets[static_cast<std::size_t>(presetIndex)]);
-}
-
-bool UIManager::guidedExperienceSelected() const {
-    return m_guidedExperienceGetter && m_guidedExperienceGetter();
-}
-
-int UIManager::workshopPresetIndex() const {
-    const auto& presets = Config::instance().getLayoutPresets();
-    const bool guided = guidedExperienceSelected();
-    const int preferred = findPresetIndex(presets, [guided](const LayoutPreset& preset) {
-        return guided ? isGuidedLayout(preset) : isAdvancedLayout(preset);
-    });
-    if (preferred >= 0)
-        return preferred;
-    return findPresetIndex(presets, [](const LayoutPreset& preset) {
-        return isGuidedLayout(preset) || isAdvancedLayout(preset);
-    });
-}
-
-int UIManager::senderPresetIndex() const {
-    return findPresetIndex(Config::instance().getLayoutPresets(), isCncLayout);
-}
-
-void UIManager::selectGuidedExperience(bool guided) {
-    if (m_cncStreaming)
-        return;
-    if (m_guidedExperienceSetter)
-        m_guidedExperienceSetter(guided);
-    if (m_workspaceMode == WorkspaceMode::Model)
-        applyLayoutPreset(workshopPresetIndex());
-}
-
-LayoutPreset UIManager::captureCurrentLayout(const std::string& name) const {
-    LayoutPreset preset;
-    preset.name = name;
-
-    for (const auto& entry : m_panelRegistry) {
-        const auto* catalog = findWindowCatalogEntry(entry.key);
-        if (catalog && !catalog->layoutPersistent)
-            continue;
-        preset.visibility[entry.key] = *entry.showFlag;
-    }
-    return preset;
-}
-
-void UIManager::saveCurrentAsPreset(const std::string& name) {
-    auto& cfg = Config::instance();
-    auto& presets = const_cast<std::vector<LayoutPreset>&>(cfg.getLayoutPresets());
-
-    // Check for existing custom preset with same name — overwrite it
-    for (int i = 0; i < static_cast<int>(presets.size()); ++i) {
-        auto idx = static_cast<size_t>(i);
-        if (!presets[idx].builtIn && presets[idx].name == name) {
-            cfg.updateLayoutPreset(i, captureCurrentLayout(name));
-            m_activePresetIndex = i;
-            cfg.setActiveLayoutPresetIndex(i);
-            cfg.save();
-            return;
-        }
-    }
-
-    // New preset
-    cfg.addLayoutPreset(captureCurrentLayout(name));
-    m_activePresetIndex = static_cast<int>(cfg.getLayoutPresets().size()) - 1;
-    cfg.setActiveLayoutPresetIndex(m_activePresetIndex);
-    cfg.save();
-}
-
-void UIManager::deletePreset(int index) {
-    auto& cfg = Config::instance();
-    cfg.removeLayoutPreset(index);
-
-    if (m_activePresetIndex >= static_cast<int>(cfg.getLayoutPresets().size()))
-        m_activePresetIndex = static_cast<int>(cfg.getLayoutPresets().size()) - 1;
-    cfg.setActiveLayoutPresetIndex(m_activePresetIndex);
-    cfg.save();
-}
-
-void UIManager::checkAutoContextTrigger(const std::string& focusedPanelKey) {
-    if (m_suppressAutoContext) return;
-
-    auto& cfg = Config::instance();
-    const auto& presets = cfg.getLayoutPresets();
-
-    for (int i = 0; i < static_cast<int>(presets.size()); ++i) {
-        if (i == m_activePresetIndex) continue;
-        if (presets[static_cast<size_t>(i)].autoTriggerPanelKey == focusedPanelKey) {
-            const bool senderPreset = isBuiltInSenderPreset(i);
-            const bool workshopPreset = isBuiltInWorkshopPreset(i);
-            if ((senderPreset && m_workspaceMode == WorkspaceMode::CNC) ||
-                (workshopPreset && m_workspaceMode == WorkspaceMode::Model)) {
-                applyLayoutPreset(i);
-                return;
-            }
-        }
-    }
-}
-
-void UIManager::renderPresetSelector() {
-    auto& cfg = Config::instance();
-    const auto& presets = cfg.getLayoutPresets();
-
-    const char* activeLabel = "Custom";
-    if (m_activePresetIndex >= 0 &&
-        m_activePresetIndex < static_cast<int>(presets.size())) {
-        activeLabel = presets[static_cast<size_t>(m_activePresetIndex)].name.c_str();
-    }
-
-    ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
-
-    const auto& style = ImGui::GetStyle();
-    float comboWidth = ImGui::CalcTextSize(activeLabel).x + style.FramePadding.x * 4.0f +
-                       ImGui::GetFrameHeight();
-    ImGui::SetNextItemWidth(comboWidth);
-
-    if (ImGui::BeginCombo("##LayoutPreset", activeLabel, ImGuiComboFlags_NoArrowButton)) {
-        for (int i = 0; i < static_cast<int>(presets.size()); ++i) {
-            bool selected = (i == m_activePresetIndex);
-            const bool disabled = (m_cncStreaming && !selected) ||
-                                  (m_showLibrary && isBuiltInSenderPreset(i));
-            if (disabled)
-                ImGui::BeginDisabled();
-            if (ImGui::Selectable(presets[static_cast<size_t>(i)].name.c_str(), selected))
-                applyLayoutPreset(i);
-            if (disabled) {
-                ImGui::EndDisabled();
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip(
-                        "The active layout stays fixed while a G-code stream is active.");
-            }
-            if (selected) ImGui::SetItemDefaultFocus();
-        }
-
-        ImGui::Separator();
-        if (ImGui::Selectable("Save Current Layout..."))
-            m_showSavePresetPopup = true;
-        if (m_activePresetIndex >= 0 &&
-            m_activePresetIndex < static_cast<int>(presets.size()) &&
-            !presets[static_cast<size_t>(m_activePresetIndex)].builtIn) {
-            if (ImGui::Selectable("Delete Current Preset"))
-                deletePreset(m_activePresetIndex);
-        }
-        ImGui::EndCombo();
-    }
-}
-
-void UIManager::renderSavePresetPopup() {
-    if (m_showSavePresetPopup) {
-        ImGui::OpenPopup("Save Layout Preset");
-        m_showSavePresetPopup = false;
-    }
-    if (ImGui::BeginPopupModal("Save Layout Preset", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Preset name:");
-        float inputWidth = ImGui::CalcTextSize("M").x * 30.0f;
-        ImGui::SetNextItemWidth(inputWidth);
-        ImGui::InputText("##PresetName", m_presetNameBuf, sizeof(m_presetNameBuf));
-        ImGui::Spacing();
-
-        bool nameValid = m_presetNameBuf[0] != '\0';
-        if (!nameValid) ImGui::BeginDisabled();
-        if (ImGui::Button("Save")) {
-            saveCurrentAsPreset(m_presetNameBuf);
-            m_presetNameBuf[0] = '\0';
-            ImGui::CloseCurrentPopup();
-        }
-        if (!nameValid) ImGui::EndDisabled();
-
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            m_presetNameBuf[0] = '\0';
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
 }
 
 } // namespace dw

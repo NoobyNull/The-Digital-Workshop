@@ -1,12 +1,13 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
 #include <utility>
 
-#include "modules/project_plan/project_plan.h"
 #include "panel.h"
+#include "project_contents.h"
 
 namespace dw {
 
@@ -17,13 +18,13 @@ struct ProjectPanelSnapshot {
     std::string notes;
     bool modified = false;
     bool hasModels = false;
-    project_plan::ProjectPlan plan;
+    ProjectContents contents;
     std::optional<workshop::ProjectItemId> activeItem;
 };
 
-// Project is the persistent workshop context. This panel renders one Project
-// Plan snapshot and emits intents; it does not query asset repositories or own
-// preparation policy.
+// Project is the persistent workshop context, organized like a slicer project:
+// designs, the CAM setups made from them, and the G-code they produced. This
+// panel renders one snapshot and emits intents; it does not query repositories.
 class ProjectPanel : public Panel {
   public:
     ProjectPanel();
@@ -35,20 +36,23 @@ class ProjectPanel : public Panel {
         m_notesChanged = false;
     }
 
-    using ProjectPlanProvider = std::function<std::optional<ProjectPanelSnapshot>()>;
-    using ProjectPlanActionCallback =
-        std::function<void(const project_plan::NextAction&)>;
-    using ProjectItemActivatedCallback =
-        std::function<void(workshop::ProjectItemRef)>;
+    using ProjectSnapshotProvider = std::function<std::optional<ProjectPanelSnapshot>()>;
+    using ProjectItemCallback = std::function<void(workshop::ProjectItemRef)>;
 
-    void setProjectPlanProvider(ProjectPlanProvider provider) {
-        m_projectPlanProvider = std::move(provider);
+    void setProjectSnapshotProvider(ProjectSnapshotProvider provider) {
+        m_snapshotProvider = std::move(provider);
     }
-    void setOnProjectPlanAction(ProjectPlanActionCallback callback) {
-        m_onProjectPlanAction = std::move(callback);
-    }
-    void setOnProjectItemActivated(ProjectItemActivatedCallback callback) {
+    void setOnProjectItemActivated(ProjectItemCallback callback) {
         m_onProjectItemActivated = std::move(callback);
+    }
+    // Opens the design's CAM setup, creating one when the design has none.
+    void setOnOpenInCam(ProjectItemCallback callback) {
+        m_onOpenInCam = std::move(callback);
+    }
+
+    using AddFromLibraryCallback = std::function<void()>;
+    void setAddFromLibraryCallback(AddFromLibraryCallback callback) {
+        m_addFromLibraryCallback = std::move(callback);
     }
 
     using OpenHomeCallback = std::function<void()>;
@@ -79,13 +83,16 @@ class ProjectPanel : public Panel {
 
   private:
     void renderProjectHeader(const ProjectPanelSnapshot& snapshot);
-    void renderProjectPlan(const ProjectPanelSnapshot& snapshot);
+    void renderProjectContents(const ProjectPanelSnapshot& snapshot);
+    void renderContentRow(const ProjectPanelSnapshot& snapshot, std::size_t index);
+    void renderContentRowMenu(const ProjectContentRow& row);
     void renderProjectDetails(const ProjectPanelSnapshot& snapshot);
     void renderNoProject();
 
-    ProjectPlanProvider m_projectPlanProvider;
-    ProjectPlanActionCallback m_onProjectPlanAction;
-    ProjectItemActivatedCallback m_onProjectItemActivated;
+    ProjectSnapshotProvider m_snapshotProvider;
+    ProjectItemCallback m_onProjectItemActivated;
+    ProjectItemCallback m_onOpenInCam;
+    AddFromLibraryCallback m_addFromLibraryCallback;
     OpenHomeCallback m_openHomeCallback;
     CloseProjectCallback m_closeProjectCallback;
     SaveProjectCallback m_saveProjectCallback;

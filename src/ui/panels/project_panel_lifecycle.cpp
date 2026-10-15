@@ -1,10 +1,10 @@
 #include "project_panel.h"
 
 #include <cstring>
+#include <string>
 
 #include <imgui.h>
 
-#include "modules/project_plan/project_plan_presentation.h"
 #include "ui/icons.h"
 
 namespace dw {
@@ -20,31 +20,15 @@ void ProjectPanel::renderProjectHeader(const ProjectPanelSnapshot& snapshot) {
         ImGui::PopStyleColor();
     }
 
-    std::string designs;
-    std::size_t designCount = 0;
-    for (const auto& node : snapshot.plan.nodes) {
-        if (node.item.kind != project_plan::ItemKind::Model) continue;
-        if (!designs.empty()) designs += ", ";
-        designs += node.item.label;
-        ++designCount;
-    }
-    if (designCount == 1)
-        ImGui::TextWrapped("Design: %s", designs.c_str());
-    else if (designCount > 1)
-        ImGui::TextWrapped("Legacy project designs: %s", designs.c_str());
-
-    if (snapshot.activeItem) {
-        for (const auto& node : snapshot.plan.nodes) {
-            if (node.item.ref.item != *snapshot.activeItem) continue;
-            const std::string selected =
-                "Selected: " + node.item.label + " | " +
-                project_plan::itemStateLabel(node.item.state);
-            ImGui::PushStyleColor(
-                ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-            ImGui::TextWrapped("%s", selected.c_str());
-            ImGui::PopStyleColor();
-            break;
-        }
+    if (!snapshot.activeItem) return;
+    for (const auto& row : snapshot.contents) {
+        if (row.ref.item != *snapshot.activeItem) continue;
+        const std::string selected = "Selected: " + row.label + " | " + row.status;
+        ImGui::PushStyleColor(
+            ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("%s", selected.c_str());
+        ImGui::PopStyleColor();
+        break;
     }
 }
 

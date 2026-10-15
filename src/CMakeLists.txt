@@ -6,7 +6,6 @@
 add_subdirectory(modules/workshop)
 add_subdirectory(modules/design_library)
 add_subdirectory(modules/project_session)
-add_subdirectory(modules/project_plan)
 add_subdirectory(modules/carve_preparation)
 add_subdirectory(modules/run_coordination)
 add_subdirectory(modules/viewport)
@@ -35,8 +34,7 @@ set(DW_SOURCES
     app/library_workflow_adapter.cpp
     app/library_workflow_coordinator.cpp
     app/direct_carve_run_effect_adapter.cpp
-    app/project_plan_input_adapter.cpp
-    app/project_plan_run_truth_adapter.cpp
+    app/project_contents_adapter.cpp
     app/project_session_integration.cpp
     app/window.cpp
     app/workspace.cpp
@@ -46,6 +44,7 @@ set(DW_SOURCES
     managers/ui_manager_workshop.cpp
     managers/ui_manager_menus.cpp
     managers/ui_manager_layout.cpp
+    managers/ui_manager_top_bar.cpp
     managers/file_io_manager.cpp
     managers/file_io_projects.cpp
     managers/config_manager.cpp
@@ -60,7 +59,6 @@ set(DW_SOURCES
     core/utils/string_utils.cpp
     core/utils/lmstudio_http.cpp
     core/utils/unit_conversion.cpp
-    core/utils/board_foot.cpp
 
     # Threading
     core/threading/main_thread_queue.cpp
@@ -99,10 +97,6 @@ set(DW_SOURCES
     core/database/project_repository_open_items.cpp
     core/database/gcode_repository.cpp
     core/database/job_repository.cpp
-    core/database/cost_repository.cpp
-    core/database/stock_size_repository.cpp
-    core/database/rate_category_repository.cpp
-    core/database/cut_plan_repository.cpp
     core/database/tool_database.cpp
     core/database/tool_database_machine_material.cpp
     core/database/tool_database_schema.cpp
@@ -110,9 +104,6 @@ set(DW_SOURCES
     core/database/supplier_tool_catalog.cpp
     core/database/selective_tool_importer.cpp
     core/database/toolbox_repository.cpp
-
-    # Graph
-    core/graph/graph_manager.cpp
 
     # Mesh
     core/mesh/mesh.cpp
@@ -137,8 +128,6 @@ set(DW_SOURCES
     core/project/gcode_project_context.cpp
     core/project/project_open_item_warnings.cpp
     core/project/project_directory.cpp
-    core/project/project_costing_io.cpp
-    core/project/costing_engine.cpp
 
     # Storage
     core/storage/storage_manager.cpp
@@ -192,15 +181,6 @@ set(DW_SOURCES
     core/cnc/machine_units.cpp
     core/cnc/macro_manager.cpp
     core/cnc/gamepad_input.cpp
-
-    # Optimizer
-    core/optimizer/cut_optimizer.cpp
-    core/optimizer/cut_list_file.cpp
-    core/optimizer/bin_packer.cpp
-    core/optimizer/guillotine.cpp
-    core/optimizer/waste_breakdown.cpp
-    core/optimizer/multi_stock_optimizer.cpp
-    core/optimizer/clo_result_file.cpp
 
     # Carve (Direct Carve pipeline)
     core/carve/model_fitter.cpp
@@ -257,16 +237,11 @@ set(DW_SOURCES
     ui/panels/log_viewer_panel.cpp
     ui/panels/materials_panel.cpp
     ui/panels/materials_panel_dialogs.cpp
-    ui/panels/materials_panel_stock.cpp
     ui/panels/properties_panel.cpp
     ui/panels/project_panel.cpp
     ui/panels/project_panel_lifecycle.cpp
-    ui/panels/project_plan_view.cpp
     ui/panels/gcode_panel.cpp
     ui/panels/gcode_panel_files.cpp
-    ui/panels/gcode_panel_run_truth.cpp
-    ui/panels/cost_panel.cpp
-    ui/panels/cut_optimizer_panel.cpp
     ui/panels/start_page.cpp
     ui/panels/tool_browser_panel.cpp
     ui/panels/cnc_status_panel.cpp
@@ -278,12 +253,10 @@ set(DW_SOURCES
     ui/panels/cnc_safety_panel.cpp
     ui/panels/cnc_settings_panel.cpp
     ui/panels/cnc_macro_panel.cpp
-    ui/panels/group_panel.cpp
 
     # UI Widgets
     ui/widgets/binding_recorder.cpp
     ui/widgets/status_bar.cpp
-    modules/workshop/ui/project_context_bar.cpp
     ui/widgets/status_tips.cpp
     ui/widgets/toast.cpp
     ui/widgets/tool_profile_preview.cpp
@@ -323,7 +296,6 @@ target_link_libraries(digital_workshop PRIVATE
     dw_viewport_presentation
     dw_run_coordination
     dw_design_library
-    dw_project_plan
     dw_project_session
     dw_workshop_core
     imgui
@@ -364,9 +336,9 @@ set_target_properties(digital_workshop PROPERTIES
 )
 
 # CPack and cmake --install must fail closed when the release payload is
-# incomplete. Configuration and ordinary development builds may still proceed
-# offline without GraphQLite; only creation/installation of a distributable is
-# blocked until the cached dependency and canonical resources are present.
+# incomplete. Ordinary development builds proceed regardless; only
+# creation/installation of a distributable is blocked until the canonical
+# resources are present.
 set(DW_RELEASE_PAYLOAD_CHECK
     "${CMAKE_CURRENT_BINARY_DIR}/verify_release_payload.cmake")
 configure_file(
@@ -375,17 +347,6 @@ configure_file(
     @ONLY
 )
 install(SCRIPT "${DW_RELEASE_PAYLOAD_CHECK}")
-
-# --- Bundle GraphQLite extension (if available) ---
-if(DW_GRAPHQLITE_AVAILABLE)
-    add_custom_command(TARGET digital_workshop POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${DW_GRAPHQLITE_LIB_PATH}"
-            "$<TARGET_FILE_DIR:digital_workshop>/${GRAPHQLITE_LIB}"
-        COMMENT "Copying GraphQLite extension to build directory"
-    )
-    install(FILES "${DW_GRAPHQLITE_LIB_PATH}" DESTINATION bin)
-endif()
 
 # --- Bundle resources (materials) ---
 # Copy .dwmat files from resources/materials/ to the build output directory.

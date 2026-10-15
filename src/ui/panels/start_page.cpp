@@ -7,7 +7,7 @@
 
 #include "../../core/config/config.h"
 #include "../../core/utils/file_utils.h"
-#include "../../modules/workshop/ui/guided_layout_metrics.h"
+#include "../../modules/workshop/ui/workshop_layout_metrics.h"
 #include "version.h"
 
 namespace dw {
@@ -36,12 +36,12 @@ void StartPage::render() {
     }
 
     applyMinSize(30, 16);
-    if (ImGui::Begin(m_title.c_str(), &m_open, flags)) {
-        const auto homeLayout = workshop::ui::chooseGuidedHomeLayout(
+    if (ImGui::Begin(m_title.c_str(), closeHandle(), flags)) {
+        const auto homeLayout = workshop::ui::chooseHomeLayout(
             ImGui::GetContentRegionAvail().x, ImGui::GetStyle().ItemSpacing.x);
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + homeLayout.horizontalOffset);
         ImGui::BeginChild(
-            "##GuidedHomeContent", ImVec2(homeLayout.contentWidth, 0.0F), false);
+            "##HomeContent", ImVec2(homeLayout.contentWidth, 0.0F), false);
 
         // Header
         ImGui::Text("Home");

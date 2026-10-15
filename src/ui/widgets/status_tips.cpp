@@ -28,15 +28,15 @@ std::vector<std::string> buildStatusTips(StatusTipContext context, const StatusT
     case StatusTipContext::Sender: {
         std::vector<std::string> tips;
         if (state.cncStreaming) {
-            tips.push_back("Sender: active stream keeps Workshop locked until the job stops");
+            tips.push_back("Device: the active stream keeps this tab open until the job stops");
         } else if (!state.cncConnected) {
-            tips.push_back("Sender: connect a controller before streaming G-code");
+            tips.push_back("Device: connect a controller before streaming G-code");
         } else {
-            tips.push_back("Sender: load or resume G-code from the G-code Viewer");
+            tips.push_back("Device: open G-code in Preview, then use Send to Machine");
         }
-        tips.push_back("Sender: " + bindingName(state.feedOverridePlus, "feed +") + " / " +
+        tips.push_back("Device: " + bindingName(state.feedOverridePlus, "feed +") + " / " +
                        bindingName(state.feedOverrideMinus, "feed -") + " adjusts feed override");
-        tips.push_back("Sender: " + bindingName(state.spindleOverridePlus, "spindle +") + " / " +
+        tips.push_back("Device: " + bindingName(state.spindleOverridePlus, "spindle +") + " / " +
                        bindingName(state.spindleOverrideMinus, "spindle -") +
                        " adjusts spindle override");
         return tips;
@@ -44,9 +44,9 @@ std::vector<std::string> buildStatusTips(StatusTipContext context, const StatusT
     case StatusTipContext::Workshop:
     default:
         return {
-            "Workshop: Ctrl+I imports models",
-            "Workshop: select a model from the Library to load it",
-            "Workshop: use Tools > Recalculate Model Normals for the loaded model",
+            "Ctrl+I imports models into the Library",
+            "Ctrl+1 to Ctrl+6 switch between the tabs",
+            "Prepare: click a design in the project to load it",
         };
     }
 }

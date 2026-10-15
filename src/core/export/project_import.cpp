@@ -327,40 +327,10 @@ DwprojExportResult ProjectExportManager::importProject(const Path& archivePath,
         }
     }
 
-    // Phase D: Import cost estimates
-    size_t costsSize = 0;
-    void* costsData = mz_zip_reader_extract_file_to_heap(&zip, "costs.json", &costsSize, 0);
-    if (costsData) {
-        std::string costsJson(static_cast<char*>(costsData), costsSize);
-        mz_free(costsData);
-
-        auto estimates = parseCostsJson(costsJson);
-        CostRepository costRepo(m_db);
-        for (auto& est : estimates) {
-            est.projectId = *projectId;
-            costRepo.insert(est);
-        }
-    }
-
-    // Phase E: Import cut plans
-    size_t plansSize = 0;
-    void* plansData = mz_zip_reader_extract_file_to_heap(&zip, "cut_plans.json", &plansSize, 0);
-    if (plansData) {
-        std::string plansJson(static_cast<char*>(plansData), plansSize);
-        mz_free(plansData);
-
-        auto plans = parseCutPlansJson(plansJson);
-        CutPlanRepository cutPlanRepo(m_db);
-        for (auto& plan : plans) {
-            plan.projectId = *projectId;
-            cutPlanRepo.insert(plan);
-        }
-    }
-
     mz_zip_reader_end(&zip);
 
     log::infof(kLogModuleImport,
-               "Imported project '%s' with %d models, %zu gcode, costs, cut plans from '%s'",
+               "Imported project '%s' with %d models, %zu gcode from '%s'",
                manifest.projectName.c_str(),
                importedCount,
                manifest.gcode.size(),
@@ -369,89 +339,6 @@ DwprojExportResult ProjectExportManager::importProject(const Path& archivePath,
     auto result = DwprojExportResult::ok(importedCount, totalBytes);
     result.importedProjectId = *projectId;
     return result;
-}
-
-// --- JSON Parsing Helpers ---
-
-std::vector<CostingRecord> ProjectExportManager::parseCostsJson(const std::string& json) {
-    std::vector<CostingRecord> results;
-    try {
-        auto arr = nlohmann::json::parse(json);
-        if (!arr.is_array()) return results;
-
-        for (const auto& ej : arr) {
-            CostingRecord est;
-            est.name = ej.value("name", "");
-            est.projectId = ej.value("project_id", static_cast<i64>(0));
-            est.subtotal = ej.value("subtotal", 0.0);
-            est.taxRate = ej.value("tax_rate", 0.0);
-            est.taxAmount = ej.value("tax_amount", 0.0);
-            est.discountRate = ej.value("discount_rate", 0.0);
-            est.discountAmount = ej.value("discount_amount", 0.0);
-            est.total = ej.value("total", 0.0);
-            est.notes = ej.value("notes", "");
-            est.createdAt = ej.value("created_at", "");
-            est.modifiedAt = ej.value("modified_at", "");
-
-            if (ej.contains("items") && ej["items"].is_array()) {
-                for (const auto& ij : ej["items"]) {
-                    CostItem item;
-                    item.name = ij.value("name", "");
-                    item.category = static_cast<CostCategory>(ij.value("category", 0));
-                    item.quantity = ij.value("quantity", 1.0);
-                    item.rate = ij.value("rate", 0.0);
-                    item.total = ij.value("total", 0.0);
-                    item.notes = ij.value("notes", "");
-                    est.items.push_back(std::move(item));
-                }
-            }
-
-            results.push_back(std::move(est));
-        }
-    } catch (const nlohmann::json::exception& e) {
-        log::warningf(kLogModuleImport, "Failed to parse costs.json: %s", e.what());
-    }
-    return results;
-}
-
-std::vector<CutPlanRecord> ProjectExportManager::parseCutPlansJson(const std::string& json) {
-    std::vector<CutPlanRecord> results;
-    try {
-        auto arr = nlohmann::json::parse(json);
-        if (!arr.is_array()) return results;
-
-        for (const auto& pj : arr) {
-            CutPlanRecord rec;
-            rec.name = pj.value("name", "");
-            if (pj.contains("project_id") && !pj["project_id"].is_null()) {
-                rec.projectId = pj["project_id"].get<i64>();
-            }
-            rec.algorithm = pj.value("algorithm", "");
-            rec.allowRotation = pj.value("allow_rotation", true);
-            rec.kerf = pj.value("kerf", 0.0f);
-            rec.margin = pj.value("margin", 0.0f);
-            rec.sheetsUsed = pj.value("sheets_used", 0);
-            rec.efficiency = pj.value("efficiency", 0.0f);
-            rec.createdAt = pj.value("created_at", "");
-            rec.modifiedAt = pj.value("modified_at", "");
-
-            // Re-serialize embedded JSON fields
-            if (pj.contains("sheet_config") && !pj["sheet_config"].is_null()) {
-                rec.sheetConfigJson = pj["sheet_config"].dump();
-            }
-            if (pj.contains("parts") && !pj["parts"].is_null()) {
-                rec.partsJson = pj["parts"].dump();
-            }
-            if (pj.contains("result") && !pj["result"].is_null()) {
-                rec.resultJson = pj["result"].dump();
-            }
-
-            results.push_back(std::move(rec));
-        }
-    } catch (const nlohmann::json::exception& e) {
-        log::warningf(kLogModuleImport, "Failed to parse cut_plans.json: %s", e.what());
-    }
-    return results;
 }
 
 } // namespace dw

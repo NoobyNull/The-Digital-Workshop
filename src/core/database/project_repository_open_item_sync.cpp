@@ -98,53 +98,6 @@ int ProjectRepository::ensureOpenItemsForProject(i64 projectId) {
         }
     }
 
-    auto stockStmt = m_db.prepare(R"(
-        SELECT DISTINCT s.id, s.material_id, s.name, s.width_mm, s.height_mm,
-               s.thickness_mm, s.price_per_unit, s.unit_label, mat.name
-        FROM stock_sizes s
-        INNER JOIN materials mat ON mat.id = s.material_id
-        INNER JOIN models m ON m.material_id = mat.id
-        INNER JOIN project_models pm ON pm.model_id = m.id
-        WHERE pm.project_id = ?
-        ORDER BY mat.name, s.name
-    )");
-    if (stockStmt.isValid() && stockStmt.bindInt(1, projectId)) {
-        while (stockStmt.step()) {
-            i64 stockId = stockStmt.getInt(0);
-            if (!findOpenItemsBySource(projectId, "stock_sizes", stockId).empty()) {
-                continue;
-            }
-
-            std::string stockName = stockStmt.getText(2);
-            std::string materialName = stockStmt.getText(8);
-            std::string displayName = stockName.empty() ? materialName + " stock" : stockName;
-
-            std::ostringstream snapshot;
-            snapshot << "{\"material_id\":" << stockStmt.getInt(1) << ",\"material_name\":\""
-                     << project_open_item_detail::jsonEscape(materialName) << "\","
-                     << "\"stock_name\":\"" << project_open_item_detail::jsonEscape(stockName)
-                     << "\","
-                     << "\"width_mm\":" << stockStmt.getDouble(3)
-                     << ",\"height_mm\":" << stockStmt.getDouble(4)
-                     << ",\"thickness_mm\":" << stockStmt.getDouble(5)
-                     << ",\"price_per_unit\":" << stockStmt.getDouble(6) << ",\"unit_label\":\""
-                     << project_open_item_detail::jsonEscape(stockStmt.getText(7)) << "\"}";
-
-            ProjectOpenItem item;
-            item.projectId = projectId;
-            item.itemType = ProjectOpenItemType::Stock;
-            item.sourceTable = "stock_sizes";
-            item.sourceId = stockId;
-            item.status = ProjectOpenItemStatus::Ready;
-            item.displayName = displayName;
-            item.intentJson = R"({"selected_use":"model_material_stock"})";
-            item.snapshotJson = snapshot.str();
-            if (insertOpenItem(item).has_value()) {
-                ++created;
-            }
-        }
-    }
-
     auto operationStmt = m_db.prepare(R"(
         SELECT DISTINCT og.id, og.model_id, og.name
         FROM operation_groups og
@@ -367,82 +320,6 @@ int ProjectRepository::ensureOpenItemsForProject(i64 projectId) {
             item.status = itemStatus;
             item.displayName = "Run: " + jobStmt.getText(1);
             item.intentJson = R"({"actual_type":"cnc_run"})";
-            item.snapshotJson = snapshot.str();
-            if (!existingItems.empty()) {
-                item.id = existingItems.front().id;
-                (void)updateOpenItem(item);
-            } else if (insertOpenItem(item).has_value()) {
-                ++created;
-            }
-        }
-    }
-
-    auto cutPlanStmt = m_db.prepare(R"(
-        SELECT id, name, algorithm, allow_rotation, kerf, margin, sheets_used, efficiency
-        FROM cut_plans
-        WHERE project_id = ?
-        ORDER BY created_at, id
-    )");
-    if (cutPlanStmt.isValid() && cutPlanStmt.bindInt(1, projectId)) {
-        while (cutPlanStmt.step()) {
-            i64 planId = cutPlanStmt.getInt(0);
-            if (!findOpenItemsBySource(projectId, "cut_plans", planId).empty()) {
-                continue;
-            }
-
-            std::ostringstream snapshot;
-            snapshot << "{\"algorithm\":\""
-                     << project_open_item_detail::jsonEscape(cutPlanStmt.getText(2)) << "\","
-                     << "\"allow_rotation\":" << (cutPlanStmt.getInt(3) != 0 ? "true" : "false")
-                     << ",\"kerf\":" << cutPlanStmt.getDouble(4)
-                     << ",\"margin\":" << cutPlanStmt.getDouble(5)
-                     << ",\"sheets_used\":" << cutPlanStmt.getInt(6)
-                     << ",\"efficiency\":" << cutPlanStmt.getDouble(7) << "}";
-
-            ProjectOpenItem item;
-            item.projectId = projectId;
-            item.itemType = ProjectOpenItemType::CutPlan;
-            item.sourceTable = "cut_plans";
-            item.sourceId = planId;
-            item.status = ProjectOpenItemStatus::Generated;
-            item.displayName = cutPlanStmt.getText(1);
-            item.intentJson = R"({"selected_use":"cut_optimizer_plan"})";
-            item.snapshotJson = snapshot.str();
-            if (insertOpenItem(item).has_value()) {
-                ++created;
-            }
-        }
-    }
-
-    auto costStmt = m_db.prepare(R"(
-        SELECT id, name, subtotal, tax_amount, discount_amount, total, items
-        FROM costing_records
-        WHERE project_id = ?
-        ORDER BY created_at, id
-    )");
-    if (costStmt.isValid() && costStmt.bindInt(1, projectId)) {
-        while (costStmt.step()) {
-            i64 costId = costStmt.getInt(0);
-            auto existingItems = findOpenItemsBySource(projectId, "costing_records", costId);
-            auto sourceKeys =
-                project_open_item_detail::autoCostSourceKeysFromItemsJson(costStmt.getText(6));
-
-            std::ostringstream snapshot;
-            snapshot << "{\"subtotal\":" << costStmt.getDouble(2)
-                     << ",\"tax_amount\":" << costStmt.getDouble(3)
-                     << ",\"discount_amount\":" << costStmt.getDouble(4)
-                     << ",\"total\":" << costStmt.getDouble(5)
-                     << ",\"source_keys\":" << project_open_item_detail::jsonStringArray(sourceKeys)
-                     << "}";
-
-            ProjectOpenItem item;
-            item.projectId = projectId;
-            item.itemType = ProjectOpenItemType::Cost;
-            item.sourceTable = "costing_records";
-            item.sourceId = costId;
-            item.status = ProjectOpenItemStatus::Ready;
-            item.displayName = costStmt.getText(1);
-            item.intentJson = R"({"estimate_type":"project_estimate"})";
             item.snapshotJson = snapshot.str();
             if (!existingItems.empty()) {
                 item.id = existingItems.front().id;

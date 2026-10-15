@@ -17,7 +17,6 @@ namespace dw {
 // Forward declarations
 class ThumbnailGenerator;
 class Texture;
-class GraphManager;
 
 // Report returned by library maintenance operations
 struct MaintenanceReport {
@@ -84,9 +83,6 @@ class LibraryManager {
     // Set thumbnail generator (optional, owned externally)
     void setThumbnailGenerator(ThumbnailGenerator* generator) { m_thumbnailGen = generator; }
 
-    // Set graph manager for dual-write (optional, owned externally)
-    void setGraphManager(GraphManager* gm) { m_graphManager = gm; }
-
     // Generate thumbnail and update DB record
     bool generateThumbnail(i64 modelId,
                            const Mesh& mesh,
@@ -120,7 +116,7 @@ class LibraryManager {
     // Auto-detect: try to match G-code filename to model name
     std::optional<i64> autoDetectModelMatch(const std::string& gcodeFilename);
 
-    // --- Category management (delegates to ModelRepository + graph dual-write) ---
+    // --- Category management (delegates to ModelRepository) ---
     bool assignCategory(i64 modelId, i64 categoryId);
     bool removeModelCategory(i64 modelId, i64 categoryId);
     std::optional<i64> createCategory(const std::string& name,
@@ -153,7 +149,6 @@ class LibraryManager {
     GCodeRepository m_gcodeRepo;
     DuplicateHandler m_duplicateHandler;
     ThumbnailGenerator* m_thumbnailGen = nullptr;
-    GraphManager* m_graphManager = nullptr;
 };
 
 } // namespace dw

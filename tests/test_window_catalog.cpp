@@ -5,7 +5,6 @@
 #include <sstream>
 
 #include "core/config/layout_preset.h"
-#include "core/config/workspace_stream_policy.h"
 #include "core/config/window_catalog.h"
 
 namespace dw {
@@ -42,20 +41,26 @@ TEST(WindowCatalog, HomePreservesTheStartPageLayoutIdentity) {
     EXPECT_EQ(canonicalWindowKey("home"), "start_page");
 }
 
-TEST(WindowCatalog, ProjectCostingPreservesItsLegacyLayoutAlias) {
-    const auto* entry = findWindowCatalogEntry("cost_estimator");
+TEST(WindowCatalog, MachineSettingsPreservesItsLegacyLayoutAliases) {
+    const auto* entry = findWindowCatalogEntry("firmware_settings");
     ASSERT_NE(entry, nullptr);
-    EXPECT_EQ(entry->key, "project_costing");
-    EXPECT_EQ(entry->layoutKey, "project_costing");
+    EXPECT_EQ(entry->key, "machine_settings");
+    EXPECT_EQ(entry->layoutKey, "cnc_settings");
+}
+
+TEST(WindowCatalog, RemovedPanelsHaveNoCatalogEntry) {
+    EXPECT_EQ(findWindowCatalogEntry("cut_optimizer"), nullptr);
+    EXPECT_EQ(findWindowCatalogEntry("project_costing"), nullptr);
+    EXPECT_EQ(findWindowCatalogEntry("cost_estimator"), nullptr);
 }
 
 TEST(WindowCatalog, LegacyVisibilityKeysResolveWithoutRewritingCustomPreset) {
     LayoutPreset custom;
     custom.name = "Legacy aliases";
-    custom.visibility = {{"cost_estimator", true}, {"home", false}};
+    custom.visibility = {{"firmware_settings", true}, {"home", false}};
     const auto before = custom.toJsonString();
 
-    EXPECT_EQ(layoutPresetVisibility(custom, "project_costing"), true);
+    EXPECT_EQ(layoutPresetVisibility(custom, "machine_settings"), true);
     EXPECT_EQ(layoutPresetVisibility(custom, "start_page"), false);
     EXPECT_EQ(custom.toJsonString(), before);
 }
@@ -69,37 +74,21 @@ TEST(WindowCatalog, DesignLibraryIsATransientWorkflowSurface) {
     EXPECT_FALSE(LayoutPreset::modelDefault().visibility.at("library"));
 }
 
-TEST(WindowCatalog, DirectCarveIsSharedAcrossWorkshopAndSender) {
+TEST(WindowCatalog, CamWindowSitsInThePrepareSidebar) {
     const auto* entry = findWindowCatalogEntry("direct_carve");
     ASSERT_NE(entry, nullptr);
     EXPECT_EQ(entry->role, WindowRole::Shared);
 
-    std::ifstream manager(std::string(CMAKE_SOURCE_DIR) + "/src/managers/ui_manager.cpp");
-    ASSERT_TRUE(manager.is_open());
+    std::ifstream layout(std::string(CMAKE_SOURCE_DIR) + "/src/managers/ui_manager_layout.cpp");
+    ASSERT_TRUE(layout.is_open());
     std::ostringstream source;
-    source << manager.rdbuf();
-    const auto directCarve = source.str().find("{\"direct_carve\"");
-    ASSERT_NE(directCarve, std::string::npos);
-    EXPECT_NE(source.str().find("WindowRole::Shared", directCarve), std::string::npos);
-}
-
-TEST(WorkspaceStreamPolicy, OnlyGuidedDirectCarvePreservesWorkshopShell) {
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::DirectCarve, true, true),
-              CncStreamShell::GuidedWorkshop);
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::DirectCarve, false, true),
-              CncStreamShell::Sender);
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::DirectCarve, true, false),
-              CncStreamShell::Sender);
-    EXPECT_EQ(cncStreamShellForStart(
-                  CncStreamOrigin::ExternalGCode, true, true),
-              CncStreamShell::Sender);
+    source << layout.rdbuf();
+    // CAM is the slicer's "Process" section, beside the object list.
+    EXPECT_NE(source.str().find("dockPanel(\"direct_carve\", processSection)"),
+              std::string::npos);
 }
 
 TEST(WindowCatalog, DockableLayoutKeysExistInBuiltInPresets) {
-    const auto guided = LayoutPreset::guidedDefault();
     const auto workshop = LayoutPreset::modelDefault();
     const auto sender = LayoutPreset::cncDefault();
 
@@ -107,7 +96,6 @@ TEST(WindowCatalog, DockableLayoutKeysExistInBuiltInPresets) {
         if (entry.type != WindowType::DockablePanel || !entry.layoutPersistent)
             continue;
 
-        EXPECT_NE(guided.visibility.find(entry.layoutKey), guided.visibility.end()) << entry.key;
         EXPECT_NE(workshop.visibility.find(entry.layoutKey), workshop.visibility.end())
             << entry.key;
         EXPECT_NE(sender.visibility.find(entry.layoutKey), sender.visibility.end())

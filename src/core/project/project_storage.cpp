@@ -70,10 +70,8 @@ bool isOwnedTemporaryRoot(const Path& root) {
 
 bool hasManagedProjectDirectories(const ProjectDirectory& directory) {
     return file::isDirectory(directory.modelsDir()) &&
-           file::isDirectory(directory.heightmapsDir()) &&
            file::isDirectory(directory.gcodeDir()) &&
-           file::isDirectory(directory.imagesDir()) &&
-           file::isDirectory(directory.costingDir());
+           file::isDirectory(directory.imagesDir());
 }
 
 std::optional<Path> copyToOwnedStaging(const Path& source, i64 projectId) {

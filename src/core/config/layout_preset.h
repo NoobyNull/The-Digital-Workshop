@@ -14,7 +14,7 @@ struct LayoutPreset {
     std::string name;
     bool builtIn = false; // Prevents deletion
 
-    // Panel visibility: key -> visible (20 keys matching UIManager m_show* flags)
+    // Panel visibility: key -> visible (keys match UIManager m_show* flags)
     std::unordered_map<std::string, bool> visibility;
 
     // Auto-context: focusing a panel with this key activates this preset.
@@ -26,27 +26,24 @@ struct LayoutPreset {
     static LayoutPreset fromJsonString(const std::string& jsonStr);
 
     // Built-in preset factories
-    static LayoutPreset guidedDefault();
-    static LayoutPreset advancedDefault();
+    static LayoutPreset workshopDefault();
     // Stable source alias retained for callers that historically requested
     // the modeling/workshop preset.
     static LayoutPreset modelDefault();
     static LayoutPreset cncDefault();
 };
 
-inline constexpr const char* GUIDED_LAYOUT_ID = "guided_workshop";
-inline constexpr const char* ADVANCED_LAYOUT_ID = "advanced_workbench";
+inline constexpr const char* WORKSHOP_LAYOUT_ID = "workshop";
 inline constexpr const char* CNC_LAYOUT_ID = "cnc_sender";
 
 // All valid panel keys (for validation and iteration)
 inline constexpr const char* PANEL_KEYS[] = {
     "viewport",      "library",     "properties",   "project",
-    "gcode",         "cut_optimizer", "project_costing", "materials",
-    "tool_browser",  "start_page",
+    "gcode",         "materials",   "tool_browser", "start_page",
     "cnc_status",    "cnc_jog",     "cnc_console",  "cnc_wcs",
     "cnc_tool",      "cnc_job",     "cnc_safety",   "cnc_settings",
     "cnc_macros",    "direct_carve",
 };
-inline constexpr int PANEL_KEY_COUNT = 20;
+inline constexpr int PANEL_KEY_COUNT = 18;
 
 } // namespace dw

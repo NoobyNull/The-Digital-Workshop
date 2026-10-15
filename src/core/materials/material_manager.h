@@ -6,7 +6,6 @@
 
 #include "../database/database.h"
 #include "../database/material_repository.h"
-#include "../database/stock_size_repository.h"
 #include "../types.h"
 #include "material.h"
 
@@ -69,13 +68,6 @@ class MaterialManager {
     // Get the material assigned to a model (queries models table then fetches MaterialRecord)
     std::optional<MaterialRecord> getModelMaterial(i64 modelId);
 
-    // --- Stock size operations (delegate to StockSizeRepository) ---
-
-    std::vector<StockSize> getStockSizes(i64 materialId);
-    std::optional<i64> addStockSize(const StockSize& size);
-    bool updateStockSize(const StockSize& size);
-    bool removeStockSize(i64 id);
-
   private:
     // Generate a unique filename in getMaterialsDir() to avoid collisions.
     // If "material.dwmat" exists, tries "material_1.dwmat", "material_2.dwmat", etc.
@@ -83,7 +75,6 @@ class MaterialManager {
 
     Database& m_db;
     MaterialRepository m_repo;
-    StockSizeRepository m_stockRepo;
 };
 
 } // namespace dw

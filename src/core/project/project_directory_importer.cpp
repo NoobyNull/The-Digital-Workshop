@@ -1,6 +1,5 @@
 #include "project_directory_importer.h"
 
-#include <cmath>
 #include <filesystem>
 #include <optional>
 #include <unordered_map>
@@ -40,7 +39,6 @@ struct ManifestData {
     std::string name;
     std::string description;
     std::vector<ManifestModel> models;
-    std::vector<std::string> heightmaps;
     std::vector<ManifestGCode> gcode;
 };
 
@@ -175,7 +173,7 @@ std::optional<ManifestData> parseManifest(const ProjectDirectory& directory,
             manifest.description = json["description"].get<std::string>();
         }
 
-        for (const char* key : {"models", "heightmaps", "gcode"}) {
+        for (const char* key : {"models", "gcode"}) {
             if (json.contains(key) && !json[key].is_array()) {
                 error = fail(ProjectDirectoryImportError::InvalidManifest,
                              std::string("Project manifest field is not an array: ") + key);
@@ -194,21 +192,6 @@ std::optional<ManifestData> parseManifest(const ProjectDirectory& directory,
                 }
                 manifest.models.push_back(
                     {item["filename"].get<std::string>(), item["hash"].get<std::string>()});
-            }
-        }
-
-        if (json.contains("heightmaps")) {
-            for (const auto& item : json["heightmaps"]) {
-                if (!item.is_object() || !item.contains("filename") ||
-                    !item["filename"].is_string() || !item.contains("resolutionMmPerPx") ||
-                    !item["resolutionMmPerPx"].is_number() ||
-                    !std::isfinite(item["resolutionMmPerPx"].get<double>()) ||
-                    item["resolutionMmPerPx"].get<double>() <= 0.0) {
-                    error = fail(ProjectDirectoryImportError::InvalidManifest,
-                                 "Every heightmap requires a filename and positive resolution");
-                    return std::nullopt;
-                }
-                manifest.heightmaps.push_back(item["filename"].get<std::string>());
             }
         }
 
@@ -262,12 +245,6 @@ std::optional<PreparedManifest> preflight(const ProjectDirectory& directory,
             return std::nullopt;
         }
         prepared.models.push_back({*path, actualHash});
-    }
-
-    for (const auto& filename : prepared.manifest.heightmaps) {
-        if (!validateEntryPath(prepared.manifest.root / "heightmaps", filename, error)) {
-            return std::nullopt;
-        }
     }
 
     for (const auto& entry : prepared.manifest.gcode) {

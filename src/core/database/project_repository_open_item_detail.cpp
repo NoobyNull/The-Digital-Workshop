@@ -1,6 +1,5 @@
 #include "project_repository_open_item_detail.h"
 
-#include <set>
 #include <sstream>
 
 #include <nlohmann/json.hpp>
@@ -41,39 +40,6 @@ std::string jsonEscape(const std::string& value) {
     }
     return out.str();
 }
-std::vector<std::string> autoCostSourceKeysFromItemsJson(const std::string& itemsJson) {
-    std::set<std::string> keys;
-    auto parsed = nlohmann::json::parse(itemsJson, nullptr, false);
-    if (!parsed.is_array()) {
-        return {};
-    }
-
-    for (const auto& item : parsed) {
-        if (!item.is_object() || !item.contains("notes") || !item["notes"].is_string()) {
-            continue;
-        }
-        auto notes = item["notes"].get<std::string>();
-        if (notes.rfind("[auto:", 0) == 0) {
-            keys.insert(std::move(notes));
-        }
-    }
-
-    return {keys.begin(), keys.end()};
-}
-
-std::string jsonStringArray(const std::vector<std::string>& values) {
-    std::ostringstream out;
-    out << "[";
-    for (size_t i = 0; i < values.size(); ++i) {
-        if (i > 0) {
-            out << ",";
-        }
-        out << "\"" << jsonEscape(values[i]) << "\"";
-    }
-    out << "]";
-    return out.str();
-}
-
 GeneratedDirectCarvePrograms explicitGeneratedDirectCarvePrograms(Database& database,
                                                                   i64 projectId) {
     GeneratedDirectCarvePrograms programs;
@@ -204,50 +170,16 @@ void pruneOpenItemsForProject(Database& database, i64 projectId) {
         (void)pruneJobs.execute();
     }
 
-    auto pruneCutPlans = database.prepare(R"(
+    // Item types retired with costing, the Cut Optimizer, and the Project
+    // Plan. Schema v19 removes them once; this keeps any that reappear (for
+    // example from an older client sharing the database) out of the project.
+    auto pruneRetired = database.prepare(R"(
         DELETE FROM project_open_items
         WHERE project_id = ?
-          AND item_type = 'cut_plan'
-          AND source_table = 'cut_plans'
-          AND source_id NOT IN (
-              SELECT id FROM cut_plans WHERE project_id = ?
-          )
+          AND item_type IN ('stock', 'cut_plan', 'cost', 'labor', 'consumable', 'zeroing')
     )");
-    if (pruneCutPlans.isValid() && pruneCutPlans.bindInt(1, projectId) &&
-        pruneCutPlans.bindInt(2, projectId)) {
-        (void)pruneCutPlans.execute();
-    }
-
-    auto pruneCosts = database.prepare(R"(
-        DELETE FROM project_open_items
-        WHERE project_id = ?
-          AND item_type = 'cost'
-          AND source_table = 'costing_records'
-          AND source_id NOT IN (
-              SELECT id FROM costing_records WHERE project_id = ?
-          )
-    )");
-    if (pruneCosts.isValid() && pruneCosts.bindInt(1, projectId) &&
-        pruneCosts.bindInt(2, projectId)) {
-        (void)pruneCosts.execute();
-    }
-
-    auto pruneStock = database.prepare(R"(
-        DELETE FROM project_open_items
-        WHERE project_id = ?
-          AND item_type = 'stock'
-          AND source_table = 'stock_sizes'
-          AND source_id NOT IN (
-              SELECT s.id
-              FROM stock_sizes s
-              INNER JOIN models m ON m.material_id = s.material_id
-              INNER JOIN project_models pm ON pm.model_id = m.id
-              WHERE pm.project_id = ?
-          )
-    )");
-    if (pruneStock.isValid() && pruneStock.bindInt(1, projectId) &&
-        pruneStock.bindInt(2, projectId)) {
-        (void)pruneStock.execute();
+    if (pruneRetired.isValid() && pruneRetired.bindInt(1, projectId)) {
+        (void)pruneRetired.execute();
     }
 }
 
