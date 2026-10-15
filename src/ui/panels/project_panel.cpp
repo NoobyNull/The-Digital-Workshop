@@ -70,47 +70,74 @@ void ProjectPanel::renderContentRow(const ProjectPanelSnapshot& snapshot, std::s
     const std::string stableId = "project_item_" + std::to_string(row.ref.item.value);
     ImGui::PushID(stableId.c_str());
 
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
+    // One line per item, like a slicer's object list: icon and name, with
+    // the state in words at the right edge.
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (children.empty())
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     // Designs open by default so their setups are visible; deeper G-code and
     // run history stay folded until asked for.
     if (row.kind == ProjectContentKind::Design) flags |= ImGuiTreeNodeFlags_DefaultOpen;
-    if (snapshot.activeItem && *snapshot.activeItem == row.ref.item)
+    const bool selected = snapshot.activeItem && *snapshot.activeItem == row.ref.item;
+    if (selected)
         flags |= ImGuiTreeNodeFlags_Selected;
 
     const std::string label =
         std::string(contentIcon(row.kind)) + " " + row.label + "##project_item";
     const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
+    const bool activated =
+        (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) ||
+        (ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter, false));
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s: %s\n%s", projectContentKindLabel(row.kind),
+                          row.label.c_str(), row.status.c_str());
+    }
+    renderContentRowMenu(row);
 
-    ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
-    const std::string metadata =
-        std::string(projectContentKindLabel(row.kind)) + " | " + row.status;
-    if (row.needsAttention) {
-        ImGui::TextWrapped("%s %s", Icons::Warning, metadata.c_str());
-    } else {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("%s", metadata.c_str());
+    const std::string status = row.needsAttention
+                                   ? std::string(Icons::Warning) + " " + row.status
+                                   : row.status;
+    ImGui::SameLine();
+    const float statusWidth = ImGui::CalcTextSize(status.c_str()).x;
+    const float available = ImGui::GetContentRegionAvail().x;
+    if (available > statusWidth) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + available - statusWidth);
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImGui::GetStyleColorVec4(row.needsAttention ? ImGuiCol_Text
+                                                                          : ImGuiCol_TextDisabled));
+        ImGui::TextUnformatted(status.c_str());
         ImGui::PopStyleColor();
-    }
-    if (row.kind == ProjectContentKind::Setup) {
-        if (ImGui::SmallButton("Open in CAM") && m_onProjectItemActivated)
-            m_onProjectItemActivated(row.ref);
     } else {
-        if (ImGui::SmallButton("Open") && m_onProjectItemActivated)
-            m_onProjectItemActivated(row.ref);
-        if (row.kind == ProjectContentKind::Design) {
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Open in CAM") && m_onOpenInCam) m_onOpenInCam(row.ref);
-        }
+        ImGui::NewLine();
     }
-    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+
+    // The selected design offers its next step, as a slicer selection does.
+    if (selected && row.kind == ProjectContentKind::Design) {
+        ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+        if (ImGui::SmallButton("Open in CAM") && m_onOpenInCam) m_onOpenInCam(row.ref);
+        ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+    }
+    if (activated && m_onProjectItemActivated)
+        m_onProjectItemActivated(row.ref);
 
     if (!children.empty() && open) {
         for (const auto child : children) renderContentRow(snapshot, child);
         ImGui::TreePop();
     }
     ImGui::PopID();
+}
+
+void ProjectPanel::renderContentRowMenu(const ProjectContentRow& row) {
+    if (!ImGui::BeginPopupContextItem("##project_item_menu"))
+        return;
+    ImGui::TextDisabled("%s", projectContentKindLabel(row.kind));
+    ImGui::Separator();
+    const char* openLabel = row.kind == ProjectContentKind::Setup ? "Open in CAM" : "Open";
+    if (ImGui::MenuItem(openLabel) && m_onProjectItemActivated)
+        m_onProjectItemActivated(row.ref);
+    if (row.kind == ProjectContentKind::Design && ImGui::MenuItem("Open in CAM") && m_onOpenInCam)
+        m_onOpenInCam(row.ref);
+    ImGui::EndPopup();
 }
 
 } // namespace dw

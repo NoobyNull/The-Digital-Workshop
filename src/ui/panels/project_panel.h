@@ -85,6 +85,7 @@ class ProjectPanel : public Panel {
     void renderProjectHeader(const ProjectPanelSnapshot& snapshot);
     void renderProjectContents(const ProjectPanelSnapshot& snapshot);
     void renderContentRow(const ProjectPanelSnapshot& snapshot, std::size_t index);
+    void renderContentRowMenu(const ProjectContentRow& row);
     void renderProjectDetails(const ProjectPanelSnapshot& snapshot);
     void renderNoProject();
 
