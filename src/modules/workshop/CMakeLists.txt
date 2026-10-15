@@ -1,6 +1,8 @@
 add_library(dw_workshop_core STATIC
     home_flow.cpp
     home_flow.h
+    main_tabs.cpp
+    main_tabs.h
     project_item_load_guard.cpp
     project_item_load_guard.h
     project_workshop_controller.cpp

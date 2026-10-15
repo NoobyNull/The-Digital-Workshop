@@ -122,6 +122,7 @@ set(DW_TEST_SOURCES
     # Tier 3 — workspace tests (no GL/SDL required)
     test_workspace.cpp
     test_home_flow.cpp
+    test_main_tabs.cpp
     test_library_picker_flow.cpp
     test_library_picker_presentation.cpp
     test_project_resume.cpp
@@ -320,6 +321,7 @@ gtest_discover_tests(dw_tests)
 add_executable(dw_workshop_core_tests
     test_workshop_layout_metrics.cpp
     test_home_flow.cpp
+    test_main_tabs.cpp
     test_project_resume.cpp
     test_project_item_load_guard.cpp
     test_workshop_core.cpp
