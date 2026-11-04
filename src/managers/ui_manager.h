@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "../core/config/layout_preset.h"
+#include "../core/config/window_mode_policy.h"
 #include "../core/config/workspace_stream_policy.h"
 #include "../core/config/window_catalog.h"
 #include "../core/types.h"
@@ -91,8 +92,8 @@ class ProjectShellSnapshot;
 }
 
 // Callback types for actions that remain in Application
-// Workspace mode — controls which panels are visible by default
-enum class WorkspaceMode { Model, CNC };
+// (WorkspaceMode now lives in core/config/window_mode_policy.h alongside the
+// mode-availability rules it governs.)
 
 using ActionCallback = std::function<void()>;
 using ModelIdCallback = std::function<void(int64_t)>;

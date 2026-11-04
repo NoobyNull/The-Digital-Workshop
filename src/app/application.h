@@ -9,12 +9,15 @@
 #include <csignal>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "../core/cam/cam_engine_runtime.h"
+#include "../core/cam/cam_tool_mapping.h"
 #include "../core/threading/loading_state.h"
 #include "../core/types.h"
 
@@ -302,6 +305,45 @@ class Application {
     // CAM placeholder panel's "Start engine" button (Phase 2).
     std::unique_ptr<cam::CamEngineRuntime> m_camEngineRuntime;
     std::optional<cam::CamEngineStatus> m_camEngineStatus;
+
+    // Early CAM workflow (v0.8.0 slice): the active carve setup the CAM
+    // panel operates on, worker-shared job progress, and the engine's
+    // machine list once fetched. Main thread owns everything except
+    // CamGenerationState, which workers update under its mutex.
+  public:
+    struct CamActiveSetup {
+        i64 projectId = 0;
+        i64 operationItemId = 0;
+        i64 modelId = 0;
+        std::string modelName;
+        std::string meshPath;   // absolute
+        Vec3 extents{0, 0, 0}; // raw mesh bounds size, for lay-flat orientation
+    };
+    struct CamGenerationState {
+        std::mutex mutex;
+        bool running = false;
+        std::string message;
+    };
+
+  private:
+    std::optional<CamActiveSetup> m_camActiveSetup;
+    std::shared_ptr<CamGenerationState> m_camGeneration =
+        std::make_shared<CamGenerationState>();
+    std::vector<std::pair<std::string, std::string>> m_camMachines;
+    std::vector<cam::EngineTool> m_camTools; // .vtdb projections, lazy-loaded
+    std::vector<std::pair<std::string, std::string>> m_camToolChoices;
+    bool m_camToolsLoaded = false;
+    std::optional<i64> m_camGeneratedItemId;
+
+    cam::CamEngineRuntime* ensureCamEngineRuntime();
+    void startCamEngineAsync();
+    const std::vector<std::pair<std::string, std::string>>& camToolChoices();
+    void startCamGenerationAsync(const std::string& machineId,
+                                 const std::string& orientation,
+                                 const std::string& roughingToolId,
+                                 const std::string& finishingToolId);
+    void persistGeneratedCamGCode(const CamActiveSetup& setup, std::string gcodeText);
+    void sendGeneratedCamGCodeToRun();
 
     std::unique_ptr<DirectCarveRunEffectAdapter> m_directCarveRunEffectAdapter;
     std::unique_ptr<ProjectPlanRunTruthAdapter> m_projectPlanRunTruthAdapter;

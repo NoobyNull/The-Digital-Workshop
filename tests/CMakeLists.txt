@@ -50,6 +50,7 @@ set(DW_TEST_SOURCES
     test_camera.cpp
     test_status_tips.cpp
     test_window_catalog.cpp
+    test_window_mode_policy.cpp
     test_layout_migration.cpp
     test_navigation_style.cpp
     test_view_cube_orientation.cpp
@@ -117,6 +118,8 @@ set(DW_TEST_SOURCES
     # CAM engine
     test_cam_engine_client.cpp
     test_cam_engine_runtime.cpp
+    test_cam_job_spec.cpp
+    test_cam_tool_mapping.cpp
     # Carve (Direct Carve pipeline)
     test_model_fitter.cpp
     test_preparation_identity.cpp
@@ -282,6 +285,7 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/config/layout_preset.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/layout_migration.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config/window_catalog.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/config/window_mode_policy.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/app_paths.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/network_location.cpp
     ${CMAKE_SOURCE_DIR}/src/core/paths/path_resolver.cpp
@@ -291,6 +295,8 @@ set(DW_TEST_DEPS
     ${CMAKE_SOURCE_DIR}/src/core/carve/model_fitter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cam/cam_engine_client.cpp
     ${CMAKE_SOURCE_DIR}/src/core/cam/cam_engine_runtime.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cam/cam_job_spec.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/cam/cam_tool_mapping.cpp
     ${CMAKE_SOURCE_DIR}/src/render/camera.cpp
     ${CMAKE_SOURCE_DIR}/src/app/workspace.cpp
     ${CMAKE_SOURCE_DIR}/src/app/project_session_integration.cpp

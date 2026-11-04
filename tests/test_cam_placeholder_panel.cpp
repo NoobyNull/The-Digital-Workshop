@@ -3,11 +3,16 @@
 
 namespace dw {
 
-TEST(CamPlaceholderPanel, ReportsRebuildStatusCopy) {
+TEST(CamPlaceholderPanel, ReportsWorkflowStatusCopy) {
     CamPlaceholderPanel panel;
     const auto& copy = panel.statusCopy();
     EXPECT_NE(copy.find("CAM"), std::string::npos);
-    EXPECT_NE(copy.find("rebuilt"), std::string::npos);
+    EXPECT_NE(copy.find("Run"), std::string::npos);
+}
+
+TEST(CamPlaceholderPanel, DefaultsToFluidncMachine) {
+    CamPlaceholderPanel panel;
+    EXPECT_EQ(panel.selectedMachineId(), "fluidnc");
 }
 
 TEST(CamPlaceholderPanel, VisibilityDefaultsOpenAndToggles) {

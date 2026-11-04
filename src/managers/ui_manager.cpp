@@ -359,10 +359,8 @@ void UIManager::setWorkspaceMode(WorkspaceMode mode) {
 }
 
 void UIManager::enforceWorkspaceBoundary() {
-    const WindowRole hiddenRole = m_workspaceMode == WorkspaceMode::CNC ? WindowRole::Workshop
-                                                                        : WindowRole::Sender;
     for (auto& entry : m_panelRegistry) {
-        if (entry.role == hiddenRole)
+        if (!windowAvailableInMode(entry.role, m_workspaceMode))
             *entry.showFlag = false;
     }
 
@@ -426,17 +424,21 @@ void UIManager::openWindow(const std::string& key) {
         return;
     if (!it->panel)
         return;
-    if (m_showLibrary && it->role == WindowRole::Sender)
-        return;
 
-    if (it->role == WindowRole::Sender && m_workspaceMode != WorkspaceMode::CNC) {
-        if (m_cncStreaming)
-            return;
+    WindowOpenContext context;
+    context.cncStreaming = m_cncStreaming;
+    context.libraryOverlayActive = m_showLibrary;
+    switch (windowOpenAction(it->role, m_workspaceMode, context)) {
+    case WindowOpenAction::Blocked:
+        return;
+    case WindowOpenAction::SwitchToCnc:
         setWorkspaceMode(WorkspaceMode::CNC);
-    } else if (it->role == WindowRole::Workshop && m_workspaceMode != WorkspaceMode::Model) {
-        if (m_cncStreaming)
-            return;
+        break;
+    case WindowOpenAction::SwitchToModel:
         setWorkspaceMode(WorkspaceMode::Model);
+        break;
+    case WindowOpenAction::Open:
+        break;
     }
 
     *it->showFlag = true;
